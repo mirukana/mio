@@ -1,0 +1,8 @@
+__pycache__
+.mypy_cache
+*.egg-info
+*.pyc
+Makefile
+build
+dist
+tags
