@@ -6,7 +6,7 @@ from pydantic import AnyUrl
 from ..utils import AutoStrEnum
 from . import EventId, RoomAlias, RoomEvent, RoomId, Sources, UserId
 
-# TODO: members, power levels, server ACL
+# TODO: power levels, server ACL
 
 
 class Creation(RoomEvent):
@@ -112,3 +112,29 @@ class Tombstone(RoomEvent):
 
     server_message:   str
     replacement_room: RoomId
+
+
+class Member(RoomEvent):
+    class Membership(AutoStrEnum):
+        invite = auto()
+        join   = auto()
+        knock  = auto()
+        leave  = auto()
+        ban    = auto()
+
+    type = "m.room.member"
+    make = Sources(
+        avatar_url        = ("content", "avatar_url"),
+        display_name      = ("content", "displayname"),
+        membership        = ("content", "membership"),
+        is_direct         = ("content", "is_direct"),
+        third_party_name  = ("content", "third_party_invite", "display_name"),
+        # invite_room_state = ("content", "unsigned", "invite_room_state"),
+    )
+
+    membership:       Membership
+    avatar_url:       Optional[AnyUrl] = None
+    display_name:     Optional[str]    = None
+    is_direct:        bool             = False
+    third_party_name: Optional[str]    = None
+    # invite_room_state: List[StrippedState] = []  # TODO
