@@ -6,7 +6,7 @@ from pydantic import AnyUrl, validator
 from ..utils import AutoStrEnum
 from . import EventId, RoomAlias, RoomEvent, RoomId, Sources, UserId
 
-# TODO: server ACL
+# TODO: m.room.third_party_invite
 
 
 class Creation(RoomEvent):
@@ -170,3 +170,16 @@ class PowerLevels(RoomEvent):
     def add_room_notif(cls, value):
         value.setdefault("room", 50)
         return value
+
+
+class ServerACL(RoomEvent):
+    type = "m.room.server_acl"
+    make = Sources(
+        allow_ip_literals = ("content", "allow_ip_literals"),
+        allow             = ("content", "allow"),
+        deny              = ("content", "deny"),
+    )
+
+    allow_ip_literals: bool      = True
+    allow:             List[str] = []
+    deny:              List[str] = []
