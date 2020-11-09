@@ -1,10 +1,15 @@
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
+from ...events import Event
+
 
 @dataclass
 class Room:
     id: str
+
+    async def handle_event(self, event: Event) -> None:
+        print(repr(event))
 
 
 @dataclass
