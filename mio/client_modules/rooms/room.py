@@ -9,7 +9,7 @@ class Room:
     id: str
 
     async def handle_event(self, event: Event) -> None:
-        print(repr(event))
+        debug( event)
 
 
 @dataclass

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type
+from typing import Any, ClassVar, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel
 from pydantic.main import ModelMetaclass
@@ -17,20 +17,15 @@ class EventMeta(ModelMetaclass):
 
 
 class Event(BaseModel, metaclass=EventMeta):
-    type:              ClassVar[Optional[str]]            = None
-    make:              ClassVar[Sources]                  = Sources()
-    _types_subclasses: ClassVar[Dict[str, Type["Event"]]] = {}
+    type: ClassVar[Optional[str]] = None
+    make: ClassVar[Sources]       = Sources()
 
     source: Dict[str, Any] = {}
-
-    def __init_subclass__(cls, **kwargs) -> None:
-        if cls.type:
-            Event._types_subclasses[cls.type] = cls
 
     def __repr_args__(self) -> List[Tuple[Optional[str], Any]]:
         return [
             (name, value) for name, value in super().__repr_args__()
-            if name != "source" or type(self) is Event
+            if name != "source" or not self.type
         ]
 
     @classmethod
@@ -39,7 +34,7 @@ class Event(BaseModel, metaclass=EventMeta):
 
         for parent_class in cls.__bases__:
             if issubclass(parent_class, Event):
-                fields.update(parent_class.make.find_fields(event))
+                fields.update(parent_class.find_fields(event))
 
         fields.update(cls.make.find_fields(event))
         return fields
@@ -51,24 +46,24 @@ class Event(BaseModel, metaclass=EventMeta):
     @classmethod
     def subtype_from_source(cls, event: Dict[str, Any]) -> "Event":
         event_type = event.get("type", "")
-        subclass   = cls._types_subclasses.get(event_type, Event)
-        return subclass.from_source(event)
 
+        if event_type:
+            for subclass in cls.__subclasses__():
+                if subclass.type == event_type:
+                    return subclass.subtype_from_source(event)
 
-class StrippedState(Event):
-    make = Sources(state_key="state_key", sender="sender")
-
-    state_key: str
-    sender:    UserId
+        return cls.from_source(event)
 
 
 class RoomEvent(Event):
     make = Sources(
         event_id  = "event_id",
+        sender    = "sender",
         date      = "origin_server_ts",
         state_key = "state_key",
     )
 
     event_id:  EventId
-    date:      datetime
-    state_key: Optional[str] = None
+    sender:    UserId
+    date:      Optional[datetime] = None
+    state_key: Optional[str]      = None

@@ -2,10 +2,10 @@ import asyncio
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional, Union
 
-from ..events import Event
+from ..events import Event, RoomEvent
 from ..utils import remove_none
 from . import ClientModule
-from .rooms import InvitedRoom, JoinedRoom, LeftRoom
+from .rooms import InvitedRoom, JoinedRoom, LeftRoom, Room
 
 FilterType = Union[None, str, Dict[str, Any]]
 
@@ -71,6 +71,10 @@ class Synchronization(ClientModule):
             for event in data.get(key, {}).get("events", ()):
                 await coro(Event.subtype_from_source(event))
 
+        async def room_events_call(data: dict, key: str, room: Room) -> None:
+            for event in data.get(key, {}).get("events", ()):
+                await room.handle_event(RoomEvent.subtype_from_source(event))
+
         # events_call(sync, "account_data", noop)  # TODO
         # events_call(sync, "presence", noop)      # TODO
 
@@ -78,7 +82,7 @@ class Synchronization(ClientModule):
 
         for room_id, data in sync.get("rooms", {}).get("invite", {}).items():
             invited = rooms.invited.setdefault(room_id, InvitedRoom(room_id))
-            await events_call(data, "invite_state", invited.handle_event)
+            await room_events_call(data, "invite_state", invited)
 
         for room_id, data in sync.get("rooms", {}).get("join", {}).items():
             joined = rooms.joined.setdefault(room_id, JoinedRoom(room_id))
@@ -106,12 +110,12 @@ class Synchronization(ClientModule):
                 joined.unread_highlights = unread["highlight_count"]
 
             await events_call(data, "account_data", joined.handle_event)
-            await events_call(data, "state", joined.handle_event)
-            await events_call(data, "timeline", joined.handle_event)
             await events_call(data, "ephemeral", joined.handle_event)
+            await room_events_call(data, "state", joined)
+            await room_events_call(data, "timeline", joined)
 
         for room_id, data in sync.get("rooms", {}).get("leave", {}).items():
             left = rooms.left.setdefault(room_id, LeftRoom(room_id))
             await events_call(data, "account_data", left.handle_event)
-            await events_call(data, "state", left.handle_event)
-            await events_call(data, "timeline", left.handle_event)
+            await room_events_call(data, "state", left)
+            await room_events_call(data, "timeline", left)
