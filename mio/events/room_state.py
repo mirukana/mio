@@ -1,12 +1,12 @@
 from enum import auto
-from typing import List, Optional
+from typing import Dict, List, Optional
 
-from pydantic import AnyUrl
+from pydantic import AnyUrl, validator
 
 from ..utils import AutoStrEnum
 from . import EventId, RoomAlias, RoomEvent, RoomId, Sources, UserId
 
-# TODO: power levels, server ACL
+# TODO: server ACL
 
 
 class Creation(RoomEvent):
@@ -138,3 +138,35 @@ class Member(RoomEvent):
     is_direct:        bool             = False
     third_party_name: Optional[str]    = None
     # invite_room_state: List[StrippedState] = []  # TODO
+
+
+class PowerLevels(RoomEvent):
+    type = "m.room.power_levels"
+    make = Sources(
+        invite         = ("content", "invite"),
+        kick           = ("content", "kick"),
+        ban            = ("content", "ban"),
+        redact         = ("content", "redact"),
+        events_default = ("content", "events_default"),
+        state_default  = ("content", "state_default"),
+        users_default  = ("content", "users_default"),
+        events         = ("content", "events"),
+        users          = ("content", "users"),
+        notifications  = ("content", "notifications"),
+    )
+
+    invite:         int               = 50
+    kick:           int               = 50
+    ban:            int               = 50
+    redact:         int               = 50
+    events_default: int               = 0
+    state_default:  int               = 50
+    users_default:  int               = 0
+    events:         Dict[str, int]    = {}
+    users:          Dict[UserId, int] = {}
+    notifications:  Dict[str, int]    = {"room": 50}
+
+    @validator("notifications")
+    def add_room_notif(cls, value):
+        value.setdefault("room", 50)
+        return value
