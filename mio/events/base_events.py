@@ -1,10 +1,18 @@
+import logging as log
 from datetime import datetime
-from typing import Any, ClassVar, Dict, List, Optional, Tuple
+from typing import (
+    Any, ClassVar, Dict, List, Optional, Tuple, Type, TypeVar, Union,
+)
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from pydantic.main import ModelMetaclass
 
+from ..client_modules.encryption.decryption_meta import DecryptionMetadata
+from ..utils import deep_find_subclasses
 from . import EventId, Sources, UserId
+
+EvT    = TypeVar("EvT", bound="Event")
+EventT = Union["Event", EvT]
 
 
 class EventMeta(ModelMetaclass):
@@ -20,7 +28,12 @@ class Event(BaseModel, metaclass=EventMeta):
     type: ClassVar[Optional[str]] = None
     make: ClassVar[Sources]       = Sources()
 
-    source: Dict[str, Any] = {}
+    source:           Dict[str, Any]            = {}
+    decryption:       DecryptionMetadata        = DecryptionMetadata()
+    validation_error: Optional[ValidationError] = None
+
+    class Config:
+        arbitrary_types_allowed = True  # needed for `validation_error` field
 
     def __repr_args__(self) -> List[Tuple[Optional[str], Any]]:
         return [
@@ -40,19 +53,33 @@ class Event(BaseModel, metaclass=EventMeta):
         return fields
 
     @classmethod
-    def from_source(cls, event: Dict[str, Any]) -> "Event":
-        return cls(**cls.find_fields(event))
+    def from_source(cls: Type[EvT], event: Dict[str, Any]) -> EventT:
+        try:
+            return cls(**cls.find_fields(event))
+        except ValidationError as e:
+            log.warning(
+                "Failed validating event %r for type %s: %s\n",
+                event, cls.__name__, e,
+            )
+            return Event(source=event, validation_error=e)
 
     @classmethod
-    def subtype_from_source(cls, event: Dict[str, Any]) -> "Event":
-        event_type = event.get("type", "")
+    def matches_event(cls, event: Dict[str, Any]) -> bool:
+        return cls.type == event.get("type")
 
-        if event_type:
-            for subclass in cls.__subclasses__():
-                if subclass.type == event_type:
-                    return subclass.subtype_from_source(event)
+    @classmethod
+    def subtype_from_source(cls: Type[EvT], event: Dict[str, Any]) -> EventT:
+        for subclass in deep_find_subclasses(cls):
+            if subclass.matches_event(event):
+                return subclass.from_source(event)
 
         return cls.from_source(event)
+
+
+class ToDeviceEvent(Event):
+    make = Sources(sender="sender")
+
+    sender: UserId
 
 
 class RoomEvent(Event):
@@ -63,7 +90,7 @@ class RoomEvent(Event):
         state_key = "state_key",
     )
 
-    event_id:  EventId
     sender:    UserId
+    event_id:  Optional[EventId]  = None
     date:      Optional[datetime] = None
     state_key: Optional[str]      = None

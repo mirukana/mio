@@ -1,11 +1,13 @@
 import asyncio
+import logging as log
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Callable, Dict, Optional, Set, Union
 
 from ..events import Event, RoomEvent
 from ..utils import remove_none
-from . import ClientModule
-from .rooms import InvitedRoom, JoinedRoom, LeftRoom, Room
+from . import ClientModule, InvitedRoom, JoinedRoom, LeftRoom, Room
+from .encryption.errors import DecryptionError
+from .encryption.events import Megolm, Olm
 
 FilterType = Union[None, str, Dict[str, Any]]
 
@@ -65,15 +67,61 @@ class Synchronization(ClientModule):
 
 
     async def handle_sync(self, sync: Dict[str, Any]) -> None:
-        # TODO: to_device, device_lists, device_one_time_keys_count
+        # TODO: handle event parsing errors, device_lists
+
+        async def decrypt(
+            event: Union[Olm, Megolm], room_id: Optional[str] = None,
+        ) -> Event:
+            try:
+                return await self.client.e2e.decrypt_event(event, room_id)
+            except DecryptionError as e:
+                event.decryption_error = e
+                log.warn("Failed decrypting %r\n", event)
+                return event
 
         async def events_call(data: dict, key: str, coro: Callable) -> None:
             for event in data.get(key, {}).get("events", ()):
-                await coro(Event.subtype_from_source(event))
+                if self.client.e2e.ready and Olm.matches_event(event):
+                    parsed = Olm.from_source(event)
+                    if isinstance(parsed, Olm):
+                        await coro(await decrypt(parsed))
+                    else:
+                        await coro(parsed)
+                else:
+                    await coro(Event.subtype_from_source(event))
 
         async def room_events_call(data: dict, key: str, room: Room) -> None:
             for event in data.get(key, {}).get("events", ()):
-                await room.handle_event(RoomEvent.subtype_from_source(event))
+                if self.client.e2e.ready and Megolm.matches_event(event):
+                    clear = Megolm.from_source(event)
+                    if isinstance(clear, Megolm):
+                        clear = await decrypt(clear, room.id)
+                else:
+                    clear = RoomEvent.subtype_from_source(event)
+
+                await room.handle_event(clear)
+
+        if self.client.e2e.ready:
+            users: Set[str] = set()
+
+            for event in sync.get("to_device", {}).get("events", ()):
+                if Olm.matches_event(event):
+                    parsed = Olm.from_source(event)
+                    if isinstance(parsed, Olm):
+                        users.add(parsed.sender)
+
+            for kind in ("invite", "join", "leave"):
+                for data in sync.get("rooms", {}).get(kind, {}).values():
+                    for event in data.get("timeline", {}).get("events", ()):
+                        if Megolm.matches_event(event):
+                            parsed = Megolm.from_source(event)
+                            if isinstance(parsed, Megolm):
+                                users.add(parsed.sender)
+
+            await self.client.e2e.query_devices(users)
+
+            coro = self.client.e2e.handle_to_device_event
+            await events_call(sync, "to_device", coro)
 
         # events_call(sync, "account_data", noop)  # TODO
         # events_call(sync, "presence", noop)      # TODO
@@ -119,3 +167,7 @@ class Synchronization(ClientModule):
             await events_call(data, "account_data", left.handle_event)
             await room_events_call(data, "state", left)
             await room_events_call(data, "timeline", left)
+
+        if self.client.e2e.ready and "device_one_time_keys_count" in sync:
+            up = sync["device_one_time_keys_count"].get("signed_curve25519", 0)
+            await self.client.e2e.upload_one_time_keys(currently_uploaded=up)

@@ -6,7 +6,7 @@ from pydantic import AnyUrl, validator
 from ..utils import AutoStrEnum
 from . import EventId, RoomAlias, RoomEvent, RoomId, Sources, UserId
 
-# TODO: m.room.third_party_invite
+# TODO: m.room.third_party_invite, prev_content
 
 
 class Creation(RoomEvent):

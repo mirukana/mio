@@ -1,6 +1,6 @@
 from typing import Any, ClassVar, Dict, Optional
 
-from . import Event, RoomEvent, Sources, EventMeta
+from . import EventMeta, RoomEvent, Sources
 
 _TEXT_SOURCE = Sources(
     format         = ("content", "format"),
@@ -27,15 +27,9 @@ class Message(RoomEvent, metaclass=MessageMeta):
     body: str
 
     @classmethod
-    def subtype_from_source(cls, event: Dict[str, Any]) -> "Event":
-        msgtype = event.get("content", {}).get("msgtype", "")
-
-        if msgtype:
-            for subclass in cls.__subclasses__():
-                if subclass.msgtype == msgtype:
-                    return subclass.subtype_from_source(event)
-
-        return cls.from_source(event)
+    def matches_event(cls, event: Dict[str, Any]) -> bool:
+        msgtype = event.get("content", {}).get("msgtype")
+        return cls.type == event.get("type") and cls.msgtype == msgtype
 
 
 class Text(Message):

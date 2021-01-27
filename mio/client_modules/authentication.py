@@ -1,12 +1,16 @@
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from ..utils import remove_none
 from . import ClientModule
 
+if TYPE_CHECKING:
+    from ..base_client import BaseClient
+
 
 @dataclass
 class Authentication(ClientModule):
+    client:       "BaseClient"
     user_id:      Optional[str] = ""
     access_token: Optional[str] = ""
     device_id:    Optional[str] = ""

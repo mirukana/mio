@@ -1,9 +1,18 @@
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 
-@dataclass
-class ServerError(Exception):
+@dataclass(frozen=True)
+class MioError(Exception):
+    debug: Any = field(init=False, repr=False, default=None)
+
+    def __str__(self) -> str:
+        return repr(self)
+
+
+@dataclass(frozen=True)
+class ServerError(MioError):
     http_code: int
     message:   str
 
@@ -23,6 +32,6 @@ class ServerError(Exception):
         return cls(http_code, message)
 
 
-@dataclass
+@dataclass(frozen=True)
 class MatrixError(ServerError):
     m_code: str

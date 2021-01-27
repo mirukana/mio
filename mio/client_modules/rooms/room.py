@@ -1,15 +1,21 @@
-from dataclasses import dataclass
-from typing import Optional, Tuple
+from dataclasses import dataclass, field
+from typing import List, Optional, Tuple
 
 from ...events import Event
+from ..encryption.events import Encryption
 
 
 @dataclass
 class Room:
-    id: str
+    id:         str
+    encryption: Optional[Encryption] = None
+    events:     List[Event]          = field(default_factory=list, repr=False)
 
     async def handle_event(self, event: Event) -> None:
-        debug( event)
+        if isinstance(event, Encryption):
+            self.encryption = event
+
+        self.events.append(event)
 
 
 @dataclass

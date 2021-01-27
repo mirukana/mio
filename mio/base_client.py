@@ -2,18 +2,21 @@ import json
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-from . import client_modules
+from .client_modules.authentication import Authentication
+from .client_modules.encryption.encryption import Encryption
+from .client_modules.rooms import Rooms
+from .client_modules.synchronizer import Synchronization
 
 
 @dataclass
 class BaseClient:
     homeserver: str
 
-
     def __post_init__(self) -> None:
-        self.auth  = client_modules.Authentication(self)
-        self.sync  = client_modules.Synchronization(self)
-        self.rooms = client_modules.Rooms(self)
+        self.auth  = Authentication(client=self)
+        self.sync  = Synchronization(client=self)
+        self.rooms = Rooms(client=self)
+        self.e2e   = Encryption(client=self)
 
 
     @property
