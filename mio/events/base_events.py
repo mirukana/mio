@@ -119,7 +119,7 @@ class RoomEvent(Event):
         room_id  = "room_id",
     )
 
-    sender:   UserId
+    sender:   Optional[UserId]   = None
     event_id: Optional[EventId]  = None
     date:     Optional[datetime] = None
     room_id:  Optional[RoomId]   = None
