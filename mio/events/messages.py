@@ -31,6 +31,13 @@ class Message(RoomEvent, metaclass=MessageMeta):
         msgtype = event.get("content", {}).get("msgtype")
         return cls.type == event.get("type") and cls.msgtype == msgtype
 
+    @property
+    def matrix(self) -> Dict[str, Any]:
+        event = super().matrix
+        # make sure this is always included
+        event["content"]["msgtype"] = self.msgtype
+        return event
+
 
 class Text(Message):
     msgtype = "m.text"
