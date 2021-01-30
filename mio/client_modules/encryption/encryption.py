@@ -96,9 +96,9 @@ class Encryption(ClientModule):
 
         log.info("Querying devices for %r", for_users)
 
-        result = await self.client.json_send(
+        result = await self.client.send_json(
             method = "POST",
-            url    = f"{self.client.api}/keys/query",
+            path   = [*self.client.api, "keys", "query"],
             body   = {
                 "device_keys": {user_id: [] for user_id in for_users},
                 "token":       token,
@@ -133,9 +133,9 @@ class Encryption(ClientModule):
             for keyid, key in self._account.one_time_keys["curve25519"].items()
         }
 
-        await self.client.json_send(
+        await self.client.send_json(
             method = "POST",
-            url    = f"{self.client.api}/keys/upload",
+            path   = [*self.client.api, "keys", "upload"],
             body   = {"one_time_keys": one_time_keys},
         )
 
@@ -203,9 +203,9 @@ class Encryption(ClientModule):
 
         device_keys = self._sign_dict(device_keys)
 
-        result = await self.client.json_send(
+        result = await self.client.send_json(
             method = "POST",
-            url    = f"{self.client.api}/keys/upload",
+            path   = [*self.client.api, "keys", "upload"],
             body   = {"device_keys": device_keys},
         )
 

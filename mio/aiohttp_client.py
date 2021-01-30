@@ -1,6 +1,7 @@
 import json
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
+from urllib.parse import quote
 
 import aiohttp
 
@@ -17,9 +18,9 @@ class AiohttpClient(BaseClient):
     async def send(
         self,
         method:     str,
-        url:        str,
+        path:       List[str],
         parameters: Optional[Dict[str, Any]] = None,
-        body:       Optional[Dict[str, Any]] = None,
+        data:       Optional[bytes]          = None,
         headers:    Optional[Dict[str, Any]] = None,
     ) -> bytes:
 
@@ -35,11 +36,13 @@ class AiohttpClient(BaseClient):
                     value, ensure_ascii=False, separators=(",", ":"),
                 )
 
+        joined_path = "/".join(quote(p, safe="") for p in path)
+
         response = await self.session.request(
             method  = method,
-            url     = url,
+            url     = f"{self.homeserver}/{joined_path}",
             params  = parameters,
-            json    = body,
+            data    = data,
             headers = headers,
         )
 

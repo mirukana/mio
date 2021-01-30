@@ -25,9 +25,9 @@ class Authentication(ClientModule):
         if auth_dict.get("device_name") is None:
             auth_dict["device_name"] = self.default_device_name
 
-        result = await self.client.json_send(
+        result = await self.client.send_json(
             method = "POST",
-            url    = f"{self.client.api}/login",
+            path   = [*self.client.api, "login"],
             body   = auth_dict,
         )
 
@@ -77,9 +77,9 @@ class Authentication(ClientModule):
     async def logout(self, all_devices: bool = False) -> None:
         path = "logout/all" if all_devices else "logout"
 
-        await self.client.json_send(
+        await self.client.send_json(
             method = "POST",
-            url    = f"{self.client.api}/{path}",
+            path   = [*self.client.api, path],
         )
 
         self.user_id = self.access_token = self.device_id = None

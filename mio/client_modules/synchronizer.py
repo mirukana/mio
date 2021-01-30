@@ -37,9 +37,9 @@ class Synchronization(ClientModule):
         }
 
         # TODO: timeout
-        result = await self.client.json_send(
+        result = await self.client.send_json(
             method     = "GET",
-            url        = f"{self.client.api}/sync",
+            path       = [*self.client.api, "sync"],
             parameters = remove_none(parameters),
         )
 
