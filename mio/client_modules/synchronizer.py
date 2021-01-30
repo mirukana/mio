@@ -127,13 +127,16 @@ class Synchronization(ClientModule):
         # events_call(sync, "presence", noop)      # TODO
 
         rooms = self.client.rooms
+        default: Room
 
         for room_id, data in sync.get("rooms", {}).get("invite", {}).items():
-            invited = rooms.invited.setdefault(room_id, InvitedRoom(room_id))
+            default = InvitedRoom(self.client, room_id)
+            invited = rooms.invited.setdefault(room_id, default)
             await room_events_call(data, "invite_state", invited)
 
         for room_id, data in sync.get("rooms", {}).get("join", {}).items():
-            joined = rooms.joined.setdefault(room_id, JoinedRoom(room_id))
+            default = JoinedRoom(self.client, room_id)
+            joined = rooms.joined.setdefault(room_id, default)
 
             prev_batch = data.get("timeline", {}).get("prev_batch")
             summary    = data.get("summary", {})
@@ -163,7 +166,8 @@ class Synchronization(ClientModule):
             await room_events_call(data, "timeline", joined)
 
         for room_id, data in sync.get("rooms", {}).get("leave", {}).items():
-            left = rooms.left.setdefault(room_id, LeftRoom(room_id))
+            default = LeftRoom(self.client, room_id)
+            left = rooms.left.setdefault(room_id, default)
             await events_call(data, "account_data", left.handle_event)
             await room_events_call(data, "state", left)
             await room_events_call(data, "timeline", left)
