@@ -4,12 +4,14 @@ from typing import Dict, List, Optional
 from pydantic import AnyUrl, validator
 
 from ..utils import AutoStrEnum
-from . import EventId, RoomAlias, RoomEvent, RoomId, Sources, UserId
+from . import (
+    EmptyString, EventId, RoomAlias, RoomId, Sources, StateEvent, UserId,
+)
 
 # TODO: m.room.third_party_invite, prev_content
 
 
-class Creation(RoomEvent):
+class Creation(StateEvent):
     type = "m.room.create"
     make = Sources(
         creator           = ("content", "creator"),
@@ -19,6 +21,7 @@ class Creation(RoomEvent):
         previous_event_id = ("content", "predecessor", "event_id"),
     )
 
+    state_key:         EmptyString
     creator:           UserId
     federate:          bool              = True
     version:           str               = "1"
@@ -26,40 +29,44 @@ class Creation(RoomEvent):
     previous_event_id: Optional[EventId] = None
 
 
-class Name(RoomEvent):
+class Name(StateEvent):
     type = "m.room.name"
     make = Sources(name=("content", "name"))
 
-    name: Optional[str]
+    state_key: EmptyString
+    name:      Optional[str]
 
 
-class Topic(RoomEvent):
+class Topic(StateEvent):
     type = "m.room.topic"
     make = Sources(topic=("content", "topic"))
 
-    topic: Optional[str]
+    state_key: EmptyString
+    topic:     Optional[str]
 
 
-class Avatar(RoomEvent):
+class Avatar(StateEvent):
     type = "m.room.avatar"
     make = Sources(url=("content", "url"))
 
-    url: Optional[AnyUrl]
+    state_key: EmptyString
+    url:       Optional[AnyUrl]
     # TODO: info
 
 
-class CanonicalAlias(RoomEvent):
+class CanonicalAlias(StateEvent):
     type = "m.room.canonical_alias"
     make = Sources(
         alias        = ("content", "alias"),
         alternatives = ("content", "alt_aliases"),
     )
 
+    state_key:    EmptyString
     alias:        RoomAlias
     alternatives: List[RoomAlias] = []
 
 
-class JoinRules(RoomEvent):
+class JoinRules(StateEvent):
     class Rule(AutoStrEnum):
         public  = auto()
         knock   = auto()
@@ -69,10 +76,11 @@ class JoinRules(RoomEvent):
     type = "m.room.join_rules"
     make = Sources(rule=("content", "join_rule"))
 
-    rule: Rule
+    state_key: EmptyString
+    rule:      Rule
 
 
-class HistoryVisibility(RoomEvent):
+class HistoryVisibility(StateEvent):
     class Visibility(AutoStrEnum):
         invited        = auto()
         joined         = auto()
@@ -82,10 +90,11 @@ class HistoryVisibility(RoomEvent):
     type = "m.room.history_visibility"
     make = Sources(visibility=("content", "history_visibility"))
 
+    state_key:  EmptyString
     visibility: Visibility
 
 
-class GuestAccess(RoomEvent):
+class GuestAccess(StateEvent):
     class Access(AutoStrEnum):
         can_join  = auto()
         forbidden = auto()
@@ -93,28 +102,31 @@ class GuestAccess(RoomEvent):
     type = "m.room.guest_access"
     make = Sources(access=("content", "guest_access"))
 
-    access: Access
+    state_key: EmptyString
+    access:    Access
 
 
-class PinnedEvents(RoomEvent):
+class PinnedEvents(StateEvent):
     type = "m.room.pinned_events"
     make = Sources(pinned=("content", "pinned"))
 
-    pinned: List[EventId] = []
+    state_key: EmptyString
+    pinned:    List[EventId] = []
 
 
-class Tombstone(RoomEvent):
+class Tombstone(StateEvent):
     type = "m.room.tombstone"
     make = Sources(
         server_message   = ("content", "body"),
         replacement_room = ("content", "replacement_room"),
     )
 
+    state_key:        EmptyString
     server_message:   str
     replacement_room: RoomId
 
 
-class Member(RoomEvent):
+class Member(StateEvent):
     class Membership(AutoStrEnum):
         invite = auto()
         join   = auto()
@@ -132,6 +144,7 @@ class Member(RoomEvent):
         # invite_room_state = ("content", "unsigned", "invite_room_state"),
     )
 
+    state_key:        UserId
     membership:       Membership
     avatar_url:       Optional[AnyUrl] = None
     display_name:     Optional[str]    = None
@@ -140,7 +153,7 @@ class Member(RoomEvent):
     # invite_room_state: List[StrippedState] = []  # TODO
 
 
-class PowerLevels(RoomEvent):
+class PowerLevels(StateEvent):
     type = "m.room.power_levels"
     make = Sources(
         invite         = ("content", "invite"),
@@ -155,6 +168,7 @@ class PowerLevels(RoomEvent):
         notifications  = ("content", "notifications"),
     )
 
+    state_key:      EmptyString
     invite:         int               = 50
     kick:           int               = 50
     ban:            int               = 50
@@ -172,7 +186,7 @@ class PowerLevels(RoomEvent):
         return value
 
 
-class ServerACL(RoomEvent):
+class ServerACL(StateEvent):
     type = "m.room.server_acl"
     make = Sources(
         allow_ip_literals = ("content", "allow_ip_literals"),
@@ -180,6 +194,7 @@ class ServerACL(RoomEvent):
         deny              = ("content", "deny"),
     )
 
+    state_key:         EmptyString
     allow_ip_literals: bool      = True
     allow:             List[str] = []
     deny:              List[str] = []

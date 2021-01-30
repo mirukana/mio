@@ -84,13 +84,17 @@ class ToDeviceEvent(Event):
 
 class RoomEvent(Event):
     make = Sources(
-        event_id  = "event_id",
-        sender    = "sender",
-        date      = "origin_server_ts",
-        state_key = "state_key",
+        event_id = "event_id",
+        sender   = "sender",
+        date     = "origin_server_ts",
     )
 
     sender:    UserId
     event_id:  Optional[EventId]  = None
     date:      Optional[datetime] = None
-    state_key: Optional[str]      = None
+
+
+class StateEvent(RoomEvent):
+    make = Sources(state_key="state_key")
+
+    state_key: str

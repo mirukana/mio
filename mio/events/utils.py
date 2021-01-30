@@ -33,6 +33,10 @@ class RegexType(str, CustomType):
         return cls(value)
 
 
+class EmptyString(RegexType):
+    regex = r"^$"
+
+
 class UserId(RegexType):
     regex = rf"^@[\x21-\x39\x3B-\x7E]+:{HOST_REGEX}$"
 
@@ -68,4 +72,4 @@ class Sources:
 
         fields           = {k: retrieve(v) for k, v in self.fields.items()}
         fields["source"] = event
-        return {k:   v for k, v in fields.items() if v is not _Missing}
+        return {k: v for k, v in fields.items() if v is not _Missing}
