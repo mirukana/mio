@@ -57,16 +57,15 @@ class Sources:
     def __init__(self, **fields: SourcePath) -> None:
         self.fields = fields
 
-    def find_fields(self, event: Dict[str, Any]) -> Dict[str, Any]:
+    def fields_from_matrix(self, event: Dict[str, Any]) -> Dict[str, Any]:
         def retrieve(path: SourcePath) -> Any:
-            data  = event
+            data = event
             path = (path,) if isinstance(path, str) else path
 
             for part in path:
-                try:
-                    data = data[part]
-                except KeyError:
-                    return _Missing
+                data = data.get(part, _Missing)
+                if data is _Missing:
+                    break
 
             return data
 

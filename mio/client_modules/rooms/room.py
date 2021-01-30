@@ -18,6 +18,12 @@ class Room:
         self.events.append(event)
 
 
+    async def send(
+        self, event: Event, transaction_id: Optional[str] = None,
+    ) -> str:
+        pass
+
+
 @dataclass
 class InvitedRoom(Room):
     inviter: Optional[str] = None
