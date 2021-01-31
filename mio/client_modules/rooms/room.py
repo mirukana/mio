@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, List, Optional, Tuple
 from uuid import uuid4
 
 from ...events.base_events import Event, StateEvent
-from ..encryption.events import Encryption
+from ..encryption.events import EncryptionSettings
 
 if TYPE_CHECKING:
     from ...base_client import BaseClient
@@ -13,15 +13,15 @@ if TYPE_CHECKING:
 class Room:
     client:     "BaseClient"
     id:         str
-    encryption: Optional[Encryption] = None
-    events:     List[Event]          = field(default_factory=list, repr=False)
+    encryption: Optional[EncryptionSettings] = None
+
+    events: List[Event] = field(default_factory=list, repr=False)
 
     async def handle_event(self, event: Event) -> None:
-        if isinstance(event, Encryption):
+        if isinstance(event, EncryptionSettings):
             self.encryption = event
 
         self.events.append(event)
-
 
     async def send(
         self, event: Event, transaction_id: Optional[str] = None,

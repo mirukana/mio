@@ -11,7 +11,7 @@ from ...events import (
 from .errors import DecryptionError
 
 
-class Encryption(StateEvent):
+class EncryptionSettings(StateEvent):
     type = "m.room.encryption"
     make = Sources(
         sessions_max_duration = ("content", "rotation_period_ms"),
