@@ -13,6 +13,7 @@ import olm
 from aiofiles import open as aiopen
 
 from ...events import Event, RoomEvent, ToDeviceEvent
+from ...utils import AsyncInit
 from .. import ClientModule
 from . import errors as err
 from .decryption_meta import DecryptionMetadata
@@ -20,11 +21,10 @@ from .devices import Device
 from .events import EncryptionSettings, Megolm, Olm, RoomKey
 
 if TYPE_CHECKING:
-    from ...base_client import BaseClient
+    from ...base_client import Client
 
 # TODO: https://github.com/matrix-org/matrix-doc/pull/2732 (fallback OTK)
 # TODO: protect against concurrency and saving sessions before sharing
-# TODO: ensure logged in
 
 Payload = Dict[str, Any]
 
@@ -45,12 +45,11 @@ OutboundGroupSessionsType = Dict[
 
 
 @dataclass
-class Encryption(ClientModule):
-    client:    "BaseClient"
-    save_file: Optional[Path] = None
+class Encryption(ClientModule, AsyncInit):
+    client:      "Client"
+    save_folder: Path
 
     uploaded_device_keys: bool = field(default=False, init=False)
-    ready:                bool = field(default=False, init=False)
 
     # {user_id: {device_id: Device}}
     devices: Dict[str, Dict[str, Device]] = \
@@ -59,7 +58,7 @@ class Encryption(ClientModule):
     to_device_events: List[ToDeviceEvent] = \
         field(default_factory=list, repr=False, init=False)
 
-    _account: Optional[olm.Account] = field(default=None, init=False)
+    _account: olm.Account = field(init=False)
 
     # {sender_curve25519: [olm.Session]}
     _inbound_sessions: Dict[str, List[olm.Session]] = \
@@ -77,16 +76,7 @@ class Encryption(ClientModule):
         field(default_factory=dict, init=False)
 
 
-    async def init(self, save_file: Union[None, str, Path] = None) -> None:
-        if self.ready:
-            raise RuntimeError("Encryption module was already initialized")
-
-        if save_file:
-            self.save_file = Path(save_file)
-
-        if not self.save_file:
-            raise ValueError("Encryption.save_file path not set")
-
+    async def __ainit__(self) -> None:
         self.save_file.parent.mkdir(parents=True, exist_ok=True)
 
         if self.save_file.exists():
@@ -98,14 +88,18 @@ class Encryption(ClientModule):
         if not self.uploaded_device_keys:
             await self._upload_keys()
 
-        await self.query_devices([self.client.auth.user_id])
-        self.ready = True
+        await self.query_devices([self.client.user_id])
+
+
+    @property
+    def save_file(self) -> Path:
+        name = f"{self.client.user_id}.{self.client.device_id}.json"
+        return self.save_folder / name
 
 
     @property
     def own_device(self) -> Device:
-        auth = self.client.auth
-        return self.devices[auth.user_id][auth.device_id]
+        return self.devices[self.client.user_id][self.client.device_id]
 
 
     async def query_devices(
@@ -186,7 +180,6 @@ class Encryption(ClientModule):
 
 
     async def upload_one_time_keys(self, currently_uploaded: int) -> None:
-        assert self._account
         minimum = self._account.max_one_time_keys // 2
 
         if currently_uploaded >= minimum:
@@ -262,8 +255,6 @@ class Encryption(ClientModule):
         event:     RoomEvent,
     ) -> Megolm:
 
-        assert self._account
-
         # Do we have a non-expired outbound group session for this room?
         session, creation_date, encrypted_events_count = \
             self._outbound_group_sessions.get(room_id, (None, 0, 0))
@@ -319,7 +310,7 @@ class Encryption(ClientModule):
 
         encrypted = Megolm(
             sender_curve25519 = self._account.identity_keys["curve25519"],
-            device_id         = self.client.auth.device_id,
+            device_id         = self.client.device_id,
             session_id        = session.id,
             ciphertext        = session.encrypt(self._canonical_json(payload)),
         )
@@ -336,14 +327,12 @@ class Encryption(ClientModule):
 
 
     async def _upload_keys(self) -> None:
-        assert self._account
-
         device_keys = {
-            "user_id":    self.client.auth.user_id,
-            "device_id":  self.client.auth.device_id,
+            "user_id":    self.client.user_id,
+            "device_id":  self.client.device_id,
             "algorithms": [Olm.algorithm, Megolm.algorithm],
             "keys": {
-                f"{kind}:{self.client.auth.device_id}": key
+                f"{kind}:{self.client.device_id}": key
                 for kind, key in self._account.identity_keys.items()
             },
         }
@@ -414,9 +403,8 @@ class Encryption(ClientModule):
         self, user_id: str, device_id: str, info: Dict[str, Any],
     ) -> None:
 
-        auth = self.client.auth
-
-        if user_id == auth.user_id and device_id == auth.device_id:
+        client = self.client
+        if user_id == client.user_id and device_id == client.device_id:
             return
 
         if info["user_id"] != user_id:
@@ -459,11 +447,10 @@ class Encryption(ClientModule):
         signatures = dct.pop("signatures", {})
         unsigned   = dct.pop("unsigned", None)
 
-        assert self._account
         signature = self._account.sign(self._canonical_json(dct))
-        key       = f"ed25519:{self.client.auth.device_id}"
+        key       = f"ed25519:{self.client.device_id}"
 
-        signatures.setdefault(self.client.auth.user_id, {})[key] = signature
+        signatures.setdefault(self.client.user_id, {})[key] = signature
 
         dct["signatures"] = signatures
         if unsigned is not None:
@@ -476,8 +463,6 @@ class Encryption(ClientModule):
         self, event: Olm,
     ) -> Tuple[Payload, Optional[err.OlmVerificationError]]:
         # TODO: remove old sessions, unwedging, error handling?
-
-        assert self._account
 
         sender_curve = event.sender_curve25519
         own_key      = self._account.identity_keys["curve25519"]
@@ -508,7 +493,6 @@ class Encryption(ClientModule):
         if not is_prekey:
             raise err.OlmDecryptionError()  # TODO: unwedge
 
-        assert self._account
         session = olm.InboundSession(self._account, message, sender_curve)
         self._account.remove_one_time_keys(session)
         await self._save()
@@ -524,9 +508,6 @@ class Encryption(ClientModule):
 
 
     def _verify_olm_payload(self, event: Olm, payload: Payload) -> Payload:
-        assert self._account
-        assert self.client.auth.user_id
-        our_user_id    = self.client.auth.user_id
         our_ed25519    = self._account.identity_keys["ed25519"]
         our_curve25519 = self._account.identity_keys["curve25519"]
 
@@ -540,8 +521,8 @@ class Encryption(ClientModule):
         if payload_from != event.sender:
             raise err.OlmPayloadSenderMismatch(event.sender, payload_from)
 
-        if payload_to != our_user_id:
-            raise err.OlmPayloadWrongReceiver(payload_to, our_user_id)
+        if payload_to != self.client.user_id:
+            raise err.OlmPayloadWrongReceiver(payload_to, self.client.user_id)
 
         if payload_to_ed != our_ed25519:
             raise err.OlmPayloadWrongReceiverEd25519(
@@ -549,7 +530,7 @@ class Encryption(ClientModule):
             )
 
         if (
-            payload_from == our_user_id and
+            payload_from == self.client.user_id and
             payload_from_ed  == our_ed25519 and
             event.sender_curve25519 == our_curve25519
         ):
@@ -636,8 +617,6 @@ class Encryption(ClientModule):
         self, event: ToDeviceEvent, *devices: Device,
     ) -> Tuple[Dict[Device, Olm], Set[Device]]:
 
-        assert self._account
-
         sessions:         Dict[Device, olm.OutboundSession] = {}
         missing_sessions: Set[Device]                       = set()
         olms:             Dict[Device, Olm]                 = {}
@@ -668,7 +647,7 @@ class Encryption(ClientModule):
         payload_base: Dict[str, Any] = {
             "type":    event.type,
             "content": event.matrix["content"],
-            "sender":  self.client.auth.user_id,
+            "sender":  self.client.user_id,
             "keys":    {"ed25519": self._account.identity_keys["ed25519"]},
         }
 
@@ -683,7 +662,7 @@ class Encryption(ClientModule):
             cipher = Olm.Cipher(type=msg.message_type, body=msg.ciphertext)
 
             olms[device] = Olm(
-                sender            = self.client.auth.user_id,
+                sender            = self.client.user_id,
                 sender_curve25519 = self._account.identity_keys["curve25519"],
                 ciphertext        = {device.curve25519: cipher},
             )
@@ -696,10 +675,10 @@ class Encryption(ClientModule):
         async with aiopen(self.save_file) as file:  # type: ignore
             data = json.loads(await file.read())
 
-        if data["user_id"] != self.client.auth.user_id:
+        if data["user_id"] != self.client.user_id:
             raise ValueError("Mismatched user_id for saved account")
 
-        if data["device_id"] != self.client.auth.device_id:
+        if data["device_id"] != self.client.device_id:
             raise ValueError("Mismatched device_id for saved account")
 
         self.uploaded_device_keys = data["uploaded_device_keys"]
@@ -747,10 +726,9 @@ class Encryption(ClientModule):
 
     async def _save(self) -> None:
         # TODO: saving thousands of inbound sessions in single JSON, bad idea?
-        assert self._account
         data = {
-            "user_id":              self.client.auth.user_id,
-            "device_id":            self.client.auth.device_id,
+            "user_id":              self.client.user_id,
+            "device_id":            self.client.device_id,
             "uploaded_device_keys": self.uploaded_device_keys,
             "olm_account":          self._account.pickle().decode(),
 

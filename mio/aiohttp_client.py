@@ -1,23 +1,21 @@
 import json
 import logging as log
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Type, Union
 from urllib.parse import quote
 
 import aiohttp
 
-from . import BaseClient, ServerError
+from . import Client, ServerError
 
 
 @dataclass
-class AiohttpClient(BaseClient):
-    def __post_init__(self) -> None:
-        super().__post_init__()
-        self.session = aiohttp.ClientSession()
+class AiohttpClient(Client):
+    session = aiohttp.ClientSession()
 
 
     async def send(
-        self,
+        obj:        Union[Type["AiohttpClient"], "AiohttpClient"],
         method:     str,
         path:       List[str],
         parameters: Optional[Dict[str, Any]] = None,
@@ -25,11 +23,12 @@ class AiohttpClient(BaseClient):
         headers:    Optional[Dict[str, Any]] = None,
     ) -> bytes:
 
-        headers    = headers or {}
-        parameters = parameters or {}
+        headers     = headers or {}
+        parameters  = parameters or {}
+        joined_path = "/".join(quote(p, safe="") for p in path[1:])
 
-        if self.auth.access_token:
-            headers["Authorization"] = f"Bearer {self.auth.access_token}"
+        if hasattr(obj, "access_token"):
+            headers["Authorization"] = f"Bearer {obj.access_token}"
 
         for key, value in parameters.items():
             if not isinstance(value, str):
@@ -37,11 +36,9 @@ class AiohttpClient(BaseClient):
                     value, ensure_ascii=False, separators=(",", ":"),
                 )
 
-        joined_path = "/".join(quote(p, safe="") for p in path)
-
-        response = await self.session.request(
+        response = await obj.session.request(
             method  = method,
-            url     = f"{self.homeserver}/{joined_path}",
+            url     = f"{path[0]}/{joined_path}",
             params  = parameters,
             data    = data,
             headers = headers,

@@ -2,6 +2,15 @@ from enum import Enum
 from typing import Generator, Mapping, MutableMapping, Type
 
 
+class AsyncInit:
+    def __await__(self):
+        yield from self.__ainit__().__await__()
+        return self
+
+    async def __ainit__(self) -> None:
+        pass
+
+
 class AutoStrEnum(Enum):
     """An Enum where auto() assigns the member's name instead of an integer.
 

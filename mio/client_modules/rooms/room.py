@@ -7,12 +7,12 @@ from ...events.room_state import Member
 from ..encryption.events import EncryptionSettings, Megolm
 
 if TYPE_CHECKING:
-    from ...base_client import BaseClient
+    from ...base_client import Client
 
 
 @dataclass
 class Room:
-    client:     "BaseClient"
+    client:     "Client"
     id:         str
     encryption: Optional[EncryptionSettings] = None
     members:    Set[str]                     = field(default_factory=set)
