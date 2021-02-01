@@ -12,7 +12,7 @@ from .utils import AsyncInit, remove_none
 
 @dataclass
 class Client(AsyncInit):
-    e2e_folder:   Path
+    save_folder:  Path
     server:       str
     user_id:      str
     access_token: str
@@ -23,7 +23,7 @@ class Client(AsyncInit):
         self.auth  = Authentication(self)
         self.sync  = Synchronization(self)
         self.rooms = Rooms(self)
-        self.e2e   = await Encryption(self, self.e2e_folder)
+        self.e2e   = await Encryption(self)
 
 
     @property
@@ -34,9 +34,9 @@ class Client(AsyncInit):
     @classmethod
     async def login(
         cls,
-        e2e_folder: Union[Path, str],
-        server:     str,
-        auth:       Dict[str, Any],
+        save_folder: Union[Path, str],
+        server:      str,
+        auth:        Dict[str, Any],
     ) -> "Client":
 
         result = await cls.send_json(
@@ -47,7 +47,7 @@ class Client(AsyncInit):
         )
 
         return await cls(
-            e2e_folder   = Path(e2e_folder),
+            save_folder  = Path(save_folder),
             server       = server,
             user_id      = result["user_id"],
             access_token = result["access_token"],
@@ -58,7 +58,7 @@ class Client(AsyncInit):
     @classmethod
     async def login_password(
         cls,
-        e2e_folder:          Union[Path, str],
+        save_folder:         Union[Path, str],
         server:              str,
         user:                str,
         password:            str,
@@ -74,13 +74,13 @@ class Client(AsyncInit):
             "initial_device_display_name": initial_device_name,
         }
 
-        return await cls.login(e2e_folder, server, remove_none(auth))
+        return await cls.login(save_folder, server, remove_none(auth))
 
 
     @classmethod
     async def login_token(
         cls,
-        e2e_folder:          Union[Path, str],
+        save_folder:         Union[Path, str],
         server:              str,
         user:                str,
         token:               str,
@@ -96,7 +96,7 @@ class Client(AsyncInit):
             "initial_device_display_name": initial_device_name,
         }
 
-        return await cls.login(e2e_folder, server, remove_none(auth))
+        return await cls.login(save_folder, server, remove_none(auth))
 
 
     async def send(

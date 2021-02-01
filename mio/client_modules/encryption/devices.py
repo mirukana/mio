@@ -4,12 +4,12 @@ from typing import List, Optional
 
 @dataclass(eq=False)
 class Device:
-    user_id:              str
-    device_id:            str
-    ed25519:              str
-    curve25519:           str
-    supported_algorithms: List[str]
-    display_name:         Optional[str] = None
+    user_id:        str
+    device_id:      str
+    ed25519:        str
+    curve25519:     str
+    e2e_algorithms: List[str]
+    display_name:   Optional[str] = None
 
     def __eq__(self, other) -> bool:
         if not isinstance(other, Device):

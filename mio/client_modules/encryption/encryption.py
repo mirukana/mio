@@ -46,10 +46,7 @@ OutboundGroupSessionsType = Dict[
 
 @dataclass
 class Encryption(ClientModule, AsyncInit):
-    client:      "Client"
-    save_folder: Path
-
-    uploaded_device_keys: bool = field(default=False, init=False)
+    client: "Client"
 
     # {user_id: {device_id: Device}}
     devices: Dict[str, Dict[str, Device]] = \
@@ -83,18 +80,15 @@ class Encryption(ClientModule, AsyncInit):
             await self._load()
         else:
             self._account = olm.Account()
-            await self._save()
-
-        if not self.uploaded_device_keys:
             await self._upload_keys()
-
-        await self.query_devices([self.client.user_id])
+            await self.query_devices({self.client.user_id: []})
+            await self._save()
 
 
     @property
     def save_file(self) -> Path:
         name = f"{self.client.user_id}.{self.client.device_id}.json"
-        return self.save_folder / name
+        return self.client.save_folder / name
 
 
     @property
@@ -104,24 +98,31 @@ class Encryption(ClientModule, AsyncInit):
 
     async def query_devices(
         self,
-        for_users: Collection[str] = (),
-        token:     Optional[str]   = None,
-        timeout:   float           = 10,
+        # {user_id: [device_id]} - empty list = all devices for that user
+        devices:      Dict[str, List[str]],
+        update_token: Optional[str] = None,
+        timeout:      float         = 10,
     ) -> None:
 
-        for_users = {u for u in for_users if u not in self.devices}
+        if not update_token and any(d != [] for d in devices.items()):
+            raise ValueError("No update_token to do partial device queries")
 
-        if not for_users:
+        if not update_token:
+            devices = {
+                u: d for u, d in devices.items() if u not in self.devices
+            }
+
+        if not devices:
             return
 
-        log.info("Querying devices for %r", for_users)
+        log.info("Querying devices: %r", devices)
 
         result = await self.client.send_json(
             method = "POST",
             path   = [*self.client.api, "keys", "query"],
             body   = {
-                "device_keys": {user_id: [] for user_id in for_users},
-                "token":       token,
+                "device_keys": devices,
+                "token":       update_token,
                 "timeout":     timeout * 1000,
             },
         )
@@ -129,8 +130,8 @@ class Encryption(ClientModule, AsyncInit):
         if result["failures"]:
             log.warning("Failed querying some devices: %s", result["failures"])
 
-        for user_id, devices in result["device_keys"].items():
-            for device_id, info in devices.items():
+        for user_id, devs in result["device_keys"].items():
+            for device_id, info in devs.items():
                 try:
                     self._handle_queried_device(user_id, device_id, info)
                 except (err.QueriedDeviceError, err.InvalidSignedDict) as e:
@@ -270,15 +271,14 @@ class Encryption(ClientModule, AsyncInit):
             encrypted_events_count = 0
 
             # Then create a corresponding InboundGroupSession:
-            our_ed     = self._account.identity_keys["ed25519"]
-            our_curve  = self._account.identity_keys["curve25519"]
-            key        = (room_id, our_curve, session.id)
+            key        = (room_id, self.own_device.curve25519, session.id)
+            our_ed     = self.own_device.ed25519
             in_session = olm.InboundGroupSession(session.session_key)
 
             self._inbound_group_sessions[key] = (in_session, our_ed, {})
 
             # Now share the outbound group session with everyone in the room:
-            await self.query_devices(for_users)
+            await self.query_devices({u: [] for u in for_users})
 
             room_key = RoomKey(
                 algorithm   = RoomKey.Algorithm.megolm_v1_aes_sha2,
@@ -287,7 +287,7 @@ class Encryption(ClientModule, AsyncInit):
                 session_key = session.session_key,
             )
 
-            # TODO: device trust, supported_algorithms
+            # TODO: device trust, e2e_algorithms
             olms, no_otks = await self._encrypt_to_devices(
                 room_key,
                 *[d for uid in for_users for d in self.devices[uid].values()],
@@ -309,7 +309,7 @@ class Encryption(ClientModule, AsyncInit):
         }
 
         encrypted = Megolm(
-            sender_curve25519 = self._account.identity_keys["curve25519"],
+            sender_curve25519 = self.own_device.curve25519,
             device_id         = self.client.device_id,
             session_id        = session.id,
             ciphertext        = session.encrypt(self._canonical_json(payload)),
@@ -344,9 +344,6 @@ class Encryption(ClientModule, AsyncInit):
             path   = [*self.client.api, "keys", "upload"],
             body   = {"device_keys": device_keys},
         )
-
-        self.uploaded_device_keys = True
-        await self._save()
 
         uploaded = result["one_time_key_counts"].get("signed_curve25519", 0)
         await self.upload_one_time_keys(uploaded)
@@ -465,11 +462,11 @@ class Encryption(ClientModule, AsyncInit):
         # TODO: remove old sessions, unwedging, error handling?
 
         sender_curve = event.sender_curve25519
-        own_key      = self._account.identity_keys["curve25519"]
-        cipher       = event.ciphertext.get(own_key)
+        our_curve    = self.own_device.curve25519
+        cipher       = event.ciphertext.get(our_curve)
 
         if not cipher:
-            raise err.NoCipherForUs(own_key, event.ciphertext)
+            raise err.NoCipherForUs(our_curve, event.ciphertext)
 
         is_prekey = cipher.type == Olm.Cipher.Type.prekey
         msg_class = olm.OlmPreKeyMessage if is_prekey else olm.OlmMessage
@@ -508,11 +505,6 @@ class Encryption(ClientModule, AsyncInit):
 
 
     def _verify_olm_payload(self, event: Olm, payload: Payload) -> Payload:
-        our_ed25519    = self._account.identity_keys["ed25519"]
-        our_curve25519 = self._account.identity_keys["curve25519"]
-
-        sender_devices = self.devices[event.sender]
-
         payload_from    = payload.get("sender", "")
         payload_to      = payload.get("recipient", "")
         payload_from_ed = payload.get("keys", {}).get("ed25519")
@@ -524,26 +516,28 @@ class Encryption(ClientModule, AsyncInit):
         if payload_to != self.client.user_id:
             raise err.OlmPayloadWrongReceiver(payload_to, self.client.user_id)
 
-        if payload_to_ed != our_ed25519:
+        if payload_to_ed != self.own_device.ed25519:
             raise err.OlmPayloadWrongReceiverEd25519(
-                payload_to_ed, our_ed25519,
+                payload_to_ed, self.own_device.ed25519,
             )
 
         if (
             payload_from == self.client.user_id and
-            payload_from_ed  == our_ed25519 and
-            event.sender_curve25519 == our_curve25519
+            payload_from_ed  == self.own_device.ed25519 and
+            event.sender_curve25519 == self.own_device.curve25519
         ):
             return payload
 
         # TODO: verify device trust
-        for device in sender_devices.values():
+        for device in self.devices[event.sender].values():
             if device.curve25519 == event.sender_curve25519:
                 if device.ed25519 == payload_from_ed:
                     return payload
 
         raise err.OlmPayloadFromUnknownDevice(
-            sender_devices, payload_from_ed, event.sender_curve25519,
+            self.devices[event.sender],
+            payload_from_ed,
+            event.sender_curve25519,
         )
 
 
@@ -648,7 +642,7 @@ class Encryption(ClientModule, AsyncInit):
             "type":    event.type,
             "content": event.matrix["content"],
             "sender":  self.client.user_id,
-            "keys":    {"ed25519": self._account.identity_keys["ed25519"]},
+            "keys":    {"ed25519": self.own_device.ed25519},
         }
 
         for device, session in sessions.items():
@@ -663,7 +657,7 @@ class Encryption(ClientModule, AsyncInit):
 
             olms[device] = Olm(
                 sender            = self.client.user_id,
-                sender_curve25519 = self._account.identity_keys["curve25519"],
+                sender_curve25519 = self.own_device.curve25519,
                 ciphertext        = {device.curve25519: cipher},
             )
 
@@ -680,8 +674,6 @@ class Encryption(ClientModule, AsyncInit):
 
         if data["device_id"] != self.client.device_id:
             raise ValueError("Mismatched device_id for saved account")
-
-        self.uploaded_device_keys = data["uploaded_device_keys"]
 
         self._account = olm.Account.from_pickle(data["olm_account"].encode())
 
@@ -727,10 +719,9 @@ class Encryption(ClientModule, AsyncInit):
     async def _save(self) -> None:
         # TODO: saving thousands of inbound sessions in single JSON, bad idea?
         data = {
-            "user_id":              self.client.user_id,
-            "device_id":            self.client.device_id,
-            "uploaded_device_keys": self.uploaded_device_keys,
-            "olm_account":          self._account.pickle().decode(),
+            "user_id":     self.client.user_id,
+            "device_id":   self.client.device_id,
+            "olm_account": self._account.pickle().decode(),
 
             "inbound_sessions": {
                 key: [s.pickle().decode() for s in sessions]
