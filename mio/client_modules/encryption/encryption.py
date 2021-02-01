@@ -98,7 +98,14 @@ class Encryption(ClientModule):
         if not self.uploaded_device_keys:
             await self._upload_keys()
 
+        await self.query_devices([self.client.auth.user_id])
         self.ready = True
+
+
+    @property
+    def own_device(self) -> Device:
+        auth = self.client.auth
+        return self.devices[auth.user_id][auth.device_id]
 
 
     async def query_devices(
@@ -150,6 +157,9 @@ class Encryption(ClientModule):
 
         if not all(e.type == mtype for e in events.values()):
             raise TypeError(f"Not all events have the same type: {events}")
+
+        # We don't want to send events to the device we're using right now
+        events.pop(self.own_device, None)
 
         # {user_id: {device_id: matrix_event_content}}
         msgs: Dict[str, Dict[str, Dict[str, Any]]] = {}
