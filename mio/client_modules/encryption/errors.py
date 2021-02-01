@@ -123,3 +123,18 @@ class MegolmVerificationError(VerificationError):
 class MegolmPayloadWrongSender(MegolmVerificationError):
     starter_device_ed25519: str
     sender_curve25519:      str
+
+
+@dataclass(frozen=True)
+class InvalidSignedDict(EncryptionModuleError):
+    pass
+
+
+@dataclass(frozen=True)
+class SignedDictMissingKey(InvalidSignedDict):
+    key: str
+
+
+@dataclass(frozen=True)
+class SignedDictVerificationError(InvalidSignedDict):
+    code: str

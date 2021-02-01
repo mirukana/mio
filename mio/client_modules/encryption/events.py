@@ -54,6 +54,13 @@ class Olm(Event):
         algo = event.get("content", {}).get("algorithm")
         return cls.type == event.get("type") and cls.algorithm == algo
 
+    @property
+    def matrix(self) -> Dict[str, Any]:
+        event = super().matrix
+        # make sure this is always included
+        event["content"]["algorithm"] = self.algorithm
+        return event
+
 
 class Megolm(RoomEvent):
     type = "m.room.encrypted"
@@ -77,6 +84,13 @@ class Megolm(RoomEvent):
     def matches_event(cls, event: Dict[str, Any]) -> bool:
         algo = event.get("content", {}).get("algorithm")
         return cls.type == event.get("type") and cls.algorithm == algo
+
+    @property
+    def matrix(self) -> Dict[str, Any]:
+        event = super().matrix
+        # make sure this is always included
+        event["content"]["algorithm"] = self.algorithm
+        return event
 
 
 class RoomKey(ToDeviceEvent):

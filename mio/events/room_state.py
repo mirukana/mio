@@ -152,6 +152,10 @@ class Member(StateEvent):
     third_party_name: Optional[str]    = None
     # invite_room_state: List[StrippedState] = []  # TODO
 
+    @property
+    def left(self) -> bool:
+        return self.membership in (self.Membership.leave, self.membership.ban)
+
 
 class PowerLevels(StateEvent):
     type = "m.room.power_levels"

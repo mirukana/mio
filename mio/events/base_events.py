@@ -108,7 +108,7 @@ class Event(BaseModel, metaclass=EventMeta):
 class ToDeviceEvent(Event):
     make = Sources(sender="sender")
 
-    sender: UserId
+    sender: Optional[UserId] = None
 
 
 class RoomEvent(Event):

@@ -67,7 +67,7 @@ class Synchronization(ClientModule):
 
 
     async def handle_sync(self, sync: Dict[str, Any]) -> None:
-        # TODO: handle event parsing errors, device_lists
+        # TODO: handle event parsing errors, device_lists, partial syncs
 
         async def decrypt(
             event: Union[Olm, Megolm], room_id: Optional[str] = None,

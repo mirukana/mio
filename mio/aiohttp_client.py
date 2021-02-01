@@ -1,4 +1,5 @@
 import json
+import logging as log
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
@@ -47,6 +48,11 @@ class AiohttpClient(BaseClient):
         )
 
         read = await response.read()
+
+        log.debug(
+            "Sent %s %s %r %r\n\nReceived %r\n",
+            method, joined_path, parameters, data, read,
+        )
 
         try:
             response.raise_for_status()
