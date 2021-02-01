@@ -46,8 +46,8 @@ OutboundGroupSessionsType = Dict[
 
 @dataclass
 class Encryption(ClientModule):
-    client:       "BaseClient"
-    account_file: Optional[Path] = None
+    client:    "BaseClient"
+    save_file: Optional[Path] = None
 
     uploaded_device_keys: bool = field(default=False, init=False)
     ready:                bool = field(default=False, init=False)
@@ -77,19 +77,19 @@ class Encryption(ClientModule):
         field(default_factory=dict, init=False)
 
 
-    async def init(self, account_file: Union[None, str, Path] = None) -> None:
+    async def init(self, save_file: Union[None, str, Path] = None) -> None:
         if self.ready:
             raise RuntimeError("Encryption module was already initialized")
 
-        if account_file:
-            self.account_file = Path(account_file)
+        if save_file:
+            self.save_file = Path(save_file)
 
-        if not self.account_file:
-            raise ValueError("Encryption.account_file path not set")
+        if not self.save_file:
+            raise ValueError("Encryption.save_file path not set")
 
-        self.account_file.parent.mkdir(parents=True, exist_ok=True)
+        self.save_file.parent.mkdir(parents=True, exist_ok=True)
 
-        if self.account_file.exists():
+        if self.save_file.exists():
             await self._load()
         else:
             self._account = olm.Account()
@@ -683,7 +683,7 @@ class Encryption(ClientModule):
 
 
     async def _load(self) -> None:
-        async with aiopen(self.account_file) as file:  # type: ignore
+        async with aiopen(self.save_file) as file:  # type: ignore
             data = json.loads(await file.read())
 
         if data["user_id"] != self.client.auth.user_id:
@@ -777,5 +777,5 @@ class Encryption(ClientModule):
             },
         }
 
-        async with aiopen(self.account_file, "w") as file:  # type: ignore
+        async with aiopen(self.save_file, "w") as file:  # type: ignore
             await file.write(json.dumps(data, ensure_ascii=False, indent=4))
