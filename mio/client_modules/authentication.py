@@ -22,8 +22,8 @@ class Authentication(ClientModule):
 
 
     async def login(self, auth_dict: Dict[str, Any]) -> None:
-        if auth_dict.get("device_name") is None:
-            auth_dict["device_name"] = self.default_device_name
+        if auth_dict.get("initial_device_display_name") is None:
+            auth_dict["initial_device_display_name"] = self.default_device_name
 
         result = await self.client.send_json(
             method = "POST",
@@ -40,16 +40,16 @@ class Authentication(ClientModule):
         self,
         user:        str,
         password:    str,
-        device_name: Optional[str] = None,
         device_id:   Optional[str] = None,
+        device_name: Optional[str] = None,
     ) -> None:
 
         auth_dict = {
-            "type":        "m.login.password",
-            "user":        user,
-            "password":    password,
-            "device_name": device_name,
-            "device_id":   device_id,
+            "type":                        "m.login.password",
+            "user":                        user,
+            "password":                    password,
+            "device_id":                   device_id,
+            "initial_device_display_name": device_name,
         }
 
         await self.login(remove_none(auth_dict))
@@ -59,16 +59,16 @@ class Authentication(ClientModule):
         self,
         user:        str,
         token:       str,
-        device_name: Optional[str] = None,
         device_id:   Optional[str] = None,
+        device_name: Optional[str] = None,
     ) -> None:
 
         auth_dict = {
-            "type":        "m.login.token",
-            "user":        user,
-            "token":       token,
-            "device_name": device_name,
-            "device_id":   device_id,
+            "type":                        "m.login.token",
+            "user":                        user,
+            "token":                       token,
+            "device_id":                   device_id,
+            "initial_device_display_name": device_name,
         }
 
         await self.login(remove_none(auth_dict))
