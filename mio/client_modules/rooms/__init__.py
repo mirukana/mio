@@ -1,2 +1,2 @@
-from .room import Room, InvitedRoom, JoinedRoom, LeftRoom
+from .room import Room
 from .rooms import Rooms

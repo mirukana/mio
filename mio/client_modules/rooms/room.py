@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import List, Optional, Set, Tuple
 from uuid import uuid4
 
@@ -12,14 +13,42 @@ from ..encryption.events import EncryptionSettings, Megolm
 
 
 class Room(BaseModel):
-    client:     Client
-    id:         RoomId
+    client:  Client
+    id:      RoomId
+
+    # Set by Room.handle_event
+    inviter:    Optional[UserId]             = None  # TODO
     encryption: Optional[EncryptionSettings] = None
     members:    Set[UserId]                  = set()
 
-    events: List[Event] = []
+    # Set by Synchronizer.handle_sync
+    invited:              bool               = False
+    left:                 bool               = False
+    summary_heroes:       Tuple[UserId, ...] = ()
+    summary_joined:       int                = 0
+    summary_invited:      int                = 0
+    unread_notifications: int                = 0
+    unread_highlights:    int                = 0
+    scrollback_token:     Optional[str]      = None
+
+    events: List[Event] = []  # XXX: temporary
+
+
+    @property
+    def save_file(self) -> Path:
+        return self.client.save_dir / "rooms" / f"{self.id}.json"
+
+
+    @classmethod
+    async def load(cls, client: "Client", id: RoomId) -> "Room":
+        file = client.save_dir / "rooms" / f"{id}.json"
+        data = await cls._read_json(file)
+        return await cls(client=client, id=id, **data)
+
 
     async def handle_event(self, event: Event) -> None:
+        # TODO: handle_event**s** function that only saves at the end
+
         if isinstance(event, EncryptionSettings):
             self.encryption = event
 
@@ -31,6 +60,7 @@ class Room(BaseModel):
             self.members.add(event.state_key)
 
         self.events.append(event)
+
 
     async def send(
         self, event: RoomEvent, transaction_id: Optional[str] = None,
@@ -58,26 +88,6 @@ class Room(BaseModel):
         return result["event_id"]
 
 
-class InvitedRoom(Room):
-    inviter: Optional[str] = None
-
-
-class JoinedRoom(Room):
-    summary_heroes:       Tuple[str, ...] = ()
-    summary_joined:       int             = 0
-    summary_invited:      int             = 0
-    unread_notifications: int             = 0
-    unread_highlights:    int             = 0
-    scrollback_token:     Optional[str]   = None
-
-
-class LeftRoom(Room):
-    pass
-
-
 from ...base_client import Client
 
 Room.update_forward_refs()
-InvitedRoom.update_forward_refs()
-JoinedRoom.update_forward_refs()
-LeftRoom.update_forward_refs()

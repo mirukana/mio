@@ -7,7 +7,23 @@ from typing import (
 )
 
 from aiofiles import open as aiopen
-from pydantic import BaseModel
+from pydantic import BaseModel, PrivateAttr
+
+
+class MapModel(BaseModel, Mapping):
+    _data: dict = PrivateAttr(default_factory=dict)
+
+    def __getitem__(self, item: Any) -> Any:
+        return self._data[item]
+
+    def __iter__(self):
+        return iter(self._data)
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+    def __repr__(self) -> str:
+        return "%s(%s)" % (type(self).__name__, self._data)
 
 
 class FileModel(BaseModel, ABC):

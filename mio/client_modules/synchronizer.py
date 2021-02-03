@@ -5,9 +5,10 @@ from typing import Any, Callable, Dict, Optional, Set, Union
 from ..events import Event, RoomEvent
 from ..typing import RoomId, UserId
 from ..utils import remove_none
-from . import ClientModule, InvitedRoom, JoinedRoom, LeftRoom, Room
+from .client_module import ClientModule
 from .encryption.errors import DecryptionError
 from .encryption.events import Megolm, Olm
+from .rooms.room import Room
 
 FilterType = Union[None, str, Dict[str, Any]]
 
@@ -125,50 +126,54 @@ class Synchronization(ClientModule):
         # events_call(sync, "presence", noop)      # TODO
 
         rooms = self.client.rooms
-        default: Room
 
         for room_id, data in sync.get("rooms", {}).get("invite", {}).items():
-            default = InvitedRoom(client=self.client, id=room_id)
-            invited = rooms.invited.setdefault(room_id, default)
-            await room_events_call(data, "invite_state", invited)
+            default      = await Room(client=self.client, id=room_id)
+            room         = rooms._data.setdefault(room_id, default)
+            room.invited = True
+            room.left    = False
+            await room_events_call(data, "invite_state", room)
 
         for room_id, data in sync.get("rooms", {}).get("join", {}).items():
-            default = JoinedRoom(client=self.client, id=room_id)
-            joined = rooms.joined.setdefault(room_id, default)
+            default      = await Room(client=self.client, id=room_id)
+            room         = rooms._data.setdefault(room_id, default)
+            room.invited = False
+            room.left    = False
 
             prev_batch = data.get("timeline", {}).get("prev_batch")
             summary    = data.get("summary", {})
             unread     = data.get("unread_notifications", {})
 
-            if prev_batch and not joined.scrollback_token:
-                joined.scrollback_token = prev_batch
+            if prev_batch and not room.scrollback_token:
+                room.scrollback_token = prev_batch
 
             if summary.get("m.heroes"):
-                joined.summary_heroes = tuple(summary["m.heroes"])
+                room.summary_heroes = tuple(summary["m.heroes"])
 
             if summary.get("m.joined_members_count"):
-                joined.summary_joined = summary["m.joined_members_count"]
+                room.summary_joined = summary["m.joined_members_count"]
 
             if summary.get("m.invited_members_count"):
-                joined.summary_invited = summary["m.invited_members_count"]
+                room.summary_invited = summary["m.invited_members_count"]
 
             if unread.get("notification_count"):
-                joined.unread_notifications = unread["notification_count"]
+                room.unread_notifications = unread["notification_count"]
 
             if unread.get("highlight_count"):
-                joined.unread_highlights = unread["highlight_count"]
+                room.unread_highlights = unread["highlight_count"]
 
-            await events_call(data, "account_data", joined.handle_event)
-            await events_call(data, "ephemeral", joined.handle_event)
-            await room_events_call(data, "state", joined)
-            await room_events_call(data, "timeline", joined)
+            await events_call(data, "account_data", room.handle_event)
+            await events_call(data, "ephemeral", room.handle_event)
+            await room_events_call(data, "state", room)
+            await room_events_call(data, "timeline", room)
 
         for room_id, data in sync.get("rooms", {}).get("leave", {}).items():
-            default = LeftRoom(client=self.client, id=room_id)
-            left = rooms.left.setdefault(room_id, default)
-            await events_call(data, "account_data", left.handle_event)
-            await room_events_call(data, "state", left)
-            await room_events_call(data, "timeline", left)
+            default   = await Room(client=self.client, id=room_id)
+            room      = rooms._data.setdefault(room_id, default)
+            room.left = True
+            await events_call(data, "account_data", room.handle_event)
+            await room_events_call(data, "state", room)
+            await room_events_call(data, "timeline", room)
 
         if "device_one_time_keys_count" in sync:
             up = sync["device_one_time_keys_count"].get("signed_curve25519", 0)
