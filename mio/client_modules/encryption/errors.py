@@ -98,6 +98,11 @@ class MegolmDecryptionError(DecryptionError):
 
 
 @dataclass(frozen=True)
+class MegolmMissingSender(MegolmDecryptionError):
+    pass
+
+
+@dataclass(frozen=True)
 class NoInboundGroupSessionToDecrypt(MegolmDecryptionError):
     room_id:           str
     sender_curve25519: str

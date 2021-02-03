@@ -1,7 +1,6 @@
 import json
 import logging as log
 from contextlib import suppress
-from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import (
@@ -11,8 +10,11 @@ from uuid import uuid4
 
 import olm
 from aiofiles import open as aiopen
+from pydantic import Field
+from pydantic import validator as valid
 
 from ...events import Event, RoomEvent, ToDeviceEvent
+from ...typing import EventId, RoomId, UserId
 from ...utils import AsyncInit
 from .. import ClientModule
 from . import errors as err
@@ -20,75 +22,103 @@ from .decryption_meta import DecryptionMetadata
 from .devices import Device
 from .events import EncryptionSettings, Megolm, Olm, RoomKey
 
-if TYPE_CHECKING:
-    from ...base_client import Client
-
 # TODO: https://github.com/matrix-org/matrix-doc/pull/2732 (fallback OTK)
 # TODO: protect against concurrency and saving sessions before sharing
 
+if TYPE_CHECKING:
+    from ...base_client import Client
+
 Payload = Dict[str, Any]
 
-# {index: (event_id, timestamp)}
-MessageIndice = Dict[int, Tuple[Optional[str], Optional[float]]]
+MessageIndice = Dict[int, Tuple[Optional[EventId], Optional[datetime]]]
 
 InboundGroupSessionsType = Dict[
-    # (room_id, sender_curve25519, session_id)
-    Tuple[str, str, str],
+    # room_id, sender_curve25519 and session_id separated by a \t
+    # We use this weird format because json.dumps doesn't support tuple keys
+    str,
     # (session, sender_ed25519, message_indices)
     Tuple[olm.InboundGroupSession, str, MessageIndice],
 ]
 
 # {room_id: (session, creation_date, encrypted_events_count)}
 OutboundGroupSessionsType = Dict[
-    str, Tuple[olm.OutboundGroupSession, datetime, int],
+    RoomId, Tuple[olm.OutboundGroupSession, datetime, int],
 ]
 
 
-@dataclass
 class Encryption(ClientModule, AsyncInit):
-    client: "Client"
+    save_file: Path
 
-    # {user_id: {device_id: Device}}
-    devices: Dict[str, Dict[str, Device]] = \
-        field(default_factory=dict, init=False)
+    account: olm.Account                     = Field(None)
+    devices: Dict[UserId, Dict[str, Device]] = {}
 
-    to_device_events: List[ToDeviceEvent] = \
-        field(default_factory=list, repr=False, init=False)
+    # key = sender (inbound)/receiver (outbound) curve25519
+    inbound_sessions:  Dict[str, List[olm.Session]] = {}
+    outbound_sessions: Dict[str, List[olm.Session]] = {}
 
-    _account: olm.Account = field(init=False)
+    inbound_group_sessions:  InboundGroupSessionsType  = {}
+    outbound_group_sessions: OutboundGroupSessionsType = {}
 
-    # {sender_curve25519: [olm.Session]}
-    _inbound_sessions: Dict[str, List[olm.Session]] = \
-        field(default_factory=dict, init=False)
 
-    # {receiver_curve25519: [olm.Session]}
-    _outbound_sessions: Dict[str, List[olm.Session]] = \
-        field(default_factory=dict, init=False)
+    class Config:
+        arbitrary_types_allowed = True
 
-    _inbound_group_sessions: InboundGroupSessionsType = \
-        field(default_factory=dict, init=False)
+        def olm_pickle(obj: Any) -> str:
+            return obj.pickle().decode()
 
-    # {room_id: olm.OutboundGroupSession}
-    _outbound_group_sessions: Dict[str, olm.OutboundGroupSession] = \
-        field(default_factory=dict, init=False)
+        json_encoders = {
+            olm.Account:              olm_pickle,
+            olm.Session:              olm_pickle,
+            olm.OutboundGroupSession: olm_pickle,
+            olm.InboundGroupSession:  olm_pickle,
+        }
+
+
+    @valid("account", pre=True)
+    def _unpickle_account(cls, v):
+        return olm.Account.from_pickle(v.encode()) if isinstance(v, str) else v
+
+
+    @valid("inbound_sessions", "outbound_sessions", each_item=True, pre=True)
+    def _unpickle_session(cls, v):
+        return olm.Session.from_pickle(v.encode()) if isinstance(v, str) else v
+
+
+    @valid("inbound_group_sessions", "outbound_group_sessions", pre=True)
+    def _unpickle_group_session(cls, v, field):
+        stype = olm.InboundGroupSession
+        if field.name == "outbound_group_sessions":
+            stype = olm.OutboundGroupSession
+
+        def unpickle(s):
+            return stype.from_pickle(s.encode()) if isinstance(s, str) else s
+
+        return {
+            key: (unpickle(session), sender_ed25519, decrypted_indice)
+            for key, (session, sender_ed25519, decrypted_indice) in v.items()
+        }
 
 
     async def __ainit__(self) -> None:
-        self.save_file.parent.mkdir(parents=True, exist_ok=True)
-
-        if self.save_file.exists():
-            await self._load()
-        else:
-            self._account = olm.Account()
+        if not self.account:
+            self.account = olm.Account()
             await self._upload_keys()
             await self.query_devices({self.client.user_id: []})
             await self._save()
 
 
-    @property
-    def save_file(self) -> Path:
-        name = f"{self.client.user_id}.{self.client.device_id}.json"
-        return self.client.save_folder / name
+    @classmethod
+    async def load(cls, client: "Client") -> "Encryption":
+        save_file = client.save_folder / "encryption.json"
+
+        if not save_file.exists():
+            return await cls(client=client, save_file=save_file)
+
+        async with aiopen(save_file) as file:  # type: ignore
+            data = json.loads(await file.read())
+
+        data.update({"client": client, "save_file": save_file})
+        return await cls.parse_obj(data)
 
 
     @property
@@ -99,12 +129,12 @@ class Encryption(ClientModule, AsyncInit):
     async def query_devices(
         self,
         # {user_id: [device_id]} - empty list = all devices for that user
-        devices:      Dict[str, List[str]],
+        devices:      Dict[UserId, List[str]],
         update_token: Optional[str] = None,
         timeout:      float         = 10,
     ) -> None:
 
-        if not update_token and any(d != [] for d in devices.items()):
+        if not update_token and any(d != [] for d in devices.values()):
             raise ValueError("No update_token to do partial device queries")
 
         if not update_token:
@@ -123,7 +153,7 @@ class Encryption(ClientModule, AsyncInit):
             body   = {
                 "device_keys": devices,
                 "token":       update_token,
-                "timeout":     timeout * 1000,
+                "timeout":     int(timeout * 1000),
             },
         )
 
@@ -156,8 +186,7 @@ class Encryption(ClientModule, AsyncInit):
         # We don't want to send events to the device we're using right now
         events.pop(self.own_device, None)
 
-        # {user_id: {device_id: matrix_event_content}}
-        msgs: Dict[str, Dict[str, Dict[str, Any]]] = {}
+        msgs: Dict[UserId, Dict[str, Dict[str, Any]]] = {}
 
         for device, event in events.items():
             content = event.matrix["content"]
@@ -181,16 +210,16 @@ class Encryption(ClientModule, AsyncInit):
 
 
     async def upload_one_time_keys(self, currently_uploaded: int) -> None:
-        minimum = self._account.max_one_time_keys // 2
+        minimum = self.account.max_one_time_keys // 2
 
         if currently_uploaded >= minimum:
             return
 
-        self._account.generate_one_time_keys(minimum - currently_uploaded)
+        self.account.generate_one_time_keys(minimum - currently_uploaded)
 
         one_time_keys = {
             f"signed_curve25519:{keyid}": self._sign_dict({"key": key})
-            for keyid, key in self._account.one_time_keys["curve25519"].items()
+            for keyid, key in self.account.one_time_keys["curve25519"].items()
         }
 
         await self.client.send_json(
@@ -199,12 +228,12 @@ class Encryption(ClientModule, AsyncInit):
             body   = {"one_time_keys": one_time_keys},
         )
 
-        self._account.mark_keys_as_published()
+        self.account.mark_keys_as_published()
         await self._save()
 
 
     async def handle_to_device_event(self, event: ToDeviceEvent) -> None:
-        self.to_device_events.append(event)
+        log.debug("%s got to-device event: %r", self.client.user_id, event)
 
         if not isinstance(event, RoomKey):
             return
@@ -215,17 +244,17 @@ class Encryption(ClientModule, AsyncInit):
         assert event.decryption.decrypted_payload
         sender_ed25519 = event.decryption.decrypted_payload["keys"]["ed25519"]
 
-        ses = self._inbound_group_sessions
+        ses = self.inbound_group_sessions
         key = (event.room_id, encrypted.sender_curve25519, event.session_id)
 
-        if key not in ses:
-            session  = olm.InboundGroupSession(event.session_key)
-            ses[key] = (session, sender_ed25519, {})
+        if "\t".join(key) not in ses:
+            session             = olm.InboundGroupSession(event.session_key)
+            ses["\t".join(key)] = (session, sender_ed25519, {})
             await self._save()
 
 
     async def decrypt_event(
-        self, event: Union[Olm, Megolm], room_id: Optional[str] = None,
+        self, event: Union[Olm, Megolm], room_id: Optional[RoomId] = None,
     ) -> Event:
 
         verif: Optional[err.VerificationError]
@@ -240,7 +269,11 @@ class Encryption(ClientModule, AsyncInit):
 
         clear_source     = {**event.source, **payload}
         clear            = Event.subtype_from_source(clear_source)
-        clear.decryption = DecryptionMetadata(event, payload, verif)
+        clear.decryption = DecryptionMetadata(
+            encrypted_source   = event,
+            decrypted_payload  = payload,
+            verification_error = verif,
+        )
 
         if verif:
             log.warning("Error verifying decrypted event %r\n", clear)
@@ -250,32 +283,30 @@ class Encryption(ClientModule, AsyncInit):
 
     async def encrypt_room_event(
         self,
-        room_id:   str,
-        for_users: Collection[str],
+        room_id:   RoomId,
+        for_users: Collection[UserId],
         settings:  EncryptionSettings,
         event:     RoomEvent,
     ) -> Megolm:
 
-        # Do we have a non-expired outbound group session for this room?
-        session, creation_date, encrypted_events_count = \
-            self._outbound_group_sessions.get(room_id, (None, 0, 0))
+        default = (olm.OutboundGroupSession(), datetime.now(), 0)
 
+        session, creation_date, encrypted_events_count = \
+            self.outbound_group_sessions.get(room_id, default)
+
+        # Do we have an existing non-expired OGSession for this room?
         if (
-            not session or
+            room_id not in self.outbound_group_sessions or
             datetime.now() - creation_date > settings.sessions_max_age or
             encrypted_events_count > settings.sessions_max_messages
         ):
-            # We don't, create a new OutboundGroupSession:
-            session                = olm.OutboundGroupSession()
-            creation_date          = datetime.now()
-            encrypted_events_count = 0
-
-            # Then create a corresponding InboundGroupSession:
-            key        = (room_id, self.own_device.curve25519, session.id)
+            # Create a corresponding InboundGroupSession:
+            tuple_key  = (room_id, self.own_device.curve25519, session.id)
+            key        = "\t".join(tuple_key)
             our_ed     = self.own_device.ed25519
             in_session = olm.InboundGroupSession(session.session_key)
 
-            self._inbound_group_sessions[key] = (in_session, our_ed, {})
+            self.inbound_group_sessions[key] = (in_session, our_ed, {})
 
             # Now share the outbound group session with everyone in the room:
             await self.query_devices({u: [] for u in for_users})
@@ -316,14 +347,14 @@ class Encryption(ClientModule, AsyncInit):
         )
 
         msgs = encrypted_events_count + 1
-        self._outbound_group_sessions[room_id] = (session, creation_date, msgs)
+        self.outbound_group_sessions[room_id] = (session, creation_date, msgs)
         await self._save()
 
         return encrypted
 
 
-    async def drop_outbound_group_sessions(self, room_id: str) -> None:
-        self._outbound_group_sessions.pop(room_id, None)
+    async def drop_outbound_group_sessions(self, room_id: RoomId) -> None:
+        self.outbound_group_sessions.pop(room_id, None)
 
 
     async def _upload_keys(self) -> None:
@@ -333,7 +364,7 @@ class Encryption(ClientModule, AsyncInit):
             "algorithms": [Olm.algorithm, Megolm.algorithm],
             "keys": {
                 f"{kind}:{self.client.device_id}": key
-                for kind, key in self._account.identity_keys.items()
+                for kind, key in self.account.identity_keys.items()
             },
         }
 
@@ -350,7 +381,7 @@ class Encryption(ClientModule, AsyncInit):
 
 
     async def _claim_one_time_keys(
-        self, *devices: Device, timeout: int = 10,
+        self, *devices: Device, timeout: float = 10,
     ) -> Dict[Device, str]:
 
         if not devices:
@@ -365,7 +396,7 @@ class Encryption(ClientModule, AsyncInit):
         result = await self.client.send_json(
             method = "POST",
             path   = [*self.client.api, "keys", "claim"],
-            body   = {"timeout": timeout * 1000, "one_time_keys": otk},
+            body   = {"timeout": int(timeout * 1000), "one_time_keys": otk},
         )
 
         if result["failures"]:
@@ -397,12 +428,8 @@ class Encryption(ClientModule, AsyncInit):
 
 
     def _handle_queried_device(
-        self, user_id: str, device_id: str, info: Dict[str, Any],
+        self, user_id: UserId, device_id: str, info: Dict[str, Any],
     ) -> None:
-
-        client = self.client
-        if user_id == client.user_id and device_id == client.device_id:
-            return
 
         if info["user_id"] != user_id:
             raise err.QueriedDeviceUserIdMismatch(user_id, info["user_id"])
@@ -419,12 +446,13 @@ class Encryption(ClientModule, AsyncInit):
                 raise err.QueriedDeviceEd25519Mismatch(ed25519, signer_ed25519)
 
         self.devices.setdefault(user_id, {})[device_id] = Device(
-            user_id,
-            device_id,
-            signer_ed25519,
-            info["keys"][f"curve25519:{device_id}"],
-            info["algorithms"],
-            info.get("unsigned", {}).get("device_display_name"),
+            user_id        = user_id,
+            device_id      = device_id,
+            ed25519        = signer_ed25519,
+            curve25519     = info["keys"][f"curve25519:{device_id}"],
+            e2e_algorithms = info["algorithms"],
+            display_name   =
+                info.get("unsigned", {}).get("device_display_name"),
         )
 
 
@@ -444,7 +472,7 @@ class Encryption(ClientModule, AsyncInit):
         signatures = dct.pop("signatures", {})
         unsigned   = dct.pop("unsigned", None)
 
-        signature = self._account.sign(self._canonical_json(dct))
+        signature = self.account.sign(self._canonical_json(dct))
         key       = f"ed25519:{self.client.device_id}"
 
         signatures.setdefault(self.client.user_id, {})[key] = signature
@@ -472,7 +500,7 @@ class Encryption(ClientModule, AsyncInit):
         msg_class = olm.OlmPreKeyMessage if is_prekey else olm.OlmMessage
         message   = msg_class(cipher.body)
 
-        for session in self._inbound_sessions.get(event.sender_curve25519, []):
+        for session in self.inbound_sessions.get(event.sender_curve25519, []):
             if is_prekey and not session.matches(message, sender_curve):
                 continue
 
@@ -490,12 +518,12 @@ class Encryption(ClientModule, AsyncInit):
         if not is_prekey:
             raise err.OlmDecryptionError()  # TODO: unwedge
 
-        session = olm.InboundSession(self._account, message, sender_curve)
-        self._account.remove_one_time_keys(session)
+        session = olm.InboundSession(self.account, message, sender_curve)
+        self.account.remove_one_time_keys(session)
         await self._save()
 
         payload = json.loads(session.decrypt(message))
-        self._inbound_sessions.setdefault(sender_curve, []).append(session)
+        self.inbound_sessions.setdefault(sender_curve, []).append(session)
         await self._save()
 
         try:
@@ -544,7 +572,7 @@ class Encryption(ClientModule, AsyncInit):
     @staticmethod
     def _verify_signed_dict(
         dct:              Dict[str, Any],
-        signer_user_id:   str,
+        signer_user_id:   UserId,
         signer_device_id: str,
         signer_ed25519:   str,
     ) -> Dict[str, Any]:
@@ -567,21 +595,25 @@ class Encryption(ClientModule, AsyncInit):
 
 
     async def _decrypt_megolm_cipher(
-        self, room_id: str, event: Megolm,
+        self, room_id: RoomId, event: Megolm,
     ) -> Tuple[Payload, Optional[err.MegolmVerificationError]]:
 
-        key = (room_id, event.sender_curve25519, event.session_id)
+        tuple_key = (room_id, event.sender_curve25519, event.session_id)
+
         try:
-            session, starter_ed25519, decrypted_indices = \
-                self._inbound_group_sessions[key]
+            session, starter_ed25519, decrypted_indice = \
+                self.inbound_group_sessions["\t".join(tuple_key)]
         except KeyError:
             # TODO: unwedge, request keys?
-            raise err.NoInboundGroupSessionToDecrypt(*key)
+            raise err.NoInboundGroupSessionToDecrypt(*tuple_key)
 
         verif_error: Optional[err.MegolmVerificationError]
         verif_error = err.MegolmPayloadWrongSender(
             starter_ed25519, event.sender_curve25519,
         )
+
+        if not event.sender:
+            raise err.MegolmMissingSender()
 
         for device in self.devices[event.sender].values():
             if device.curve25519 == event.sender_curve25519:
@@ -593,15 +625,15 @@ class Encryption(ClientModule, AsyncInit):
         except olm.OlmGroupSessionError as e:
             raise err.MegolmSessionError(code=e.args[0])
 
-        known     = message_index in decrypted_indices
-        event_id  = event.event_id
-        timestamp = event.date.timestamp() if event.date else None
+        known    = message_index in decrypted_indice
+        event_id = event.event_id
+        date     = event.date
 
-        if known and decrypted_indices[message_index] != (event_id, timestamp):
+        if known and decrypted_indice[message_index] != (event_id, date):
             raise err.PossibleReplayAttack()
 
         if not known:
-            decrypted_indices[message_index] = (event_id, timestamp)
+            decrypted_indice[message_index] = (event_id, date)
             await self._save()
 
         return (json.loads(json_payload), verif_error)
@@ -619,7 +651,7 @@ class Encryption(ClientModule, AsyncInit):
         for device in devices:
             try:
                 sessions[device] = sorted(
-                    self._outbound_sessions[device.curve25519],
+                    self.outbound_sessions[device.curve25519],
                     key=lambda session: session.id,
                 )[0]
             except (KeyError, IndexError):
@@ -632,9 +664,9 @@ class Encryption(ClientModule, AsyncInit):
                 no_otks.add(device)
             else:
                 sessions[device] = olm.OutboundSession(
-                    self._account, device.curve25519, new_otks[device],
+                    self.account, device.curve25519, new_otks[device],
                 )
-                self._outbound_sessions.setdefault(
+                self.outbound_sessions.setdefault(
                     device.curve25519, [],
                 ).append(sessions[device])
 
@@ -665,96 +697,12 @@ class Encryption(ClientModule, AsyncInit):
         return (olms, no_otks)
 
 
-    async def _load(self) -> None:
-        async with aiopen(self.save_file) as file:  # type: ignore
-            data = json.loads(await file.read())
-
-        if data["user_id"] != self.client.user_id:
-            raise ValueError("Mismatched user_id for saved account")
-
-        if data["device_id"] != self.client.device_id:
-            raise ValueError("Mismatched device_id for saved account")
-
-        self._account = olm.Account.from_pickle(data["olm_account"].encode())
-
-        self._inbound_sessions = {
-            key: [olm.Session.from_pickle(s.encode()) for s in sessions]
-            for key, sessions in data["inbound_sessions"].items()
-        }
-
-        self._outbound_sessions = {
-            key: [olm.Session.from_pickle(s.encode()) for s in sessions]
-            for key, sessions in data["outbound_sessions"].items()
-        }
-
-        self._inbound_group_sessions = {
-            tuple(json.loads(key)): (  # type: ignore
-                olm.InboundGroupSession.from_pickle(session.encode()),
-                sender_ed25519,
-                {
-                    int(i): (event_id, timestamp)
-                    for i, (event_id, timestamp) in decrypted_indices.items()
-                },
-            )
-            for key, (session, sender_ed25519, decrypted_indices)
-            in data["inbound_group_sessions"].items()
-        }
-
-        self._outbound_group_sessions = {
-            room_id: (
-                olm.OutboundGroupSession.from_pickle(session.encode()),
-                datetime.fromtimestamp(creation_date),
-                encrypted_events_count,
-            )
-            for room_id, (session, creation_date, encrypted_events_count) in
-            data["outbound_group_sessions"].items()
-        }
-
-        self.devices = {
-            user_id: {d["device_id"]: Device(**d) for d in devices.values()}
-            for user_id, devices in data["devices"].items()
-        }
-
-
     async def _save(self) -> None:
         # TODO: saving thousands of inbound sessions in single JSON, bad idea?
-        data = {
-            "user_id":     self.client.user_id,
-            "device_id":   self.client.device_id,
-            "olm_account": self._account.pickle().decode(),
+        self.save_file.parent.mkdir(parents=True, exist_ok=True)
 
-            "inbound_sessions": {
-                key: [s.pickle().decode() for s in sessions]
-                for key, sessions in self._inbound_sessions.items()
-            },
-
-            "outbound_sessions": {
-                key: [s.pickle().decode() for s in sessions]
-                for key, sessions in self._outbound_sessions.items()
-            },
-
-            "inbound_group_sessions": {
-                json.dumps(key):
-                [session.pickle().decode(), sender_ed25519, decrypted_indices]
-                for key, (session, sender_ed25519, decrypted_indices) in
-                self._inbound_group_sessions.items()
-            },
-
-            "outbound_group_sessions": {
-                room_id: (
-                    session.pickle().decode(),
-                    create_date.timestamp(),
-                    encrypted_events_count,
-                )
-                for room_id, (session, create_date, encrypted_events_count) in
-                self._outbound_group_sessions.items()
-            },
-
-            "devices": {
-                user_id: {d.device_id: asdict(d) for d in devices.values()}
-                for user_id, devices in self.devices.items()
-            },
-        }
+        exclude = {"client", "save_file"}
+        data    = self.json(exclude=exclude, ensure_ascii=False, indent=4)
 
         async with aiopen(self.save_file, "w") as file:  # type: ignore
-            await file.write(json.dumps(data, ensure_ascii=False, indent=4))
+            await file.write(data)

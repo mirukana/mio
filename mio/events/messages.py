@@ -1,6 +1,7 @@
 from typing import Any, ClassVar, Dict, Optional
 
-from . import EventMeta, RoomEvent, Sources
+from .base_events import EventMeta, RoomEvent
+from .utils import Sources
 
 _TEXT_SOURCE = Sources(
     format         = ("content", "format"),

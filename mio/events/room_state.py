@@ -3,10 +3,10 @@ from typing import Dict, List, Optional
 
 from pydantic import AnyUrl, validator
 
+from ..typing import EmptyString, EventId, RoomAlias, RoomId, UserId
 from ..utils import AutoStrEnum
-from . import (
-    EmptyString, EventId, RoomAlias, RoomId, Sources, StateEvent, UserId,
-)
+from .base_events import StateEvent
+from .utils import Sources
 
 # TODO: m.room.third_party_invite, prev_content
 

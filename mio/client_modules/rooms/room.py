@@ -1,23 +1,23 @@
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, List, Optional, Set, Tuple
+from __future__ import annotations
+
+from typing import List, Optional, Set, Tuple
 from uuid import uuid4
+
+from pydantic import BaseModel
 
 from ...events.base_events import Event, RoomEvent, StateEvent
 from ...events.room_state import Member
+from ...typing import RoomId, UserId
 from ..encryption.events import EncryptionSettings, Megolm
 
-if TYPE_CHECKING:
-    from ...base_client import Client
 
-
-@dataclass
-class Room:
-    client:     "Client"
-    id:         str
+class Room(BaseModel):
+    client:     Client
+    id:         RoomId
     encryption: Optional[EncryptionSettings] = None
-    members:    Set[str]                     = field(default_factory=set)
+    members:    Set[UserId]                  = set()
 
-    events: List[Event] = field(default_factory=list, repr=False)
+    events: List[Event] = []
 
     async def handle_event(self, event: Event) -> None:
         if isinstance(event, EncryptionSettings):
@@ -58,12 +58,10 @@ class Room:
         return result["event_id"]
 
 
-@dataclass
 class InvitedRoom(Room):
     inviter: Optional[str] = None
 
 
-@dataclass
 class JoinedRoom(Room):
     summary_heroes:       Tuple[str, ...] = ()
     summary_joined:       int             = 0
@@ -73,6 +71,13 @@ class JoinedRoom(Room):
     scrollback_token:     Optional[str]   = None
 
 
-@dataclass
 class LeftRoom(Room):
     pass
+
+
+from ...base_client import Client
+
+Room.update_forward_refs()
+InvitedRoom.update_forward_refs()
+JoinedRoom.update_forward_refs()
+LeftRoom.update_forward_refs()

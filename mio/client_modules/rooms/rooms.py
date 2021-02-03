@@ -1,16 +1,15 @@
-from dataclasses import dataclass, field
 from typing import Dict
 
+from ...typing import RoomId
 from .. import ClientModule
 from . import InvitedRoom, JoinedRoom, LeftRoom, Room
 
 
-@dataclass
 class Rooms(ClientModule):
-    invited: Dict[str, InvitedRoom] = field(default_factory=dict)
-    joined:  Dict[str, JoinedRoom]  = field(default_factory=dict)
-    left:    Dict[str, LeftRoom]    = field(default_factory=dict)
+    invited: Dict[RoomId, InvitedRoom] = {}
+    joined:  Dict[RoomId, JoinedRoom]  = {}
+    left:    Dict[RoomId, LeftRoom]    = {}
 
     @property
-    def all(self) -> Dict[str, Room]:
+    def all(self) -> Dict[RoomId, Room]:
         return {**self.joined, **self.invited, **self.left}

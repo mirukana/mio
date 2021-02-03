@@ -1,10 +1,12 @@
-from dataclasses import dataclass
 from typing import List, Optional
 
+from pydantic import BaseModel
 
-@dataclass(eq=False)
-class Device:
-    user_id:        str
+from ...typing import UserId
+
+
+class Device(BaseModel):
+    user_id:        UserId
     device_id:      str
     ed25519:        str
     curve25519:     str

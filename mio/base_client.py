@@ -1,29 +1,33 @@
+from __future__ import annotations
+
 import json
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type, Union
 
-from .client_modules.authentication import Authentication
-from .client_modules.encryption.encryption import Encryption
-from .client_modules.rooms import Rooms
-from .client_modules.synchronizer import Synchronization
+from pydantic import AnyHttpUrl, BaseModel, Field
+
+from .typing import UserId
 from .utils import AsyncInit, remove_none
 
 
-@dataclass
-class Client(AsyncInit):
+class Client(BaseModel, AsyncInit):
     save_folder:  Path
-    server:       str
-    user_id:      str
+    server:       AnyHttpUrl
+    user_id:      UserId
     access_token: str
     device_id:    str
 
+    e2e:   Encryption      = Field(None)
+    auth:  Authentication  = Field(None)
+    sync:  Synchronization = Field(None)
+    rooms: Rooms           = Field(None)
+
 
     async def __ainit__(self) -> None:
-        self.auth  = Authentication(self)
-        self.sync  = Synchronization(self)
-        self.rooms = Rooms(self)
-        self.e2e   = await Encryption(self)
+        self.e2e   = await Encryption.load(self)
+        self.auth  = Authentication(client=self)
+        self.rooms = Rooms(client=self)
+        self.sync  = Synchronization(client=self)
 
 
     @property
@@ -35,7 +39,7 @@ class Client(AsyncInit):
     async def login(
         cls,
         save_folder: Union[Path, str],
-        server:      str,
+        server:      AnyHttpUrl,
         auth:        Dict[str, Any],
     ) -> "Client":
 
@@ -59,7 +63,7 @@ class Client(AsyncInit):
     async def login_password(
         cls,
         save_folder:         Union[Path, str],
-        server:              str,
+        server:              AnyHttpUrl,
         user:                str,
         password:            str,
         device_id:           Optional[str] = None,
@@ -81,7 +85,7 @@ class Client(AsyncInit):
     async def login_token(
         cls,
         save_folder:         Union[Path, str],
-        server:              str,
+        server:              AnyHttpUrl,
         user:                str,
         token:               str,
         device_id:           Optional[str] = None,
@@ -124,3 +128,13 @@ class Client(AsyncInit):
         data   = json.dumps(body).encode()
         result = await cls.send(obj, method, path, parameters, data, headers)
         return json.loads(result)
+
+
+# Required to avoid circular import
+
+from .client_modules.authentication import Authentication
+from .client_modules.encryption.encryption import Encryption
+from .client_modules.rooms import Rooms
+from .client_modules.synchronizer import Synchronization
+
+Client.update_forward_refs()

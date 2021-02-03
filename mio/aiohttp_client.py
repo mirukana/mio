@@ -1,6 +1,5 @@
 import json
 import logging as log
-from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Type, Union
 from urllib.parse import quote
 
@@ -9,9 +8,8 @@ import aiohttp
 from . import Client, ServerError
 
 
-@dataclass
 class AiohttpClient(Client):
-    session = aiohttp.ClientSession()
+    _session = aiohttp.ClientSession()
 
 
     async def send(
@@ -36,7 +34,7 @@ class AiohttpClient(Client):
                     value, ensure_ascii=False, separators=(",", ":"),
                 )
 
-        response = await obj.session.request(
+        response = await obj._session.request(
             method  = method,
             url     = f"{path[0]}/{joined_path}",
             params  = parameters,

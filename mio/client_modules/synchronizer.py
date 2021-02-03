@@ -1,9 +1,9 @@
 import asyncio
 import logging as log
-from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional, Set, Union
 
 from ..events import Event, RoomEvent
+from ..typing import RoomId, UserId
 from ..utils import remove_none
 from . import ClientModule, InvitedRoom, JoinedRoom, LeftRoom, Room
 from .encryption.errors import DecryptionError
@@ -12,18 +12,17 @@ from .encryption.events import Megolm, Olm
 FilterType = Union[None, str, Dict[str, Any]]
 
 
-@dataclass
 class Synchronization(ClientModule):
     next_batch: Optional[str] = None
 
 
     async def sync(
         self,
-        timeout:      Optional[int]  = 0,
-        sync_filter:  FilterType     = None,
-        since:        Optional[str]  = None,
-        full_state:   Optional[bool] = None,
-        set_presence: Optional[str]  = None,
+        timeout:      Optional[float] = 0,
+        sync_filter:  FilterType      = None,
+        since:        Optional[str]   = None,
+        full_state:   Optional[bool]  = None,
+        set_presence: Optional[str]   = None,
     ) -> None:
 
         parameters = {
@@ -70,7 +69,7 @@ class Synchronization(ClientModule):
         # TODO: handle event parsing errors, device_lists, partial syncs
 
         async def decrypt(
-            event: Union[Olm, Megolm], room_id: Optional[str] = None,
+            event: Union[Olm, Megolm], room_id: Optional[RoomId] = None,
         ) -> Event:
             try:
                 return await self.client.e2e.decrypt_event(event, room_id)
@@ -101,7 +100,7 @@ class Synchronization(ClientModule):
 
                 await room.handle_event(clear)
 
-        users: Set[str] = set()
+        users: Set[UserId] = set()
 
         for event in sync.get("to_device", {}).get("events", ()):
             if Olm.matches_event(event):
@@ -114,10 +113,10 @@ class Synchronization(ClientModule):
                 for event in data.get("timeline", {}).get("events", ()):
                     if Megolm.matches_event(event):
                         parsed = Megolm.from_source(event)
-                        if isinstance(parsed, Megolm):
+                        if isinstance(parsed, Megolm) and parsed.sender:
                             users.add(parsed.sender)
 
-        await self.client.e2e.query_devices(users)
+        await self.client.e2e.query_devices({u: [] for u in users})
 
         coro = self.client.e2e.handle_to_device_event
         await events_call(sync, "to_device", coro)
@@ -129,12 +128,12 @@ class Synchronization(ClientModule):
         default: Room
 
         for room_id, data in sync.get("rooms", {}).get("invite", {}).items():
-            default = InvitedRoom(self.client, room_id)
+            default = InvitedRoom(client=self.client, id=room_id)
             invited = rooms.invited.setdefault(room_id, default)
             await room_events_call(data, "invite_state", invited)
 
         for room_id, data in sync.get("rooms", {}).get("join", {}).items():
-            default = JoinedRoom(self.client, room_id)
+            default = JoinedRoom(client=self.client, id=room_id)
             joined = rooms.joined.setdefault(room_id, default)
 
             prev_batch = data.get("timeline", {}).get("prev_batch")
@@ -165,7 +164,7 @@ class Synchronization(ClientModule):
             await room_events_call(data, "timeline", joined)
 
         for room_id, data in sync.get("rooms", {}).get("leave", {}).items():
-            default = LeftRoom(self.client, room_id)
+            default = LeftRoom(client=self.client, id=room_id)
             left = rooms.left.setdefault(room_id, default)
             await events_call(data, "account_data", left.handle_event)
             await room_events_call(data, "state", left)

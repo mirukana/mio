@@ -1,10 +1,14 @@
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from __future__ import annotations
 
-if TYPE_CHECKING:
-    from ..base_client import Client
+from pydantic import BaseModel
 
 
-@dataclass
-class ClientModule:
-    client: "Client"
+class ClientModule(BaseModel):
+    client: Client
+
+
+# Required to avoid circular import
+
+from ..base_client import Client
+
+ClientModule.update_forward_refs()

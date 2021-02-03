@@ -1,6 +1,8 @@
 from typing import Optional
 
-from . import EventId, RoomEvent, Sources
+from ..typing import EventId
+from .base_events import RoomEvent
+from .utils import Sources
 
 
 class Redaction(RoomEvent):

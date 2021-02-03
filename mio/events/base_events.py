@@ -10,8 +10,9 @@ from pydantic import BaseModel, ValidationError
 from pydantic.main import ModelMetaclass
 
 from ..client_modules.encryption.decryption_meta import DecryptionMetadata
+from ..typing import EventId, RoomId, UserId
 from ..utils import deep_find_subclasses
-from . import EventId, RoomId, Sources, UserId
+from .utils import Sources
 
 EvT    = TypeVar("EvT", bound="Event")
 EventT = Union["Event", EvT]
