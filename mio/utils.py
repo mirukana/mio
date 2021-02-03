@@ -1,5 +1,41 @@
+import json
 from enum import Enum
-from typing import Generator, Mapping, MutableMapping, Type
+from pathlib import Path
+from typing import (
+    Any, ClassVar, Dict, Generator, Mapping, MutableMapping, Type,
+)
+
+from aiofiles import open as aiopen
+from pydantic import BaseModel
+
+
+class FileModel(BaseModel):
+    json_kwargs: ClassVar[Dict[str, Any]] = {}
+
+    save_file: Path
+
+    async def _save(self) -> None:
+        json_kwargs: Dict[str, Any] = {
+            "exclude": set(),
+            "ensure_ascii": False,
+            "indent": 4,
+            **self.json_kwargs,
+        }
+        json_kwargs["exclude"].update({"save_file", "json_kwargs"})
+
+        self.save_file.parent.mkdir(parents=True, exist_ok=True)
+        data = self.json(**json_kwargs)
+
+        async with aiopen(self.save_file, "w") as file:  # type: ignore
+            await file.write(data)
+
+    @staticmethod
+    async def _read_json(file: Path) -> Dict[str, Any]:
+        if not file.exists():
+            return {}
+
+        async with aiopen(file) as f:  # type: ignore
+            return json.loads(await f.read())
 
 
 class AsyncInit:

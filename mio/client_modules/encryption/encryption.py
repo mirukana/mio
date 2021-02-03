@@ -2,20 +2,18 @@ import json
 import logging as log
 from contextlib import suppress
 from datetime import datetime
-from pathlib import Path
 from typing import (
     TYPE_CHECKING, Any, Collection, Dict, List, Optional, Set, Tuple, Union,
 )
 from uuid import uuid4
 
 import olm
-from aiofiles import open as aiopen
 from pydantic import Field
 from pydantic import validator as valid
 
 from ...events import Event, RoomEvent, ToDeviceEvent
 from ...typing import EventId, RoomId, UserId
-from ...utils import AsyncInit
+from ...utils import AsyncInit, FileModel
 from .. import ClientModule
 from . import errors as err
 from .decryption_meta import DecryptionMetadata
@@ -46,9 +44,7 @@ OutboundGroupSessionsType = Dict[
 ]
 
 
-class Encryption(ClientModule, AsyncInit):
-    save_file: Path
-
+class Encryption(ClientModule, FileModel, AsyncInit):
     account: olm.Account                     = Field(None)
     devices: Dict[UserId, Dict[str, Device]] = {}
 
@@ -58,6 +54,8 @@ class Encryption(ClientModule, AsyncInit):
 
     inbound_group_sessions:  InboundGroupSessionsType  = {}
     outbound_group_sessions: OutboundGroupSessionsType = {}
+
+    json_kwargs = {"exclude": {"client"}}
 
 
     class Config:
@@ -110,15 +108,8 @@ class Encryption(ClientModule, AsyncInit):
     @classmethod
     async def load(cls, client: "Client") -> "Encryption":
         save_file = client.save_folder / "encryption.json"
-
-        if not save_file.exists():
-            return await cls(client=client, save_file=save_file)
-
-        async with aiopen(save_file) as file:  # type: ignore
-            data = json.loads(await file.read())
-
-        data.update({"client": client, "save_file": save_file})
-        return await cls.parse_obj(data)
+        data      = await cls._read_json(save_file)
+        return await cls(client=client, save_file=save_file, **data)
 
 
     @property
@@ -695,14 +686,3 @@ class Encryption(ClientModule, AsyncInit):
 
         await self._save()
         return (olms, no_otks)
-
-
-    async def _save(self) -> None:
-        # TODO: saving thousands of inbound sessions in single JSON, bad idea?
-        self.save_file.parent.mkdir(parents=True, exist_ok=True)
-
-        exclude = {"client", "save_file"}
-        data    = self.json(exclude=exclude, ensure_ascii=False, indent=4)
-
-        async with aiopen(self.save_file, "w") as file:  # type: ignore
-            await file.write(data)
