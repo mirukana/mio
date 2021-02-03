@@ -4,15 +4,14 @@ from pathlib import Path
 from typing import List, Optional, Set, Tuple
 from uuid import uuid4
 
-from pydantic import BaseModel
-
 from ...events.base_events import Event, RoomEvent, StateEvent
 from ...events.room_state import Member
 from ...typing import RoomId, UserId
+from ...utils import AsyncInit, FileModel
 from ..encryption.events import EncryptionSettings, Megolm
 
 
-class Room(BaseModel):
+class Room(FileModel, AsyncInit):
     client:  Client
     id:      RoomId
 
@@ -33,6 +32,15 @@ class Room(BaseModel):
 
     events: List[Event] = []  # XXX: temporary
 
+    json_kwargs = {"exclude": {"client", "id", "events"}}
+
+
+    async def __ainit__(self) -> None:
+        # Don't overwrite a pre-existing saved room when this class is used
+        # in a `rooms.setdefault(...)` call (see Synchronizer.handle_sync)
+        if not self.save_file.exists():
+            await self._save()
+
 
     @property
     def save_file(self) -> Path:
@@ -51,13 +59,16 @@ class Room(BaseModel):
 
         if isinstance(event, EncryptionSettings):
             self.encryption = event
+            await self._save()
 
         elif isinstance(event, Member) and event.left:
             self.members.discard(event.state_key)
             await self.client.e2e.drop_outbound_group_sessions(self.id)
+            await self._save()
 
         elif isinstance(event, Member):
             self.members.add(event.state_key)
+            await self._save()
 
         self.events.append(event)
 

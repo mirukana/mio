@@ -1,15 +1,30 @@
-from typing import Dict
+from pathlib import Path
+from typing import TYPE_CHECKING, Dict
 
 from pydantic import PrivateAttr
 
 from ...typing import RoomId
 from ...utils import MapModel
 from .. import ClientModule
-from . import Room
+from .room import Room
+
+if TYPE_CHECKING:
+    from ...base_client import Client
 
 
 class Rooms(ClientModule, MapModel):
     _data: Dict[RoomId, Room] = PrivateAttr(default_factory=dict)
+
+
+    @classmethod
+    async def load(cls, client: "Client") -> "Rooms":
+        rooms = cls(client=client)
+
+        for room_file in (client.save_dir / "rooms").glob("*.json"):
+            room = await Room.load(client=client, id=RoomId(room_file.stem))
+            rooms._data[room.id] = room
+
+        return rooms
 
 
     @property

@@ -18,9 +18,9 @@ class Client(FileModel, AsyncInit):
     device_id:    str
 
     e2e:   Encryption      = Field(None)
+    rooms: Rooms           = Field(None)
     auth:  Authentication  = Field(None)
     sync:  Synchronization = Field(None)
-    rooms: Rooms           = Field(None)
 
     json_kwargs = {
         "include": {"server", "user_id", "access_token", "device_id"},
@@ -29,8 +29,8 @@ class Client(FileModel, AsyncInit):
 
     async def __ainit__(self) -> None:
         self.e2e   = await Encryption.load(self)
+        self.rooms = await Rooms.load(self)
         self.auth  = Authentication(client=self)
-        self.rooms = Rooms(client=self)
         self.sync  = Synchronization(client=self)
         await self._save()
 
