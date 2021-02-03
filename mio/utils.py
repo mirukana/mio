@@ -40,7 +40,7 @@ class MapModel(Model, Mapping):
 
 
 class FileModel(Model, ABC):
-    json_kwargs: ClassVar[Dict[str, Any]] = {}
+    __json__: ClassVar[Dict[str, Any]] = {}
 
     @abstractproperty
     def save_file(self) -> Path:
@@ -51,7 +51,7 @@ class FileModel(Model, ABC):
             "exclude": set(),
             "ensure_ascii": False,
             "indent": 4,
-            **self.json_kwargs,
+            **self.__json__,
         }
         json_kwargs["exclude"].add("json_kwargs")
 

@@ -32,7 +32,7 @@ class Room(FileModel, AsyncInit):
 
     events: List[Event] = []  # XXX: temporary
 
-    json_kwargs = {"exclude": {"client", "id", "events"}}
+    __json__         = {"exclude": {"client", "id", "events"}}
     __repr_exclude__ = ("client", "events", "members")
 
 

@@ -55,7 +55,7 @@ class Encryption(ClientModule, FileModel, AsyncInit):
     inbound_group_sessions:  InboundGroupSessionsType  = {}
     outbound_group_sessions: OutboundGroupSessionsType = {}
 
-    json_kwargs = {"exclude": {"client"}}
+    __json__ = {"exclude": {"client"}}
 
 
     class Config:

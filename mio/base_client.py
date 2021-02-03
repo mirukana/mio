@@ -23,7 +23,7 @@ class Client(FileModel, AsyncInit):
     sync:  Synchronization = Field(None)
 
     __repr_exclude__ = ("e2e", "rooms", "auth", "sync")
-    json_kwargs = {
+    __json__         = {
         "include": {"server", "user_id", "access_token", "device_id"},
     }
 
