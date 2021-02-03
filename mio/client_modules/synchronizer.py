@@ -18,15 +18,15 @@ class Synchronization(ClientModule):
 
     async def sync(
         self,
-        timeout:      Optional[float] = 0,
-        sync_filter:  FilterType      = None,
-        since:        Optional[str]   = None,
-        full_state:   Optional[bool]  = None,
-        set_presence: Optional[str]   = None,
+        timeout:      float          = 0,
+        sync_filter:  FilterType     = None,
+        since:        Optional[str]  = None,
+        full_state:   Optional[bool] = None,
+        set_presence: Optional[str]  = None,
     ) -> None:
 
         parameters = {
-            "timeout":      timeout,
+            "timeout":      int(timeout * 1000),
             "filter":       sync_filter,
             # or self.loaded_sync_token TODO
             "since":        since or self.next_batch,
@@ -49,13 +49,13 @@ class Synchronization(ClientModule):
 
     async def loop(
         self,
-        timeout:                     Optional[int]  = 0,
+        timeout:                     float          = 10,
         sync_filter:                 FilterType     = None,
         first_sync_filter:           FilterType     = None,
         since:                       Optional[str]  = None,
         full_state:                  Optional[bool] = None,
         set_presence:                Optional[str]  = None,
-        sleep_seconds_between_syncs: float          = 0,
+        sleep_seconds_between_syncs: float          = 1,
     ) -> None:
 
         await self.sync(0, first_sync_filter, since, full_state, set_presence)
@@ -66,7 +66,7 @@ class Synchronization(ClientModule):
 
 
     async def handle_sync(self, sync: Dict[str, Any]) -> None:
-        # TODO: handle event parsing errors, device_lists, partial syncs
+        # TODO: device_lists, partial syncs
 
         async def decrypt(
             event: Union[Olm, Megolm], room_id: Optional[RoomId] = None,
