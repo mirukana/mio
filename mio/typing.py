@@ -1,5 +1,5 @@
 import re
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Optional
 
 HOST_REGEX = r"[a-zA-Z\d.:-]*[a-zA-Z\d]"
 
@@ -17,35 +17,46 @@ class CustomType:
         return "%s(%s)" % (type(self).__name__, super().__repr__())
 
 
-class RegexType(str, CustomType):
-    regex: ClassVar[str] = r".*"
+class CustomString(str, CustomType):
+    min_length: int                     = 0
+    max_length: Optional[int]           = None
+    regex:      ClassVar[Optional[str]] = None
 
     @classmethod
-    def validate(cls, value: Any) -> "RegexType":
+    def validate(cls, value: Any) -> "CustomString":
         if not isinstance(value, str):
             raise TypeError(f"{value!r}: must be a string")
 
-        if not re.match(cls.regex, value):
+        if len(value) < cls.min_length:
+            raise TypeError(f"{value!r}: length must be >={cls.min_length}")
+
+        if cls.max_length is not None and len(value) > cls.max_length:
+            raise TypeError(f"{value!r}: length must be <={cls.max_length}")
+
+        if cls.regex is not None and not re.match(cls.regex, value):
             raise ValueError(f"{value!r}: does not match regex {cls.regex!r}")
 
         return cls(value)
 
 
-class EmptyString(RegexType):
-    regex = r"^$"
+class EmptyString(CustomString):
+    max_length = 0
 
 
-class UserId(RegexType):
-    regex = rf"^@[\x21-\x39\x3B-\x7E]+:{HOST_REGEX}$"
+class UserId(CustomString):
+    max_length = 255
+    regex      = rf"^@[\x21-\x39\x3B-\x7E]+:{HOST_REGEX}$"
 
 
-class EventId(RegexType):
-    regex = r"^\$.+"
+class EventId(CustomString):
+    max_length = 255
+    regex      = r"^\$.+"
 
 
-class RoomId(RegexType):
-    regex = rf"^!.+:{HOST_REGEX}$"
+class RoomId(CustomString):
+    max_length = 255
+    regex      = rf"^!.+:{HOST_REGEX}$"
 
 
-class RoomAlias(RegexType):
+class RoomAlias(CustomString):
     regex = rf"^#.+:{HOST_REGEX}$"
