@@ -53,12 +53,22 @@ class Client(FileModel, AsyncInit):
         server:   AnyHttpUrl,
         auth:     Dict[str, Any],
     ) -> "Client":
+        """Login to a homeserver using a custom authentication dict.
+
+        The `save_dir`, folder where client data will be stored, can contain
+        `{user_id}` and `{device_id}` placeholders that will be
+        automatically filled.
+        """
 
         result = await cls.send_json(
             obj    = cls,
             method = "POST",
             path   = [server, "_matrix", "client", "r0", "login"],
             body   = auth,
+        )
+
+        save_dir = str(save_dir).format(
+            user_id=result["user_id"], device_id=result["device_id"],
         )
 
         return await cls(
