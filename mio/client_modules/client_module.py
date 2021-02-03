@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from ..utils import Model
 
 
-class ClientModule(BaseModel):
+class ClientModule(Model):
     client: Client
+
+    __repr_exclude__ = ["client"]
 
 
 # Required to avoid circular import

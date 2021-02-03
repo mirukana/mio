@@ -4,15 +4,13 @@ import json
 import logging as log
 from datetime import datetime, timedelta
 from math import floor
-from typing import (
-    Any, ClassVar, Dict, List, Optional, Tuple, Type, TypeVar, Union,
-)
+from typing import Any, ClassVar, Dict, Optional, Type, TypeVar, Union
 
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 from pydantic.main import ModelMetaclass
 
 from ..typing import EventId, RoomId, UserId
-from ..utils import deep_find_subclasses
+from ..utils import Model, deep_find_subclasses
 from .utils import Sources
 
 EvT    = TypeVar("EvT", bound="Event")
@@ -28,7 +26,7 @@ class EventMeta(ModelMetaclass):
         return super().__new__(mcs, name, bases, namespace, **kwargs)
 
 
-class Event(BaseModel, metaclass=EventMeta):
+class Event(Model, metaclass=EventMeta):
     type: ClassVar[Optional[str]] = None
     make: ClassVar[Sources]       = Sources()
 
@@ -39,6 +37,8 @@ class Event(BaseModel, metaclass=EventMeta):
     decrypted_payload:             Optional[Dict[str, Any]] = None
     decryption_verification_error: Optional[Exception]      = None
 
+    __repr_exclude__ = [lambda self: "source" if self.type else None]
+
     class Config:
         arbitrary_types_allowed = True  # needed for exception fields
 
@@ -46,12 +46,6 @@ class Event(BaseModel, metaclass=EventMeta):
             datetime: lambda v: floor(v.timestamp() * 1000),
             timedelta: lambda v: floor(v.total_seconds() * 1000),
         }
-
-    def __repr_args__(self) -> List[Tuple[Optional[str], Any]]:
-        return [
-            (name, value) for name, value in super().__repr_args__()
-            if name != "source" or not self.type
-        ]
 
     @classmethod
     def fields_from_matrix(cls, event: Dict[str, Any]) -> Dict[str, Any]:

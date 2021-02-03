@@ -1,11 +1,10 @@
 from typing import List, Optional
 
-from pydantic import BaseModel
-
 from ...typing import UserId
+from ...utils import Model
 
 
-class Device(BaseModel):
+class Device(Model):
     user_id:        UserId
     device_id:      str
     ed25519:        str

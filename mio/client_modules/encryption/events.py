@@ -2,11 +2,10 @@ from datetime import timedelta
 from enum import Enum
 from typing import Any, ClassVar, Dict, Optional
 
-from pydantic import BaseModel
-
 from ...events.base_events import Event, RoomEvent, StateEvent, ToDeviceEvent
 from ...events.utils import Sources
 from ...typing import EmptyString, RoomId, UserId
+from ...utils import Model
 from .errors import DecryptionError
 
 
@@ -25,7 +24,7 @@ class EncryptionSettings(StateEvent):
 
 
 class Olm(Event):
-    class Cipher(BaseModel):
+    class Cipher(Model):
         class Type(Enum):
             prekey = 0
             normal = 1

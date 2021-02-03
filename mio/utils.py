@@ -3,14 +3,27 @@ from abc import ABC, abstractproperty
 from enum import Enum
 from pathlib import Path
 from typing import (
-    Any, ClassVar, Dict, Generator, Mapping, MutableMapping, Type,
+    Any, Callable, ClassVar, Collection, Dict, Generator, List, Mapping,
+    MutableMapping, Optional, Tuple, Type, TypeVar, Union,
 )
 
 from aiofiles import open as aiopen
 from pydantic import BaseModel, PrivateAttr
 
+ModelT       = TypeVar("ModelT", bound="Model")
+ReprCallable = Callable[[ModelT], Optional[str]]
 
-class MapModel(BaseModel, Mapping):
+class Model(BaseModel):
+    __repr_exclude__: ClassVar[Collection[Union[str, ReprCallable]]] = ()
+
+    def __repr_args__(self) -> List[Tuple[Optional[str], Any]]:
+        exclude = {
+            e(self) if callable(e) else e for e in self.__repr_exclude__
+        }
+        return [(k, v) for k, v in super().__repr_args__() if k not in exclude]
+
+
+class MapModel(Model, Mapping):
     _data: dict = PrivateAttr(default_factory=dict)
 
     def __getitem__(self, item: Any) -> Any:
@@ -26,7 +39,7 @@ class MapModel(BaseModel, Mapping):
         return "%s(%s)" % (type(self).__name__, self._data)
 
 
-class FileModel(BaseModel, ABC):
+class FileModel(Model, ABC):
     json_kwargs: ClassVar[Dict[str, Any]] = {}
 
     @abstractproperty
