@@ -1,4 +1,5 @@
 import json
+from abc import ABC, abstractproperty
 from enum import Enum
 from pathlib import Path
 from typing import (
@@ -9,10 +10,12 @@ from aiofiles import open as aiopen
 from pydantic import BaseModel
 
 
-class FileModel(BaseModel):
+class FileModel(BaseModel, ABC):
     json_kwargs: ClassVar[Dict[str, Any]] = {}
 
-    save_file: Path
+    @abstractproperty
+    def save_file(self) -> Path:
+        pass
 
     async def _save(self) -> None:
         json_kwargs: Dict[str, Any] = {
@@ -21,7 +24,7 @@ class FileModel(BaseModel):
             "indent": 4,
             **self.json_kwargs,
         }
-        json_kwargs["exclude"].update({"save_file", "json_kwargs"})
+        json_kwargs["exclude"].add("json_kwargs")
 
         self.save_file.parent.mkdir(parents=True, exist_ok=True)
         data = self.json(**json_kwargs)

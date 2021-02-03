@@ -11,6 +11,7 @@ from .utils import AsyncInit, FileModel, remove_none
 
 
 class Client(FileModel, AsyncInit):
+    save_dir:     Path
     server:       AnyHttpUrl
     user_id:      UserId
     access_token: str
@@ -39,11 +40,15 @@ class Client(FileModel, AsyncInit):
         return [self.server, "_matrix", "client", "r0"]
 
 
+    @property
+    def save_file(self) -> Path:
+        return self.save_dir / "client.json"
+
+
     @classmethod
     async def load(cls, save_dir: Union[Path, str]) -> "Client":
-        save_file = Path(save_dir) / "client.json"
-        data      = await cls._read_json(save_file)
-        return await cls(save_file=save_file, **data)
+        data = await cls._read_json(Path(save_dir) / "client.json")
+        return await cls(save_dir=Path(save_dir), **data)
 
 
     @classmethod
@@ -72,7 +77,7 @@ class Client(FileModel, AsyncInit):
         )
 
         return await cls(
-            save_file    = Path(save_dir) / "client.json",
+            save_dir     = Path(save_dir),
             server       = server,
             user_id      = result["user_id"],
             access_token = result["access_token"],

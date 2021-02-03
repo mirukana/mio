@@ -2,6 +2,7 @@ import json
 import logging as log
 from contextlib import suppress
 from datetime import datetime
+from pathlib import Path
 from typing import (
     TYPE_CHECKING, Any, Collection, Dict, List, Optional, Set, Tuple, Union,
 )
@@ -105,11 +106,15 @@ class Encryption(ClientModule, FileModel, AsyncInit):
             await self._save()
 
 
+    @property
+    def save_file(self) -> Path:
+        return self.client.save_dir / "encryption.json"
+
+
     @classmethod
     async def load(cls, client: "Client") -> "Encryption":
-        save_file = client.save_file.parent / "encryption.json"
-        data      = await cls._read_json(save_file)
-        return await cls(client=client, save_file=save_file, **data)
+        data = await cls._read_json(client.save_dir / "encryption.json")
+        return await cls(client=client, **data)
 
 
     @property
