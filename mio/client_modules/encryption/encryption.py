@@ -107,7 +107,7 @@ class Encryption(ClientModule, FileModel, AsyncInit):
 
     @classmethod
     async def load(cls, client: "Client") -> "Encryption":
-        save_file = client.save_folder / "encryption.json"
+        save_file = client.save_file.parent / "encryption.json"
         data      = await cls._read_json(save_file)
         return await cls(client=client, save_file=save_file, **data)
 

@@ -4,14 +4,13 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type, Union
 
-from pydantic import AnyHttpUrl, BaseModel, Field
+from pydantic import AnyHttpUrl, Field
 
 from .typing import UserId
-from .utils import AsyncInit, remove_none
+from .utils import AsyncInit, FileModel, remove_none
 
 
-class Client(BaseModel, AsyncInit):
-    save_folder:  Path
+class Client(FileModel, AsyncInit):
     server:       AnyHttpUrl
     user_id:      UserId
     access_token: str
@@ -22,12 +21,17 @@ class Client(BaseModel, AsyncInit):
     sync:  Synchronization = Field(None)
     rooms: Rooms           = Field(None)
 
+    json_kwargs = {
+        "include": {"server", "user_id", "access_token", "device_id"},
+    }
+
 
     async def __ainit__(self) -> None:
         self.e2e   = await Encryption.load(self)
         self.auth  = Authentication(client=self)
         self.rooms = Rooms(client=self)
         self.sync  = Synchronization(client=self)
+        await self._save()
 
 
     @property
@@ -36,11 +40,18 @@ class Client(BaseModel, AsyncInit):
 
 
     @classmethod
+    async def load(cls, save_dir: Union[Path, str]) -> "Client":
+        save_file = Path(save_dir) / "client.json"
+        data      = await cls._read_json(save_file)
+        return await cls(save_file=save_file, **data)
+
+
+    @classmethod
     async def login(
         cls,
-        save_folder: Union[Path, str],
-        server:      AnyHttpUrl,
-        auth:        Dict[str, Any],
+        save_dir: Union[Path, str],
+        server:   AnyHttpUrl,
+        auth:     Dict[str, Any],
     ) -> "Client":
 
         result = await cls.send_json(
@@ -51,7 +62,7 @@ class Client(BaseModel, AsyncInit):
         )
 
         return await cls(
-            save_folder  = Path(save_folder),
+            save_file    = Path(save_dir) / "client.json",
             server       = server,
             user_id      = result["user_id"],
             access_token = result["access_token"],
@@ -62,7 +73,7 @@ class Client(BaseModel, AsyncInit):
     @classmethod
     async def login_password(
         cls,
-        save_folder:         Union[Path, str],
+        save_dir:            Union[Path, str],
         server:              AnyHttpUrl,
         user:                str,
         password:            str,
@@ -78,13 +89,13 @@ class Client(BaseModel, AsyncInit):
             "initial_device_display_name": initial_device_name,
         }
 
-        return await cls.login(save_folder, server, remove_none(auth))
+        return await cls.login(save_dir, server, remove_none(auth))
 
 
     @classmethod
     async def login_token(
         cls,
-        save_folder:         Union[Path, str],
+        save_dir:            Union[Path, str],
         server:              AnyHttpUrl,
         user:                str,
         token:               str,
@@ -100,7 +111,7 @@ class Client(BaseModel, AsyncInit):
             "initial_device_display_name": initial_device_name,
         }
 
-        return await cls.login(save_folder, server, remove_none(auth))
+        return await cls.login(save_dir, server, remove_none(auth))
 
 
     async def send(
