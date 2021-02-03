@@ -4,10 +4,9 @@ from typing import Any, ClassVar, Dict, Optional
 
 from pydantic import BaseModel
 
-from ...events import (
-    EmptyString, Event, RoomEvent, RoomId, Sources, StateEvent, ToDeviceEvent,
-    UserId,
-)
+from ...events.base_events import Event, RoomEvent, StateEvent, ToDeviceEvent
+from ...events.utils import Sources
+from ...typing import EmptyString, RoomId, UserId
 from .errors import DecryptionError
 
 

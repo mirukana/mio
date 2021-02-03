@@ -17,7 +17,6 @@ from ...typing import EventId, RoomId, UserId
 from ...utils import AsyncInit, FileModel
 from .. import ClientModule
 from . import errors as err
-from .decryption_meta import DecryptionMetadata
 from .devices import Device
 from .events import EncryptionSettings, Megolm, Olm, RoomKey
 
@@ -234,14 +233,14 @@ class Encryption(ClientModule, FileModel, AsyncInit):
         if not isinstance(event, RoomKey):
             return
 
-        assert event.decryption.encrypted_source
-        encrypted = event.decryption.encrypted_source
+        assert event.encrypted_source
+        sender_curve25519 = event.encrypted_source["content"]["sender_key"]
 
-        assert event.decryption.decrypted_payload
-        sender_ed25519 = event.decryption.decrypted_payload["keys"]["ed25519"]
+        assert event.decrypted_payload
+        sender_ed25519 = event.decrypted_payload["keys"]["ed25519"]
 
         ses = self.inbound_group_sessions
-        key = (event.room_id, encrypted.sender_curve25519, event.session_id)
+        key = (event.room_id, sender_curve25519, event.session_id)
 
         if "\t".join(key) not in ses:
             session             = olm.InboundGroupSession(event.session_key)
@@ -265,11 +264,10 @@ class Encryption(ClientModule, FileModel, AsyncInit):
 
         clear_source     = {**event.source, **payload}
         clear            = Event.subtype_from_source(clear_source)
-        clear.decryption = DecryptionMetadata(
-            encrypted_source   = event,
-            decrypted_payload  = payload,
-            verification_error = verif,
-        )
+
+        clear.encrypted_source              = event.source
+        clear.decrypted_payload             = payload
+        clear.decryption_verification_error = verif
 
         if verif:
             log.warning("Error verifying decrypted event %r\n", clear)

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import logging as log
 from datetime import datetime, timedelta
@@ -9,7 +11,6 @@ from typing import (
 from pydantic import BaseModel, ValidationError
 from pydantic.main import ModelMetaclass
 
-from ..client_modules.encryption.decryption_meta import DecryptionMetadata
 from ..typing import EventId, RoomId, UserId
 from ..utils import deep_find_subclasses
 from .utils import Sources
@@ -32,11 +33,14 @@ class Event(BaseModel, metaclass=EventMeta):
     make: ClassVar[Sources]       = Sources()
 
     source:           Dict[str, Any]            = {}
-    decryption:       DecryptionMetadata        = DecryptionMetadata()
     validation_error: Optional[ValidationError] = None
 
+    encrypted_source:              Optional[Dict[str, Any]] = None
+    decrypted_payload:             Optional[Dict[str, Any]] = None
+    decryption_verification_error: Optional[Exception]      = None
+
     class Config:
-        arbitrary_types_allowed = True  # needed for `validation_error` field
+        arbitrary_types_allowed = True  # needed for exception fields
 
         json_encoders = {
             datetime: lambda v: floor(v.timestamp() * 1000),
