@@ -82,22 +82,22 @@ class Synchronization(ClientModule):
         async def events_call(data: dict, key: str, coro: Callable) -> None:
             for event in data.get(key, {}).get("events", ()):
                 if Olm.matches_event(event):
-                    parsed = Olm.from_source(event)
+                    parsed = Olm.from_matrix(event)
                     if isinstance(parsed, Olm):
                         await coro(await decrypt(parsed))
                     else:
                         await coro(parsed)
                 else:
-                    await coro(Event.subtype_from_source(event))
+                    await coro(Event.subtype_from_matrix(event))
 
         async def room_events_call(data: dict, key: str, room: Room) -> None:
             for event in data.get(key, {}).get("events", ()):
                 if Megolm.matches_event(event):
-                    clear = Megolm.from_source(event)
+                    clear = Megolm.from_matrix(event)
                     if isinstance(clear, Megolm):
                         clear = await decrypt(clear, room.id)
                 else:
-                    clear = RoomEvent.subtype_from_source(event)
+                    clear = RoomEvent.subtype_from_matrix(event)
 
                 await room.handle_event(clear)
 
@@ -105,7 +105,7 @@ class Synchronization(ClientModule):
 
         for event in sync.get("to_device", {}).get("events", ()):
             if Olm.matches_event(event):
-                parsed = Olm.from_source(event)
+                parsed = Olm.from_matrix(event)
                 if isinstance(parsed, Olm):
                     users.add(parsed.sender)
 
@@ -113,7 +113,7 @@ class Synchronization(ClientModule):
             for data in sync.get("rooms", {}).get(kind, {}).values():
                 for event in data.get("timeline", {}).get("events", ()):
                     if Megolm.matches_event(event):
-                        parsed = Megolm.from_source(event)
+                        parsed = Megolm.from_matrix(event)
                         if isinstance(parsed, Megolm) and parsed.sender:
                             users.add(parsed.sender)
 

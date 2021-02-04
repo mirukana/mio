@@ -263,7 +263,7 @@ class Encryption(ClientModule, FileModel, AsyncInit):
             payload, verif = await self._decrypt_megolm_cipher(room_id, event)
 
         clear_source     = {**event.source, **payload}
-        clear            = Event.subtype_from_source(clear_source)
+        clear            = Event.subtype_from_matrix(clear_source)
 
         clear.encrypted_source              = event.source
         clear.decrypted_payload             = payload

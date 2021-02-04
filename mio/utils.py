@@ -1,6 +1,7 @@
 import json
 from abc import ABC, abstractproperty
 from enum import Enum
+from functools import partial
 from pathlib import Path
 from typing import (
     Any, Callable, ClassVar, Collection, Dict, Generator, List, Mapping,
@@ -8,10 +9,12 @@ from typing import (
 )
 
 from aiofiles import open as aiopen
-from pydantic import BaseModel, PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr
 
 ModelT       = TypeVar("ModelT", bound="Model")
 ReprCallable = Callable[[ModelT], Optional[str]]
+
+Const = partial(Field, const=True)
 
 class Model(BaseModel):
     __repr_exclude__: ClassVar[Collection[Union[str, ReprCallable]]] = ()

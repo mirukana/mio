@@ -4,22 +4,21 @@ from typing import Dict, List, Optional
 from pydantic import AnyUrl, validator
 
 from ..typing import EmptyString, EventId, RoomAlias, RoomId, UserId
-from ..utils import AutoStrEnum
+from ..utils import AutoStrEnum, Const
 from .base_events import StateEvent
-from .utils import Sources
 
 # TODO: m.room.third_party_invite, prev_content
 
 
 class Creation(StateEvent):
-    type = "m.room.create"
-    make = Sources(
-        creator           = ("content", "creator"),
-        federate          = ("content", "m.federate"),
-        version           = ("content", "room_version"),
-        previous_room_id  = ("content", "predecessor", "room_id"),
-        previous_event_id = ("content", "predecessor", "event_id"),
-    )
+    class Matrix:
+        creator           = ("content", "creator")
+        federate          = ("content", "m.federate")
+        version           = ("content", "room_version")
+        previous_room_id  = ("content", "predecessor", "room_id")
+        previous_event_id = ("content", "predecessor", "event_id")
+
+    type = Const("m.room.create")
 
     state_key:         EmptyString
     creator:           UserId
@@ -30,36 +29,42 @@ class Creation(StateEvent):
 
 
 class Name(StateEvent):
-    type = "m.room.name"
-    make = Sources(name=("content", "name"))
+    class Matrix:
+        name = ("content", "name")
+
+    type = Const("m.room.name")
 
     state_key: EmptyString
     name:      Optional[str]
 
 
 class Topic(StateEvent):
-    type = "m.room.topic"
-    make = Sources(topic=("content", "topic"))
+    class Matrix:
+        topic = ("content", "topic")
+
+    type = Const("m.room.topic")
 
     state_key: EmptyString
     topic:     Optional[str]
 
 
 class Avatar(StateEvent):
-    type = "m.room.avatar"
-    make = Sources(url=("content", "url"))
+    class Matrix:
+        url = ("content", "url")
 
+    type = Const("m.room.avatar")
+
+    # TODO: info
     state_key: EmptyString
     url:       Optional[AnyUrl]
-    # TODO: info
 
 
 class CanonicalAlias(StateEvent):
-    type = "m.room.canonical_alias"
-    make = Sources(
-        alias        = ("content", "alias"),
-        alternatives = ("content", "alt_aliases"),
-    )
+    class Matrix:
+        alias        = ("content", "alias")
+        alternatives = ("content", "alt_aliases")
+
+    type = Const("m.room.canonical_alias")
 
     state_key:    EmptyString
     alias:        RoomAlias
@@ -73,8 +78,10 @@ class JoinRules(StateEvent):
         invite  = auto()
         private = auto()
 
-    type = "m.room.join_rules"
-    make = Sources(rule=("content", "join_rule"))
+    class Matrix:
+        rule = ("content", "join_rule")
+
+    type = Const("m.room.join_rules")
 
     state_key: EmptyString
     rule:      Rule
@@ -87,8 +94,10 @@ class HistoryVisibility(StateEvent):
         shared         = auto()
         world_readable = auto()
 
-    type = "m.room.history_visibility"
-    make = Sources(visibility=("content", "history_visibility"))
+    class Matrix:
+        visibility = ("content", "history_visibility")
+
+    type = Const("m.room.history_visibility")
 
     state_key:  EmptyString
     visibility: Visibility
@@ -99,27 +108,31 @@ class GuestAccess(StateEvent):
         can_join  = auto()
         forbidden = auto()
 
-    type = "m.room.guest_access"
-    make = Sources(access=("content", "guest_access"))
+    class Matrix:
+        access = ("content", "guest_access")
+
+    type = Const("m.room.guest_access")
 
     state_key: EmptyString
     access:    Access
 
 
 class PinnedEvents(StateEvent):
-    type = "m.room.pinned_events"
-    make = Sources(pinned=("content", "pinned"))
+    class Matrix:
+        pinned = ("content", "pinned")
+
+    type = Const("m.room.pinned_events")
 
     state_key: EmptyString
     pinned:    List[EventId] = []
 
 
 class Tombstone(StateEvent):
-    type = "m.room.tombstone"
-    make = Sources(
-        server_message   = ("content", "body"),
-        replacement_room = ("content", "replacement_room"),
-    )
+    class Matrix:
+        server_message   = ("content", "body")
+        replacement_room = ("content", "replacement_room")
+
+    type = Const("m.room.tombstone")
 
     state_key:        EmptyString
     server_message:   str
@@ -134,15 +147,15 @@ class Member(StateEvent):
         leave  = auto()
         ban    = auto()
 
-    type = "m.room.member"
-    make = Sources(
-        avatar_url        = ("content", "avatar_url"),
-        display_name      = ("content", "displayname"),
-        membership        = ("content", "membership"),
-        is_direct         = ("content", "is_direct"),
-        third_party_name  = ("content", "third_party_invite", "display_name"),
+    class Matrix:
+        avatar_url        = ("content", "avatar_url")
+        display_name      = ("content", "displayname")
+        membership        = ("content", "membership")
+        is_direct         = ("content", "is_direct")
+        third_party_name  = ("content", "third_party_invite", "display_name")
         # invite_room_state = ("content", "unsigned", "invite_room_state"),
-    )
+
+    type = Const("m.room.member")
 
     state_key:        UserId
     membership:       Membership
@@ -158,19 +171,19 @@ class Member(StateEvent):
 
 
 class PowerLevels(StateEvent):
-    type = "m.room.power_levels"
-    make = Sources(
-        invite         = ("content", "invite"),
-        kick           = ("content", "kick"),
-        ban            = ("content", "ban"),
-        redact         = ("content", "redact"),
-        events_default = ("content", "events_default"),
-        state_default  = ("content", "state_default"),
-        users_default  = ("content", "users_default"),
-        events         = ("content", "events"),
-        users          = ("content", "users"),
-        notifications  = ("content", "notifications"),
-    )
+    class Matrix:
+        invite         = ("content", "invite")
+        kick           = ("content", "kick")
+        ban            = ("content", "ban")
+        redact         = ("content", "redact")
+        events_default = ("content", "events_default")
+        state_default  = ("content", "state_default")
+        users_default  = ("content", "users_default")
+        events         = ("content", "events")
+        users          = ("content", "users")
+        notifications  = ("content", "notifications")
+
+    type = Const("m.room.power_levels")
 
     state_key:      EmptyString
     invite:         int               = 50
@@ -191,12 +204,12 @@ class PowerLevels(StateEvent):
 
 
 class ServerACL(StateEvent):
-    type = "m.room.server_acl"
-    make = Sources(
-        allow_ip_literals = ("content", "allow_ip_literals"),
-        allow             = ("content", "allow"),
-        deny              = ("content", "deny"),
-    )
+    class Matrix:
+        allow_ip_literals = ("content", "allow_ip_literals")
+        allow             = ("content", "allow")
+        deny              = ("content", "deny")
+
+    type = Const("m.room.server_acl")
 
     state_key:         EmptyString
     allow_ip_literals: bool      = True

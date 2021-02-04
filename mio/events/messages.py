@@ -1,64 +1,45 @@
-from typing import Any, ClassVar, Dict, Optional
+from typing import Any, Dict, Optional
 
-from .base_events import EventMeta, RoomEvent
-from .utils import Sources
-
-_TEXT_SOURCE = Sources(
-    format         = ("content", "format"),
-    formatted_body = ("content", "formatted_body"),
-)
+from ..utils import Const
+from .base_events import RoomEvent
 
 
-class MessageMeta(EventMeta):
-    def __new__(mcs, name, bases, namespace, **kwargs):
-        ann            = namespace.setdefault("__annotations__", {})
-        ann["msgtype"] = ClassVar[Optional[str]]
-        return super().__new__(mcs, name, bases, namespace, **kwargs)
+class Message(RoomEvent):
+    class Matrix:
+        msgtype = ("content", "msgtype")
+        body    = ("content", "body")
 
-
-class Message(RoomEvent, metaclass=MessageMeta):
-    type = "m.room.message"
-    make = Sources(
-        msgtype = ("content", "msgtype"),
-        body    = ("content", "body"),
-    )
-
-    msgtype: ClassVar[Optional[str]] = None
+    type:    str           = Const("m.room.message")
+    msgtype: Optional[str] = None
 
     body: str
 
     @classmethod
     def matches_event(cls, event: Dict[str, Any]) -> bool:
+        cls_msgtype = cls.__fields__["msgtype"].default
+        if not cls_msgtype:
+            return False
+
         msgtype = event.get("content", {}).get("msgtype")
-        return cls.type == event.get("type") and cls.msgtype == msgtype
-
-    @property
-    def matrix(self) -> Dict[str, Any]:
-        event = super().matrix
-        # make sure this is always included
-        event["content"]["msgtype"] = self.msgtype
-        return event
+        return super().matches_event(event) and cls_msgtype == msgtype
 
 
-class Text(Message):
-    msgtype = "m.text"
-    make    = _TEXT_SOURCE
+class TextKind(Message):
+    class Matrix:
+        format         = ("content", "format")
+        formatted_body = ("content", "formatted_body")
 
     format:         Optional[str] = None
     formatted_body: Optional[str] = None
 
 
-class Emote(Message):
-    msgtype = "m.emote"
-    make    = _TEXT_SOURCE
-
-    format:         Optional[str] = None
-    formatted_body: Optional[str] = None
+class Text(TextKind):
+    msgtype = Const("m.text")
 
 
-class Notice(Message):
-    msgtype = "m.notice"
-    make    = _TEXT_SOURCE
+class Emote(TextKind):
+    msgtype = Const("m.emote")
 
-    format:         Optional[str] = None
-    formatted_body: Optional[str] = None
+
+class Notice(TextKind):
+    msgtype = Const("m.notice")
