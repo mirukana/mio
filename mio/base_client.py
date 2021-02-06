@@ -152,7 +152,7 @@ class Client(FileModel, AsyncInit):
     ) -> Dict[str, Any]:
 
         cls    = type(obj) if isinstance(obj, Client) else obj
-        data   = json.dumps(body).encode()
+        data   = None if body is None else json.dumps(body).encode()
         result = await cls.send(obj, method, path, parameters, data, headers)
         return json.loads(result)
 
