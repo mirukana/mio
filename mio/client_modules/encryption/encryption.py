@@ -18,7 +18,7 @@ from ...utils import AsyncInit, FileModel
 from .. import ClientModule
 from . import errors as err
 from .devices import Device
-from .events import EncryptionSettings, Megolm, Olm, RoomKey
+from .events import Algorithm, EncryptionSettings, Megolm, Olm, RoomKey
 
 # TODO: https://github.com/matrix-org/matrix-doc/pull/2732 (fallback OTK)
 # TODO: protect against concurrency and saving sessions before sharing
@@ -306,7 +306,7 @@ class Encryption(ClientModule, FileModel, AsyncInit):
             await self.query_devices({u: [] for u in for_users})
 
             room_key = RoomKey(
-                algorithm   = RoomKey.Algorithm.megolm_v1_aes_sha2,
+                algorithm   = Algorithm.megolm_v1.value,
                 room_id     = room_id,
                 session_id  = session.id,
                 session_key = session.session_key,
@@ -355,7 +355,7 @@ class Encryption(ClientModule, FileModel, AsyncInit):
         device_keys = {
             "user_id":    self.client.user_id,
             "device_id":  self.client.device_id,
-            "algorithms": [Olm.algorithm, Megolm.algorithm],
+            "algorithms": [Algorithm.olm_v1.value, Algorithm.megolm_v1.value],
             "keys": {
                 f"{kind}:{self.client.device_id}": key
                 for kind, key in self.account.identity_keys.items()

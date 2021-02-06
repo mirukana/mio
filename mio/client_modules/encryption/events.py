@@ -8,6 +8,11 @@ from ...utils import Const, Model
 from .errors import DecryptionError
 
 
+class Algorithm(Enum):
+    olm_v1    = "m.olm.v1.curve25519-aes-sha2"
+    megolm_v1 = "m.megolm.v1.aes-sha2"
+
+
 class EncryptionSettings(StateEvent):
     class Matrix:
         sessions_max_age      = ("content", "rotation_period_ms")
@@ -19,7 +24,7 @@ class EncryptionSettings(StateEvent):
     state_key:             EmptyString
     sessions_max_age:      timedelta = timedelta(weeks=1)
     sessions_max_messages: int       = 100
-    algorithm:             str       = "m.megolm.v1.aes-sha2"
+    algorithm:             str       = Algorithm.megolm_v1.value
 
 
 class Olm(Event):
@@ -38,7 +43,7 @@ class Olm(Event):
         ciphertext        = ("content", "ciphertext")
 
     type:      str = Const("m.room.encrypted")
-    algorithm: str = Const("m.olm.v1.curve25519-aes-sha2")
+    algorithm: str = Const(Algorithm.olm_v1.value)
 
     sender:            UserId
     sender_curve25519: str
@@ -62,7 +67,7 @@ class Megolm(RoomEvent):
         session_id        = ("content", "session_id")
 
     type:      str = Const("m.room.encrypted")
-    algorithm: str = Const("m.megolm.v1.aes-sha2")
+    algorithm: str = Const(Algorithm.megolm_v1.value)
 
     sender_curve25519: str
     ciphertext:        str
@@ -79,9 +84,6 @@ class Megolm(RoomEvent):
 
 
 class RoomKey(ToDeviceEvent):
-    class Algorithm(Enum):
-        megolm_v1_aes_sha2 = "m.megolm.v1.aes-sha2"
-
     class Matrix:
         algorithm   = ("content", "algorithm")
         room_id     = ("content", "room_id")
