@@ -32,7 +32,7 @@ class Client(FileModel, AsyncInit):
         self.e2e   = await Encryption.load(self)
         self.rooms = await Rooms.load(self)
         self.auth  = Authentication(client=self)
-        self.sync  = Synchronization(client=self)
+        self.sync  = await Synchronization.load(self)
         await self._save()
 
 

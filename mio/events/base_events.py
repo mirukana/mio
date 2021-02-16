@@ -23,19 +23,17 @@ class Event(Model):
 
     type: Optional[str] = None
 
-    source:           Dict[str, Any]            = {}
-    validation_error: Optional[ValidationError] = None
+    source: Dict[str, Any] = {}
+    valid:  bool           = True
 
-    encrypted_source:              Optional[Dict[str, Any]] = None
-    decrypted_payload:             Optional[Dict[str, Any]] = None
-    decryption_verification_error: Optional[Exception]      = None
+    encrypted_source:   Optional[Dict[str, Any]] = None
+    decrypted_payload:  Optional[Dict[str, Any]] = None
+    decrypted_verified: Optional[bool]           = None
 
     __repr_exclude__ = [lambda self: None if type(self) is Event else "source"]
 
 
     class Config:
-        arbitrary_types_allowed = True  # needed for exception fields
-
         json_encoders = {
             datetime: lambda v: floor(v.timestamp() * 1000),
             timedelta: lambda v: floor(v.total_seconds() * 1000),
@@ -80,7 +78,7 @@ class Event(Model):
                 "Failed validating event %r for type %s: %s\n",
                 event, cls.__name__, e,
             )
-            return Event(source=event, validation_error=e)
+            return Event(source=event, valid=False)
 
 
     @classmethod
@@ -151,7 +149,7 @@ class RoomEvent(Event):
 
     def __lt__(self, other: "RoomEvent") -> bool:
         if self.date is None or other.date is None:
-            raise TypeError(f"Can't compare None date: {self}, {other}")
+            raise TypeError(f"Can't compare None date: {self!r}, {other!r}")
 
         return self.date < other.date
 

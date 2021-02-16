@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional, Set, Tuple
+from typing import Optional, Set, Tuple
 from uuid import uuid4
+
+from pydantic import Field
 
 from ...events.base_events import Event, RoomEvent, StateEvent
 from ...events.room_state import Member
@@ -28,37 +30,37 @@ class Room(FileModel, AsyncInit):
     summary_invited:      int                = 0
     unread_notifications: int                = 0
     unread_highlights:    int                = 0
-    scrollback_token:     Optional[str]      = None
 
-    events: List[Event] = []  # XXX: temporary
+    timeline: Timeline = Field(None)
 
-    __json__         = {"exclude": {"client", "id", "events"}}
-    __repr_exclude__ = ("client", "events", "members")
+    __json__         = {"exclude": {"client", "id", "timeline"}}
+    __repr_exclude__ = ("client", "members", "timeline")
 
 
     async def __ainit__(self) -> None:
-        # Don't overwrite a pre-existing saved room when this class is used
-        # in a `rooms.setdefault(...)` call (see Synchronizer.handle_sync)
-        if not self.save_file.exists():
-            await self._save()
+        self.timeline = await Timeline.load(self)
 
 
     @property
     def save_file(self) -> Path:
-        return self.client.save_dir / "rooms" / f"{self.id}.json"
+        return self.client.save_dir / "rooms" / self.id / "room.json"
 
 
     @classmethod
     async def load(cls, client: "Client", id: RoomId) -> "Room":
-        file = client.save_dir / "rooms" / f"{id}.json"
+        file = client.save_dir / "rooms" / id / "room.json"
         data = await cls._read_json(file)
         return await cls(client=client, id=id, **data)
 
 
-    async def handle_event(self, event: Event) -> None:
+    async def handle_event(self, event: Event, state: bool = False) -> None:
         # TODO: handle_event**s** function that only saves at the end
 
-        if isinstance(event, EncryptionSettings):
+        if not state:
+            if isinstance(event, RoomEvent):
+                await self.timeline.add_events(event)
+
+        elif isinstance(event, EncryptionSettings):
             self.encryption = event
             await self._save()
 
@@ -70,8 +72,6 @@ class Room(FileModel, AsyncInit):
         elif isinstance(event, Member):
             self.members.add(event.state_key)
             await self._save()
-
-        self.events.append(event)
 
 
     async def send(
@@ -101,5 +101,6 @@ class Room(FileModel, AsyncInit):
 
 
 from ...base_client import Client
+from .timeline import Timeline
 
 Room.update_forward_refs()

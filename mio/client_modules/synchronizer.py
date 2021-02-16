@@ -1,20 +1,37 @@
 import asyncio
 import logging as log
-from typing import Any, Callable, Dict, Optional, Set, Union
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Set, Union
 
 from ..events import Event, RoomEvent
 from ..typing import RoomId, UserId
-from ..utils import remove_none
+from ..utils import FileModel, remove_none
 from .client_module import ClientModule
 from .encryption.errors import DecryptionError
 from .encryption.events import Megolm, Olm
 from .rooms.room import Room
 
+if TYPE_CHECKING:
+    from ..base_client import Client
+
 FilterType = Union[None, str, Dict[str, Any]]
 
 
-class Synchronization(ClientModule):
+class Synchronization(ClientModule, FileModel):
     next_batch: Optional[str] = None
+
+    __json__ = {"exclude": {"client"}}
+
+
+    @property
+    def save_file(self) -> Path:
+        return self.client.save_dir / "sync.json"
+
+
+    @classmethod
+    async def load(cls, client: "Client") -> "Synchronization":
+        data = await cls._read_json(client.save_dir / "sync.json")
+        return cls(client=client, **data)
 
 
     async def sync(
@@ -44,8 +61,9 @@ class Synchronization(ClientModule):
         )
 
         if self.next_batch != result["next_batch"]:
-            self.next_batch = result["next_batch"]
             await self.handle_sync(result)
+            self.next_batch = result["next_batch"]
+            await self._save()
 
 
     async def loop(
@@ -69,37 +87,26 @@ class Synchronization(ClientModule):
     async def handle_sync(self, sync: Dict[str, Any]) -> None:
         # TODO: device_lists, partial syncs
 
-        async def decrypt(
-            event: Union[Olm, Megolm], room_id: Optional[RoomId] = None,
-        ) -> Event:
+        async def decrypt(event: Event, room_id: RoomId) -> Event:
+            if not isinstance(event, (Olm, Megolm)):
+                return event
+
             try:
                 return await self.client.e2e.decrypt_event(event, room_id)
             except DecryptionError as e:
-                event.decryption_error = e
-                log.warn("Failed decrypting %r\n", event)
+                log.warn("Failed decrypting %r: %r\n", event, e)
                 return event
 
         async def events_call(data: dict, key: str, coro: Callable) -> None:
             for event in data.get(key, {}).get("events", ()):
-                if Olm.matches_event(event):
-                    parsed = Olm.from_matrix(event)
-                    if isinstance(parsed, Olm):
-                        await coro(await decrypt(parsed))
-                    else:
-                        await coro(parsed)
-                else:
-                    await coro(Event.subtype_from_matrix(event))
+                Event.subtype_from_matrix(event)
+                await coro(await decrypt(ev, room.id))
 
         async def room_events_call(data: dict, key: str, room: Room) -> None:
             for event in data.get(key, {}).get("events", ()):
-                if Megolm.matches_event(event):
-                    clear = Megolm.from_matrix(event)
-                    if isinstance(clear, Megolm):
-                        clear = await decrypt(clear, room.id)
-                else:
-                    clear = RoomEvent.subtype_from_matrix(event)
-
-                await room.handle_event(clear)
+                ev       = Event.subtype_from_matrix(event)
+                is_state = key in ("state", "invite_state")
+                await room.handle_event(await decrypt(ev, room.id), is_state)
 
         users: Set[UserId] = set()
 
@@ -127,25 +134,28 @@ class Synchronization(ClientModule):
 
         rooms = self.client.rooms
 
+        async def set_room(room_id: str) -> Room:
+            if room_id in rooms._data:
+                return rooms._data[room_id]
+
+            room = await Room(client=self.client, id=room_id)
+            rooms._data[room_id] = room
+            return room
+
         for room_id, data in sync.get("rooms", {}).get("invite", {}).items():
-            default      = await Room(client=self.client, id=room_id)
-            room         = rooms._data.setdefault(room_id, default)
+            room         = await set_room(room_id)
             room.invited = True
             room.left    = False
             await room_events_call(data, "invite_state", room)
 
         for room_id, data in sync.get("rooms", {}).get("join", {}).items():
-            default      = await Room(client=self.client, id=room_id)
-            room         = rooms._data.setdefault(room_id, default)
+            room         = await set_room(room_id)
+            # TODO: save when changing invited/left
             room.invited = False
             room.left    = False
 
-            prev_batch = data.get("timeline", {}).get("prev_batch")
-            summary    = data.get("summary", {})
-            unread     = data.get("unread_notifications", {})
-
-            if prev_batch and not room.scrollback_token:
-                room.scrollback_token = prev_batch
+            summary = data.get("summary", {})
+            unread  = data.get("unread_notifications", {})
 
             if summary.get("m.heroes"):
                 room.summary_heroes = tuple(summary["m.heroes"])
@@ -162,14 +172,36 @@ class Synchronization(ClientModule):
             if unread.get("highlight_count"):
                 room.unread_highlights = unread["highlight_count"]
 
+            timeline   = data.get("timeline", {})
+            limited    = timeline.get("limited")
+            prev_batch = timeline.get("prev_batch")
+            after      = None
+
+            for event in timeline.get("events", []):
+                ev = await decrypt(Event.subtype_from_matrix(event), room.id)
+                if isinstance(ev, RoomEvent) and ev.event_id and ev.date:
+                    after = ev
+                    break
+
+            if limited and prev_batch and after:
+                if not room.timeline:
+                    await room.timeline.load_history(events_count=1)
+
+                before_id = next(reversed(tuple(room.timeline)), None)
+                await room.timeline.add_gap(
+                    prev_batch,
+                    before_id,
+                    after.event_id,  # type: ignore
+                    after.date,      # type: ignore
+                )
+
             await events_call(data, "account_data", room.handle_event)
             await events_call(data, "ephemeral", room.handle_event)
             await room_events_call(data, "state", room)
             await room_events_call(data, "timeline", room)
 
         for room_id, data in sync.get("rooms", {}).get("leave", {}).items():
-            default   = await Room(client=self.client, id=room_id)
-            room      = rooms._data.setdefault(room_id, default)
+            room      = await set_room(room_id)
             room.left = True
             await events_call(data, "account_data", room.handle_event)
             await room_events_call(data, "state", room)

@@ -1,11 +1,10 @@
 from datetime import timedelta
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from ...events.base_events import Event, RoomEvent, StateEvent, ToDeviceEvent
 from ...typing import EmptyString, RoomId, UserId
 from ...utils import Const, Model
-from .errors import DecryptionError
 
 
 class Algorithm(Enum):
@@ -48,7 +47,6 @@ class Olm(Event):
     sender:            UserId
     sender_curve25519: str
     ciphertext:        Dict[str, Cipher]  # {recipient_curve_25519: Cipher}
-    decryption_error:  Optional[DecryptionError] = None
 
     @classmethod
     def matches_event(cls, event: Dict[str, Any]) -> bool:
@@ -73,7 +71,6 @@ class Megolm(RoomEvent):
     ciphertext:        str
     device_id:         str
     session_id:        str
-    decryption_error:  Optional[DecryptionError] = None
 
     @classmethod
     def matches_event(cls, event: Dict[str, Any]) -> bool:

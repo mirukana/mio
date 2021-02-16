@@ -50,16 +50,15 @@ class FileModel(Model, ABC):
         pass
 
     async def _save(self) -> None:
-        json_kwargs: Dict[str, Any] = {
-            "exclude": set(),
-            "ensure_ascii": False,
-            "indent": 4,
-            **self.__json__,
-        }
-        json_kwargs["exclude"].add("json_kwargs")
+        json_kws: Dict[str, Any] = {"ensure_ascii": False, "indent": 4}
+
+        if callable(self.__json__):
+            json_kws.update(self.__json__())
+        else:
+            json_kws.update(self.__json__)
 
         self.save_file.parent.mkdir(parents=True, exist_ok=True)
-        data = self.json(**json_kwargs)
+        data = self.json(**json_kws)
 
         async with aiopen(self.save_file, "w") as file:  # type: ignore
             await file.write(data)

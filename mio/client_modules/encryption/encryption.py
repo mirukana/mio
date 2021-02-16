@@ -252,24 +252,24 @@ class Encryption(ClientModule, FileModel, AsyncInit):
         self, event: Union[Olm, Megolm], room_id: Optional[RoomId] = None,
     ) -> Event:
 
-        verif: Optional[err.VerificationError]
+        verror: Optional[err.VerificationError]
 
         if isinstance(event, Olm):
-            payload, verif = await self._decrypt_olm_cipher(event)
+            payload, verror = await self._decrypt_olm_cipher(event)
         else:
             if not room_id:
                 raise TypeError("room_id argument required for Megolm event")
 
-            payload, verif = await self._decrypt_megolm_cipher(room_id, event)
+            payload, verror = await self._decrypt_megolm_cipher(room_id, event)
 
         clear_source     = {**event.source, **payload}
         clear            = Event.subtype_from_matrix(clear_source)
 
-        clear.encrypted_source              = event.source
-        clear.decrypted_payload             = payload
-        clear.decryption_verification_error = verif
+        clear.encrypted_source   = event.source
+        clear.decrypted_payload  = payload
+        clear.decrypted_verified = not verror
 
-        if verif:
+        if verror:
             log.warning("Error verifying decrypted event %r\n", clear)
 
         return clear

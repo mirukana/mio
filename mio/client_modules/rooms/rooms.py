@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import TYPE_CHECKING, Dict
 
 from pydantic import PrivateAttr
@@ -20,8 +19,8 @@ class Rooms(ClientModule, MapModel):
     async def load(cls, client: "Client") -> "Rooms":
         rooms = cls(client=client)
 
-        for room_file in (client.save_dir / "rooms").glob("*.json"):
-            room = await Room.load(client=client, id=RoomId(room_file.stem))
+        for room_dir in (client.save_dir / "rooms").glob("!*"):
+            room = await Room.load(client=client, id=RoomId(room_dir.name))
             rooms._data[room.id] = room
 
         return rooms
