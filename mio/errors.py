@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
-@dataclass(frozen=True)
+@dataclass
 class MioError(Exception):
     debug: Any = field(init=False, repr=False, default=None)
 
@@ -11,7 +11,7 @@ class MioError(Exception):
         return repr(self)
 
 
-@dataclass(frozen=True)
+@dataclass
 class ServerError(MioError):
     http_code: int
     message:   str
@@ -32,6 +32,6 @@ class ServerError(MioError):
         return cls(http_code, message)
 
 
-@dataclass(frozen=True)
+@dataclass
 class MatrixError(ServerError):
     m_code: str

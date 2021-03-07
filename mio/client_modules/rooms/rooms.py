@@ -1,27 +1,36 @@
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Dict
 
-from pydantic import PrivateAttr
-
 from ...typing import RoomId
-from ...utils import MapModel
-from .. import ClientModule
+from ...utils import Frozen, Map
+from ..client_module import ClientModule
 from .room import Room
 
 if TYPE_CHECKING:
     from ...base_client import Client
 
 
-class Rooms(ClientModule, MapModel):
-    _data: Dict[RoomId, Room] = PrivateAttr(default_factory=dict)
+@dataclass
+class Rooms(ClientModule, Frozen, Map[RoomId, Room]):
+    path:   Path               = field(repr=False)
+    client: "Client"           = field(repr=False)
+    _data:  Dict[RoomId, Room] = field(default_factory=dict)
 
 
     @classmethod
-    async def load(cls, client: "Client") -> "Rooms":
-        rooms = cls(client=client)
+    async def load(cls, path: Path, **defaults) -> "ClientModule":
+        defaults["path"] = path
+        rooms            = cls(**defaults)
 
-        for room_dir in (client.save_dir / "rooms").glob("!*"):
-            room = await Room.load(client=client, id=RoomId(room_dir.name))
-            rooms._data[room.id] = room
+        for room_dir in path.glob("!*"):
+            id = RoomId(room_dir.name)
+
+            rooms._data[id] = await Room.load(
+                path   = rooms.room_path(id),
+                client = defaults["client"],
+                id     = id,
+            )
 
         return rooms
 
@@ -39,3 +48,7 @@ class Rooms(ClientModule, MapModel):
     @property
     def left(self) -> Dict[RoomId, Room]:
         return {k: v for k, v in self.items() if v.left}
+
+
+    def room_path(self, room_id: str) -> Path:
+        return self.path / room_id / "room.json"

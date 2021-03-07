@@ -8,138 +8,133 @@ if TYPE_CHECKING:
     from .events import Olm
 
 
-@dataclass(frozen=True)
+@dataclass
 class EncryptionModuleError(MioError):
     pass
 
 
-@dataclass(frozen=True)
+@dataclass
 class VerificationError(EncryptionModuleError):
     pass
 
 
-@dataclass(frozen=True)
+@dataclass
 class DecryptionError(EncryptionModuleError):
     pass
 
 
-@dataclass(frozen=True)
+@dataclass
 class QueriedDeviceError(EncryptionModuleError):
     pass
 
 
-@dataclass(frozen=True)
+@dataclass
 class QueriedDeviceUserIdMismatch(QueriedDeviceError):
     top_level_user_id: str
     info_user_id:      str
 
 
-@dataclass(frozen=True)
+@dataclass
 class QueriedDeviceIdMismatch(QueriedDeviceError):
     top_level_device_id: str
     info_device_id:      str
 
 
-@dataclass(frozen=True)
+@dataclass
 class QueriedDeviceEd25519Mismatch(QueriedDeviceError):
     saved_ed25519: str
     info_ed25519:  str
 
 
-@dataclass(frozen=True)
+@dataclass
 class OlmDecryptionError(DecryptionError):
     pass
 
 
-@dataclass(frozen=True)
+@dataclass
 class NoCipherForUs(OlmDecryptionError):
     our_curve25519: str
     ciphertext:     Dict[str, "Olm.Cipher"]
 
 
-@dataclass(frozen=True)
+@dataclass
 class OlmSessionError(OlmDecryptionError):
     code: str
 
 
-@dataclass(frozen=True)
+@dataclass
 class OlmVerificationError(VerificationError):
     pass
 
 
-@dataclass(frozen=True)
+@dataclass
 class OlmPayloadSenderMismatch(OlmVerificationError):
     event_sender:   str
     payload_sender: str
 
 
-@dataclass(frozen=True)
+@dataclass
 class OlmPayloadWrongReceiver(OlmVerificationError):
     intended_receiver: str
     our_user_id:       str
 
 
-@dataclass(frozen=True)
+@dataclass
 class OlmPayloadWrongReceiverEd25519(OlmVerificationError):
     intended_ed25519: str
     our_ed25519:      str
 
 
-@dataclass(frozen=True)
+@dataclass
 class OlmPayloadFromUnknownDevice(OlmVerificationError):
     known_sender_devices: Dict[str, "Device"]
     sender_ed25519:       str
     sender_curve25519:    str
 
 
-@dataclass(frozen=True)
+@dataclass
 class MegolmDecryptionError(DecryptionError):
     pass
 
 
-@dataclass(frozen=True)
-class MegolmMissingSender(MegolmDecryptionError):
-    pass
-
-
-@dataclass(frozen=True)
+@dataclass
 class NoInboundGroupSessionToDecrypt(MegolmDecryptionError):
     room_id:           str
     sender_curve25519: str
     session_id:        str
 
 
-@dataclass(frozen=True)
+@dataclass
 class MegolmSessionError(MegolmDecryptionError):
     code: str
 
 
-@dataclass(frozen=True)
+@dataclass
 class PossibleReplayAttack(MegolmDecryptionError):
     pass
 
 
-@dataclass(frozen=True)
+@dataclass
 class MegolmVerificationError(VerificationError):
     pass
 
 
-@dataclass(frozen=True)
+@dataclass
 class MegolmPayloadWrongSender(MegolmVerificationError):
     starter_device_ed25519: str
     sender_curve25519:      str
 
 
-@dataclass(frozen=True)
+@dataclass
 class InvalidSignedDict(EncryptionModuleError):
     pass
 
 
-@dataclass(frozen=True)
+@dataclass
 class SignedDictMissingKey(InvalidSignedDict):
     key: str
 
 
-@dataclass(frozen=True)
+@dataclass
 class SignedDictVerificationError(InvalidSignedDict):
     code: str

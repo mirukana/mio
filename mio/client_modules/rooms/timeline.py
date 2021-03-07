@@ -1,46 +1,54 @@
-from __future__ import annotations
-
 import json
 import logging as log
+from dataclasses import dataclass, field
 from datetime import datetime
 from itertools import groupby
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Dict, List, Optional, Set
+from uuid import uuid4
 
 from aiofiles import open as aiopen
-from pydantic import PrivateAttr
 from sortedcollections import ValueSortedDict
 
-from ...events.base_events import RoomEvent
+from ...client_modules.encryption.events import Megolm
+from ...events.base_events import Content, InvalidEvent, TimelineEvent
 from ...events.room_state import Creation
 from ...typing import EventId
-from ...utils import AsyncInit, FileModel, MapModel, Model, remove_none
+from ...utils import (
+    JSON, Frozen, JSONFile, Map, Runtime, log_errors, remove_none,
+)
+
+if TYPE_CHECKING:
+    from .room import Room
 
 
-class Gap(Model):
-    room:             Room
+@dataclass
+class Gap(JSON):
     fill_token:       str
     event_before:     Optional[EventId]
     event_after:      EventId
     event_after_date: datetime
     filled:           bool = False
 
-    __json__         = {"exclude": {"room"}}
-    __repr_exclude__ = {"room"}
+    timeline: Runtime[Optional["Timeline"]] = field(default=None, repr=False)
 
 
     def __lt__(self, other: "Gap") -> bool:
         return self.event_after_date < other.event_after_date
 
 
-    async def fill(self, max_events: Optional[int] = 100) -> List[RoomEvent]:
-        if self.event_after not in self.room.timeline.gaps:
+    async def fill(
+        self, max_events: Optional[int] = 100,
+    ) -> List[TimelineEvent]:
+        assert self.timeline
+
+        if self.event_after not in self.timeline.gaps:
             return []
 
-        client = self.room.client
+        client = self.timeline.room.client
         result = await client.send_json(
             method = "GET",
-            path   = [*client.api, "rooms", self.room.id, "messages"],
+            path   = [*client.api, "rooms", self.timeline.room.id, "messages"],
 
             parameters = remove_none({
                 "from":  self.fill_token,
@@ -53,42 +61,49 @@ class Gap(Model):
 
         if not result.get("chunk"):
             self.filled = True
-            self.room.timeline.gaps.pop(self.event_after, None)
-            await self.room.timeline._save()
+            self.timeline.gaps.pop(self.event_after, None)
+            await self.timeline.save()
             return []
 
-        evs      = [RoomEvent.subtype_from_matrix(e) for e in result["chunk"]]
-        room_evs = [e for e in evs if isinstance(e, RoomEvent)]
-        await self.room.timeline.add_events(*room_evs)
+        evs: List[TimelineEvent] = []
+
+        for ev in result["chunk"]:
+            with log_errors(InvalidEvent):
+                evs.append(TimelineEvent.from_dict(ev))
+
+        await self.timeline.register_events(*evs)
 
         if any(
-            isinstance(e, Creation) or e.event_id == self.event_before
-            for e in room_evs
+            isinstance(e.content, Creation) or e.id == self.event_before
+            for e in evs
         ):
             self.filled = True
-            self.room.timeline.gaps.pop(self.event_after, None)
+            self.timeline.gaps.pop(self.event_after, None)
         else:
             self.event_after = result["chunk"][-1]
 
         self.fill_token = result["end"]
-        await self.room.timeline._save()
-        return room_evs
+        await self.timeline.save()
+        return evs
 
 
-class Timeline(FileModel, MapModel, AsyncInit):
-    room: Room
-    gaps: Dict[EventId, Gap] = ValueSortedDict()  # {gap.event_after: gap}
+@dataclass
+class Timeline(JSONFile, Frozen, Map[EventId, TimelineEvent]):
+    json_exclude = {"path", "room", "_loaded_files", "_data"}
 
-    _loaded_files: Set[Path]                = PrivateAttr(set())
-    _data:         Dict[EventId, RoomEvent] = PrivateAttr(ValueSortedDict())
+    room: Runtime["Room"]    = field(repr=False)
+    gaps: Dict[EventId, Gap] = field(default_factory=ValueSortedDict)
 
-    __repr_exclude__ = {"room"}
+    _loaded_files: Runtime[Set[Path]] = field(default_factory=set)
+
+    _data: Runtime[Dict[EventId, TimelineEvent]] = \
+        field(default_factory=ValueSortedDict)
 
 
-    def __json__(self) -> Dict[str, Any]:  # type: ignore
-        return {
-            "exclude": {"room": ..., "gaps": {k: {"room"} for k in self.gaps}},
-        }
+    def __post_init__(self) -> None:
+        # TODO: make them JSONFile instead of doing this workaround
+        for gap in self.gaps.values():
+            gap.timeline = self
 
 
     @property
@@ -96,29 +111,12 @@ class Timeline(FileModel, MapModel, AsyncInit):
         return not self.gaps
 
 
-    @property
-    def save_file(self) -> Path:
-        return self.room.save_file.parent / "timeline.json"
-
-
-    @classmethod
-    async def load(cls, room: Room) -> "Timeline":
-        file = room.save_file.parent / "timeline.json"
-        data = await cls._read_json(file)
-
-        data["gaps"] = {
-            k: Gap(room=room, **v) for k, v in data.get("gaps", {}).items()
-        }
-
-        return cls(room=room, **data)
-
-
-    def get_event_file(self, event: RoomEvent) -> Path:
+    def get_event_file(self, event: TimelineEvent) -> Path:
         assert event.date
-        return self.save_file.parent / event.date.strftime("%Y-%m-%d/%Hh.json")
+        return self.path.parent / event.date.strftime("%Y-%m-%d/%Hh.json")
 
 
-    async def add_gap(
+    async def register_gap(
         self,
         fill_token:       str,
         event_before:     Optional[EventId],
@@ -126,31 +124,30 @@ class Timeline(FileModel, MapModel, AsyncInit):
         event_after_date: datetime,
     ) -> None:
         self.gaps[event_after] = Gap(
-            room             = self.room,
+            timeline         = self,
             fill_token       = fill_token,
             event_before     = event_before,
             event_after      = event_after,
             event_after_date = event_after_date,
         )
-        await self._save()
+        await self.save()
 
 
-    async def add_events(self, *events: RoomEvent) -> None:
+    async def register_events(self, *events: TimelineEvent) -> None:
         for event in events:
-            assert event.event_id and event.date
-            self._data[event.event_id] = event
+            self._data[event.id] = event
 
         for path, event_group in groupby(events, key=self.get_event_file):
-            event_dicts = [json.loads(e.json()) for e in event_group]
-            event_dicts.sort(key=lambda e: e["date"])
+            sorted_group = sorted(event_group)
+            event_dicts  = [e.dict for e in sorted_group]
 
             if not path.exists():
                 path.parent.mkdir(parents=True, exist_ok=True)
 
-                async with aiopen(path, "w") as file:  # type: ignore
+                async with aiopen(path, "w") as file:
                     await file.write("[]")
 
-            async with aiopen(path, "r+") as file:  # type: ignore
+            async with aiopen(path, "r+") as file:
                 evs  = json.loads(await file.read())
                 evs += event_dicts
                 await file.seek(0)
@@ -159,15 +156,15 @@ class Timeline(FileModel, MapModel, AsyncInit):
             self._loaded_files.add(path)
 
 
-    async def load_history(self, events_count: int = 100) -> List[RoomEvent]:
-        loaded: List[RoomEvent] = await self._fill_newest_gap(events_count)
+    async def load_history(self, count: int = 100) -> List[TimelineEvent]:
+        loaded: List[TimelineEvent] = await self._fill_newest_gap(count)
 
         day_dirs = sorted(
-            self.save_file.parent.glob("????-??-??"), key=lambda d: d.name,
+            self.path.parent.glob("????-??-??"), key=lambda d: d.name,
         )
 
         for day_dir in reversed(day_dirs):
-            if len(loaded) >= events_count:
+            if len(loaded) >= count:
                 break
 
             hour_files = sorted(day_dir.glob("??h.json"), key=lambda f: f.name)
@@ -176,25 +173,45 @@ class Timeline(FileModel, MapModel, AsyncInit):
                 if hour_file in self._loaded_files:
                     continue
 
-                async with aiopen(hour_file) as file:  # type: ignore
+                async with aiopen(hour_file) as file:
                     log.debug("Loading events from %s", hour_file)
                     events = json.loads(await file.read())
 
                 self._loaded_files.add(hour_file)
 
                 for ev in events:
-                    event = RoomEvent.subtype_from_fields(ev)
-                    if isinstance(event, RoomEvent) and event.event_id:
-                        loaded.append(event)
+                    with log_errors(InvalidEvent, trace=True):
+                        loaded.append(TimelineEvent.from_dict(ev))
 
-                if len(loaded) >= events_count:
+                if len(loaded) >= count:
                     break
 
-        self._data.update({e.event_id: e for e in loaded if e.event_id})
+        self._data.update({e.id: e for e in loaded})
         return loaded
 
 
-    async def _fill_newest_gap(self, min_events: int) -> List[RoomEvent]:
+    async def send(
+        self, content: Content, transaction_id: Optional[str] = None,
+    ) -> str:
+        room = self.room
+
+        if room.state.encryption and not isinstance(content, Megolm):
+            content = await room.client.e2e.encrypt_room_event(
+                room_id   = room.id,
+                for_users = room.state.members,
+                settings  = room.state.encryption.content,
+                content   = content,
+            )
+
+        assert content.type
+        tx   = transaction_id if transaction_id else str(uuid4())
+        path = [*room.client.api, "rooms", room.id, "send", content.type, tx]
+
+        result = await room.client.send_json("PUT", path, body=content.dict)
+        return result["event_id"]
+
+
+    async def _fill_newest_gap(self, min_events: int) -> List[TimelineEvent]:
         gap = next(
             (v for k, v in reversed(list(self.gaps.items())) if k in self),
             None,
@@ -203,15 +220,9 @@ class Timeline(FileModel, MapModel, AsyncInit):
         if not gap or gap.event_after not in self:
             return []
 
-        events: List[RoomEvent] = []
+        events: List[TimelineEvent] = []
 
         while not gap.filled and len(events) < min_events:
             events += await gap.fill(min_events)
 
         return events
-
-
-from .room import Room
-
-Gap.update_forward_refs()
-Timeline.update_forward_refs()

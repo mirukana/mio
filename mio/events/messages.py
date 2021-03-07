@@ -1,45 +1,40 @@
-from typing import Any, Dict, Optional
+from typing import Any, ClassVar, Dict, Optional
 
-from ..utils import Const
-from .base_events import RoomEvent
+from .base_events import Content, dataclass
 
 
-class Message(RoomEvent):
-    class Matrix:
-        msgtype = ("content", "msgtype")
-        body    = ("content", "body")
-
-    type:    str           = Const("m.room.message")
-    msgtype: Optional[str] = None
+@dataclass
+class Message(Content):
+    type:    ClassVar[Optional[str]] = "m.room.message"
+    msgtype: ClassVar[Optional[str]] = None
 
     body: str
 
     @classmethod
-    def matches_event(cls, event: Dict[str, Any]) -> bool:
-        cls_msgtype = cls.__fields__["msgtype"].default
-        if not cls_msgtype:
+    def matches(cls, event: Dict[str, Any]) -> bool:
+        if not cls.msgtype:
             return False
 
         msgtype = event.get("content", {}).get("msgtype")
-        return super().matches_event(event) and cls_msgtype == msgtype
+        return super().matches(event) and cls.msgtype == msgtype
 
 
+@dataclass
 class TextKind(Message):
-    class Matrix:
-        format         = ("content", "format")
-        formatted_body = ("content", "formatted_body")
-
     format:         Optional[str] = None
     formatted_body: Optional[str] = None
 
 
+@dataclass
 class Text(TextKind):
-    msgtype = Const("m.text")
+    msgtype = "m.text"
 
 
+@dataclass
 class Emote(TextKind):
-    msgtype = Const("m.emote")
+    msgtype = "m.emote"
 
 
+@dataclass
 class Notice(TextKind):
-    msgtype = Const("m.notice")
+    msgtype = "m.notice"

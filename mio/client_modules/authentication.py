@@ -1,7 +1,11 @@
-from . import ClientModule
+from dataclasses import dataclass
+
+from ..utils import Frozen
+from .client_module import JSONClientModule
 
 
-class Authentication(ClientModule):
+@dataclass
+class Authentication(JSONClientModule, Frozen):
     async def logout(self) -> None:
         await self.client.send_json("POST", [*self.client.api, "logout"])
 

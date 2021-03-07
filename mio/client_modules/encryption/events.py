@@ -1,33 +1,34 @@
 from datetime import timedelta
 from enum import Enum
-from typing import Any, Dict
+from typing import Any, ClassVar, Dict
 
-from ...events.base_events import Event, RoomEvent, StateEvent, ToDeviceEvent
-from ...typing import EmptyString, RoomId, UserId
-from ...utils import Const, Model
+from ...events.base_events import Content, dataclass
+from ...typing import RoomId, UserId
 
 
+@dataclass
 class Algorithm(Enum):
     olm_v1    = "m.olm.v1.curve25519-aes-sha2"
     megolm_v1 = "m.megolm.v1.aes-sha2"
 
 
-class EncryptionSettings(StateEvent):
-    class Matrix:
-        sessions_max_age      = ("content", "rotation_period_ms")
-        sessions_max_messages = ("content", "rotation_period_msgs")
-        algorithm             = ("content", "algorithm")
+@dataclass
+class EncryptionSettings(Content):
+    type    = "m.room.encryption"
+    aliases = {
+        "sessions_max_age": "rotation_period_ms",
+        "sessions_max_messages": "rotation_period_msgs",
+    }
 
-    type = Const("m.room.encryption")
-
-    state_key:             EmptyString
     sessions_max_age:      timedelta = timedelta(weeks=1)
     sessions_max_messages: int       = 100
     algorithm:             str       = Algorithm.megolm_v1.value
 
 
-class Olm(Event):
-    class Cipher(Model):
+@dataclass
+class Olm(Content):
+    @dataclass
+    class Cipher:
         class Type(Enum):
             prekey = 0
             normal = 1
@@ -35,37 +36,27 @@ class Olm(Event):
         type: Type
         body: str
 
-    class Matrix:
-        algorithm         = ("content", "algorithm")
-        sender            = "sender"
-        sender_curve25519 = ("content", "sender_key")
-        ciphertext        = ("content", "ciphertext")
+    type    = "m.room.encrypted"
+    aliases = {"sender_curve25519": "sender_key"}
 
-    type:      str = Const("m.room.encrypted")
-    algorithm: str = Const(Algorithm.olm_v1.value)
+    algorithm: ClassVar[str] = Algorithm.olm_v1.value
 
     sender:            UserId
     sender_curve25519: str
     ciphertext:        Dict[str, Cipher]  # {recipient_curve_25519: Cipher}
 
     @classmethod
-    def matches_event(cls, event: Dict[str, Any]) -> bool:
-        cls_algo = cls.__fields__["algorithm"].default
-        has_algo = bool(cls_algo)
-        algo     = event.get("content", {}).get("algorithm")
-        return super().matches_event(event) and has_algo and cls_algo == algo
+    def matches(cls, event: Dict[str, Any]) -> bool:
+        algo = event.get("content", {}).get("algorithm")
+        return super().matches(event) and cls.algorithm == algo
 
 
-class Megolm(RoomEvent):
-    class Matrix:
-        algorithm         = ("content", "algorithm")
-        sender_curve25519 = ("content", "sender_key")
-        ciphertext        = ("content", "ciphertext")
-        device_id         = ("content", "device_id")
-        session_id        = ("content", "session_id")
+@dataclass
+class Megolm(Content):
+    type    = "m.room.encrypted"
+    aliases = {"sender_curve25519": "sender_key"}
 
-    type:      str = Const("m.room.encrypted")
-    algorithm: str = Const(Algorithm.megolm_v1.value)
+    algorithm: ClassVar[str] = Algorithm.megolm_v1.value
 
     sender_curve25519: str
     ciphertext:        str
@@ -73,21 +64,14 @@ class Megolm(RoomEvent):
     session_id:        str
 
     @classmethod
-    def matches_event(cls, event: Dict[str, Any]) -> bool:
-        cls_algo = cls.__fields__["algorithm"].default
-        has_algo = bool(cls_algo)
-        algo     = event.get("content", {}).get("algorithm")
-        return super().matches_event(event) and has_algo and cls_algo == algo
+    def matches(cls, event: Dict[str, Any]) -> bool:
+        algo = event.get("content", {}).get("algorithm")
+        return super().matches(event) and cls.algorithm == algo
 
 
-class RoomKey(ToDeviceEvent):
-    class Matrix:
-        algorithm   = ("content", "algorithm")
-        room_id     = ("content", "room_id")
-        session_id  = ("content", "session_id")
-        session_key = ("content", "session_key")
-
-    type = Const("m.room_key")
+@dataclass
+class RoomKey(Content):
+    type = "m.room_key"
 
     algorithm:   Algorithm
     room_id:     RoomId

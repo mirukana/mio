@@ -1,23 +1,14 @@
+from dataclasses import dataclass, field
 from typing import List, Optional
 
 from ...typing import UserId
-from ...utils import Model
 
 
-class Device(Model):
+@dataclass(unsafe_hash=True)
+class Device:
     user_id:        UserId
     device_id:      str
-    ed25519:        str
-    curve25519:     str
-    e2e_algorithms: List[str]
-    display_name:   Optional[str] = None
-
-    def __eq__(self, other) -> bool:
-        if not isinstance(other, Device):
-            raise TypeError(f"Can't compare Device with {other}")
-
-        return (self.user_id, self.device_id) == \
-               (other.user_id, other.device_id)
-
-    def __hash__(self) -> int:
-        return hash((self.user_id, self.device_id, self.ed25519))
+    ed25519:        str           = field(compare=False)
+    curve25519:     str           = field(compare=False)
+    e2e_algorithms: List[str]     = field(compare=False)
+    display_name:   Optional[str] = field(default=None, compare=False)

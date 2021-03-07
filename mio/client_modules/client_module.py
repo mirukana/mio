@@ -1,16 +1,25 @@
-from __future__ import annotations
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import TYPE_CHECKING, Dict, Type
 
-from ..utils import Model
+from ..utils import JSONFile, Runtime
+
+if TYPE_CHECKING:
+    from ..base_client import Client
 
 
-class ClientModule(Model):
-    client: Client
+@dataclass
+class ClientModule:
+    client: Runtime["Client"] = field(repr=False)
 
-    __repr_exclude__ = ["client"]
+    @classmethod
+    async def load(cls, path: Path, **defaults):
+        raise NotImplementedError()
 
 
-# Required to avoid circular import
-
-from ..base_client import Client
-
-ClientModule.update_forward_refs()
+@dataclass
+class JSONClientModule(JSONFile, ClientModule):
+    @classmethod
+    def forward_references(cls) -> Dict[str, Type]:
+        from ..base_client import Client
+        return {"Client": Client}

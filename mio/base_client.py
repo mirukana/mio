@@ -1,39 +1,38 @@
-from __future__ import annotations
-
 import json
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union
 
-from pydantic import AnyHttpUrl, Field
+from .client_modules.authentication import Authentication
+from .client_modules.encryption.encryption import Encryption
+from .client_modules.rooms import Rooms
+from .client_modules.synchronizer import Synchronization
+from .typing import HttpUrl, UserId
+from .utils import Frozen, JSONFile, Runtime, remove_none
 
-from .typing import UserId
-from .utils import AsyncInit, FileModel, remove_none
+if TYPE_CHECKING:
+    from .client_modules import ClientModule
 
 
-class Client(FileModel, AsyncInit):
-    save_dir:     Path
-    server:       AnyHttpUrl
+@dataclass
+class Client(JSONFile, Frozen):
+    server:       HttpUrl
     user_id:      UserId
     access_token: str
     device_id:    str
 
-    e2e:   Encryption      = Field(None)
-    rooms: Rooms           = Field(None)
-    auth:  Authentication  = Field(None)
-    sync:  Synchronization = Field(None)
-
-    __repr_exclude__ = ("e2e", "rooms", "auth", "sync")
-    __json__         = {
-        "include": {"server", "user_id", "access_token", "device_id"},
-    }
+    auth:  Runtime[Authentication]  = field(init=False, repr=False)
+    rooms: Runtime[Rooms]           = field(init=False, repr=False)
+    sync:  Runtime[Synchronization] = field(init=False, repr=False)
+    e2e:   Runtime[Encryption]      = field(init=False, repr=False)
 
 
     async def __ainit__(self) -> None:
-        self.e2e   = await Encryption.load(self)
-        self.rooms = await Rooms.load(self)
-        self.auth  = Authentication(client=self)
-        self.sync  = await Synchronization.load(self)
-        await self._save()
+        await self._load_module("auth", Authentication, "auth.json")
+        await self._load_module("rooms", Rooms, "rooms")
+        await self._load_module("sync", Synchronization, "sync.json")
+        await self._load_module("e2e", Encryption, "e2e.json")
+        await self.save()
 
 
     @property
@@ -41,22 +40,16 @@ class Client(FileModel, AsyncInit):
         return [self.server, "_matrix", "client", "r0"]
 
 
-    @property
-    def save_file(self) -> Path:
-        return self.save_dir / "client.json"
-
-
     @classmethod
-    async def load(cls, save_dir: Union[Path, str]) -> "Client":
-        data = await cls._read_json(Path(save_dir) / "client.json")
-        return await cls(save_dir=Path(save_dir), **data)
+    async def load(cls, path: Union[Path, str], **defaults) -> "Client":
+        return await super().load(Path(path) / "client.json", **defaults)
 
 
     @classmethod
     async def login(
         cls,
         save_dir: Union[Path, str],
-        server:   AnyHttpUrl,
+        server:   HttpUrl,
         auth:     Dict[str, Any],
     ) -> "Client":
         """Login to a homeserver using a custom authentication dict.
@@ -78,7 +71,7 @@ class Client(FileModel, AsyncInit):
         )
 
         return await cls(
-            save_dir     = Path(save_dir),
+            path         = Path(save_dir) / "client.json",
             server       = server,
             user_id      = result["user_id"],
             access_token = result["access_token"],
@@ -90,7 +83,7 @@ class Client(FileModel, AsyncInit):
     async def login_password(
         cls,
         save_dir:            Union[Path, str],
-        server:              AnyHttpUrl,
+        server:              HttpUrl,
         user:                str,
         password:            str,
         device_id:           Optional[str] = None,
@@ -112,7 +105,7 @@ class Client(FileModel, AsyncInit):
     async def login_token(
         cls,
         save_dir:            Union[Path, str],
-        server:              AnyHttpUrl,
+        server:              HttpUrl,
         user:                str,
         token:               str,
         device_id:           Optional[str] = None,
@@ -157,11 +150,9 @@ class Client(FileModel, AsyncInit):
         return json.loads(result)
 
 
-# Required to avoid circular import
-
-from .client_modules.authentication import Authentication
-from .client_modules.encryption.encryption import Encryption
-from .client_modules.rooms import Rooms
-from .client_modules.synchronizer import Synchronization
-
-Client.update_forward_refs()
+    async def _load_module(
+        self, name: str, module: Type["ClientModule"], path_last_part: str,
+    ) -> None:
+        # Using __setattr__ like that because the dataclass is frozen
+        path = self.path.parent / path_last_part
+        setattr(self, name, await module.load(path, client=self))

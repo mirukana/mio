@@ -1,62 +1,42 @@
 import re
-from typing import Any, ClassVar, Optional
 
-HOST_REGEX = r"[a-zA-Z\d.:-]*[a-zA-Z\d]"
+from phantom.base import Phantom, Predicate
+from phantom.predicates.boolean import both
+from phantom.predicates.collection import count
+from phantom.predicates.interval import open
+from phantom.predicates.re import is_match
 
-
-class CustomType:
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
-
-    @classmethod
-    def validate(cls, value: Any) -> "CustomType":
-        raise NotImplementedError()
-
-    def __repr__(self) -> str:
-        return "%s(%s)" % (type(self).__name__, super().__repr__())
+HOST_REGEX    = r"[a-zA-Z\d.:-]*[a-zA-Z\d]"
+USER_ID_REGEX = rf"^@[\x21-\x39\x3B-\x7E]+:{HOST_REGEX}$"
 
 
-class CustomString(str, CustomType):
-    min_length: int                     = 0
-    max_length: Optional[int]           = None
-    regex:      ClassVar[Optional[str]] = None
-
-    @classmethod
-    def validate(cls, value: Any) -> "CustomString":
-        if not isinstance(value, str):
-            raise TypeError(f"{value!r}: must be a string")
-
-        if len(value) < cls.min_length:
-            raise TypeError(f"{value!r}: length must be >={cls.min_length}")
-
-        if cls.max_length is not None and len(value) > cls.max_length:
-            raise TypeError(f"{value!r}: length must be <={cls.max_length}")
-
-        if cls.regex is not None and not re.match(cls.regex, value):
-            raise ValueError(f"{value!r}: does not match regex {cls.regex!r}")
-
-        return cls(value)
+def match(regex: str) -> Predicate:
+    return is_match(re.compile(regex))
 
 
-class EmptyString(CustomString):
-    max_length = 0
+def match_255(regex: str) -> Predicate:
+    return both(count(open(0, 255)), is_match(re.compile(regex)))
 
 
-class UserId(CustomString):
-    max_length = 255
-    regex      = rf"^@[\x21-\x39\x3B-\x7E]+:{HOST_REGEX}$"
+class UserId(str, Phantom, predicate=match_255(USER_ID_REGEX)):
+    pass
 
 
-class EventId(CustomString):
-    max_length = 255
-    regex      = r"^\$.+"
+class EventId(str, Phantom, predicate=match_255(r"^\$.+")):
+    pass
 
 
-class RoomId(CustomString):
-    max_length = 255
-    regex      = rf"^!.+:{HOST_REGEX}$"
+class RoomId(str, Phantom, predicate=match_255(rf"^!.+:{HOST_REGEX}$")):
+    pass
 
 
-class RoomAlias(CustomString):
-    regex = rf"^#.+:{HOST_REGEX}$"
+class RoomAlias(str, Phantom, predicate=match_255(rf"^#.+:{HOST_REGEX}$")):
+    pass
+
+
+class HttpUrl(str, Phantom, predicate=match(rf"https?://{HOST_REGEX}.*")):
+    pass
+
+
+class MxcUri(str, Phantom, predicate=match(rf"mxc://{HOST_REGEX}/.+")):
+    pass

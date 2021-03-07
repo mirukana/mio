@@ -1,161 +1,151 @@
-from __future__ import annotations
-
-import json
-import logging as log
-from datetime import datetime, timedelta
-from math import floor
-from typing import Any, Dict, Optional, Sequence, Type, TypeVar, Union
-
-from pydantic import ValidationError
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import ClassVar, Generic, Optional, Type, TypeVar
 
 from ..typing import EventId, RoomId, UserId
-from ..utils import Model, deep_find_subclasses
+from ..utils import (
+    JSON, DictS, Frozen, JSONLoadError, Runtime, deep_find_subclasses,
+    deep_merge_dict,
+)
 
-EvT        = TypeVar("EvT", bound="Event")
-EventT     = Union["Event", EvT]
-MatrixPath = Union[str, Sequence[str]]
-_Missing   = object()
-
-
-class Event(Model):
-    class Matrix:
-        pass
-
-    type: Optional[str] = None
-
-    source: Dict[str, Any] = {}
-    valid:  bool           = True
-
-    encrypted_source:   Optional[Dict[str, Any]] = None
-    decrypted_payload:  Optional[Dict[str, Any]] = None
-    decrypted_verified: Optional[bool]           = None
-
-    __repr_exclude__ = [lambda self: None if type(self) is Event else "source"]
+EventT   = TypeVar("EventT", bound="Event")
+ContentT = TypeVar("ContentT", bound="Content")
+StateEvT = TypeVar("StateEvT", bound="StateEvent")
 
 
-    class Config:
-        json_encoders = {
-            datetime: lambda v: floor(v.timestamp() * 1000),
-            timedelta: lambda v: floor(v.total_seconds() * 1000),
-        }
+@dataclass
+class Decryption(Frozen):
+    source:             DictS
+    payload:            DictS
+    verification_error: Optional[Exception] = None
 
+
+@dataclass
+class Content(JSON, Frozen):
+    type: ClassVar[Optional[str]] = None
 
     @classmethod
-    def fields_from_matrix(cls, event: Dict[str, Any]) -> Dict[str, Any]:
-        fields = {}
-
-        for parent_class in cls.__bases__:
-            if issubclass(parent_class, Event):
-                fields.update(parent_class.fields_from_matrix(event))
-
-        def get(path: MatrixPath) -> Any:
-            data = event
-            path = (path,) if isinstance(path, str) else path
-
-            for part in path:
-                data = data.get(part, _Missing)
-                if data is _Missing:
-                    break
-
-            return data
-
-        fields.update({
-            k: get(v) for k, v in cls.Matrix.__dict__.items()
-            if not k.startswith("_")
-        })
-        fields = {k: v for k, v in fields.items() if v is not _Missing}
-
-        fields["source"] = event
-        return fields
-
-
-    @classmethod
-    def from_matrix(cls: Type[EvT], event: Dict[str, Any]) -> EventT:
+    def from_dict(cls: Type[ContentT], data: DictS, **defaults) -> ContentT:
         try:
-            return cls(**cls.fields_from_matrix(event))
-        except ValidationError as e:
-            log.warning(
-                "Failed validating event %r for type %s: %s\n",
-                event, cls.__name__, e,
-            )
-            return Event(source=event, valid=False)
-
+            return super().from_dict(data, **defaults)
+        except JSONLoadError as e:
+            raise InvalidContent(data, e)
 
     @classmethod
-    def matches_event(cls, event: Dict[str, Any]) -> bool:
-        cls_type = cls.__fields__["type"].default
-        return bool(cls_type) and cls_type == event.get("type")
+    def matches(cls, event: DictS) -> bool:
+        return bool(cls.type) and cls.type == event.get("type")
 
 
-    @classmethod
-    def subtype_from_matrix(cls: Type[EvT], event: Dict[str, Any]) -> EventT:
-        for subclass in deep_find_subclasses(cls):
-            if subclass.matches_event(event):
-                return subclass.from_matrix(event)
-
-        return cls.from_matrix(event)
-
-
-    @classmethod
-    def subtype_from_fields(cls: Type[EvT], fields: Dict[str, Any]) -> EventT:
-        for subclass in deep_find_subclasses(cls):
-            if subclass.matches_event(fields["source"]):
-                return subclass(**fields)
-
-        return cls(**fields)
-
+@dataclass
+class InvalidContent(Exception, Content):
+    source: Runtime[DictS]
+    error:  Runtime[JSONLoadError]
 
     @property
-    def matrix(self) -> Dict[str, Any]:
-        event: Dict[str, Any] = self.source.copy()
-
-        for field, value in json.loads(self.json(exclude_unset=True)).items():
-            for cls in (type(self), *type(self).__bases__):
-                if issubclass(cls, Event) and hasattr(cls.Matrix, field):
-                    mx_path = getattr(cls.Matrix, field)
-                    break
-            else:
-                continue
-
-            mx_path = (mx_path,) if isinstance(mx_path, str) else mx_path
-            dct     = event
-
-            for part in mx_path[:-1]:
-                dct = dct.setdefault(part, {})
-
-            dct[mx_path[-1]] = value
-
-        return event
+    def dict(self) -> DictS:
+        return self.source
 
 
-class ToDeviceEvent(Event):
-    class Matrix:
-        sender = "sender"
+@dataclass
+class Event(JSON, Frozen, Generic[ContentT]):
+    source:  Runtime[DictS] = field(repr=False)
+    content: ContentT
 
-    sender: Optional[UserId] = None
+    @property
+    def type(self) -> Optional[str]:
+        return self.content.type or self.source.get("type")
+
+    @property
+    def dict(self) -> DictS:
+        dct = self.source
+        deep_merge_dict(dct, super().dict)
+        return dct
+
+    @classmethod
+    def from_dict(cls: Type[EventT], data: DictS, **defaults) -> EventT:
+        content = cls._get_content(data, data.get("content", {}))
+        try:
+            data = {**data, "source": data, "content": content}
+            return super().from_dict(data, **defaults)
+        except JSONLoadError as e:
+            raise InvalidEvent(data, content, e)
+
+    @classmethod
+    def _get_content(cls, event: DictS, content: DictS) -> Content:
+        content_subs = deep_find_subclasses(Content)
+        content_cls  = next(
+            (c for c in content_subs if c.matches(event)),
+            InvalidContent,
+        )
+        try:
+            return content_cls.from_dict(content)
+        except InvalidContent as e:
+            return e
 
 
-class RoomEvent(Event):
-    class Matrix:
-        event_id = "event_id"
-        sender   = "sender"
-        date     = "origin_server_ts"
-        room_id  = "room_id"
+@dataclass
+class TimelineEvent(Event[ContentT]):
+    aliases = {"id": "event_id", "date": "origin_server_ts"}
 
-    sender:   Optional[UserId]   = None
-    event_id: Optional[EventId]  = None
-    date:     Optional[datetime] = None
-    room_id:  Optional[RoomId]   = None
+    content:    ContentT
+    id:         EventId
+    sender:     UserId
+    date:       datetime
+    redacts:    Optional[EventId]             = None
+    room_id:    Optional[RoomId]              = None
+    decryption: Runtime[Optional[Decryption]] = None
+    # TODO: unsigned
 
-    def __lt__(self, other: "RoomEvent") -> bool:
-        if self.date is None or other.date is None:
-            raise TypeError(f"Can't compare None date: {self!r}, {other!r}")
-
+    def __lt__(self, other: "TimelineEvent") -> bool:
         return self.date < other.date
 
 
-class StateEvent(RoomEvent):
-    class Matrix:
-        state_key = "state_key"
-
+@dataclass
+class StateKind(Event[ContentT]):
+    content:   ContentT
     state_key: str
+    sender:    UserId
+
+
+@dataclass
+class InvitedRoomStateEvent(StateKind[ContentT]):
+    content: ContentT
+
+
+@dataclass
+class StateEvent(StateKind[ContentT]):
+    aliases = {
+        "id": "event_id",
+        "date": "origin_server_ts",
+        "previous": ("unsigned", "prev_content"),
+    }
+
+    content:  ContentT
+    id:       EventId
+    date:     datetime
+    previous: Optional[ContentT] = None
+    room_id:  Optional[RoomId]   = None
+
+    @classmethod
+    def from_dict(cls: Type[StateEvT], data: DictS, **defaults) -> StateEvT:
+        prev_dict = data.get("unsigned", {}).get("prev_content", {})
+
+        if prev_dict:
+            content = cls._get_content(data, prev_dict)
+            data.setdefault("unsigned", {})["prev_content"] = content
+
+        return super().from_dict(data, **defaults)
+
+
+@dataclass
+class ToDeviceEvent(Event[ContentT]):
+    content:    ContentT
+    sender:     UserId
+    decryption: Runtime[Optional[Decryption]] = None
+
+
+@dataclass
+class InvalidEvent(Exception, Event[ContentT]):
+    source:     Runtime[DictS]  # repr=True, unlike Event
+    content:    Runtime[ContentT]
+    error:      Runtime[JSONLoadError]

@@ -1,26 +1,24 @@
+from dataclasses import dataclass, field
 from enum import auto
 from typing import Dict, List, Optional
 
-from pydantic import AnyUrl, validator
+from ..typing import EventId, MxcUri, RoomAlias, RoomId, UserId
+from ..utils import AutoStrEnum
+from .base_events import Content
 
-from ..typing import EmptyString, EventId, RoomAlias, RoomId, UserId
-from ..utils import AutoStrEnum, Const
-from .base_events import StateEvent
-
-# TODO: m.room.third_party_invite, prev_content
+# TODO: m.room.third_party_invite
 
 
-class Creation(StateEvent):
-    class Matrix:
-        creator           = ("content", "creator")
-        federate          = ("content", "m.federate")
-        version           = ("content", "room_version")
-        previous_room_id  = ("content", "predecessor", "room_id")
-        previous_event_id = ("content", "predecessor", "event_id")
+@dataclass
+class Creation(Content):
+    type    = "m.room.create"
+    aliases = {
+        "federate": "m.federate",
+        "version": "room_version",
+        "previous_room_id":  ("predecessor", "room_id"),
+        "previous_event_id": ("predecessor", "event_id"),
+    }
 
-    type = Const("m.room.create")
-
-    state_key:         EmptyString
     creator:           UserId
     federate:          bool              = True
     version:           str               = "1"
@@ -28,118 +26,95 @@ class Creation(StateEvent):
     previous_event_id: Optional[EventId] = None
 
 
-class Name(StateEvent):
-    class Matrix:
-        name = ("content", "name")
+@dataclass
+class Name(Content):
+    type = "m.room.name"
 
-    type = Const("m.room.name")
-
-    state_key: EmptyString
-    name:      Optional[str]
+    name: Optional[str] = None
 
 
-class Topic(StateEvent):
-    class Matrix:
-        topic = ("content", "topic")
+@dataclass
+class Topic(Content):
+    type = "m.room.topic"
 
-    type = Const("m.room.topic")
-
-    state_key: EmptyString
-    topic:     Optional[str]
+    topic: Optional[str] = None
 
 
-class Avatar(StateEvent):
-    class Matrix:
-        url = ("content", "url")
-
-    type = Const("m.room.avatar")
+@dataclass
+class Avatar(Content):
+    type = "m.room.avatar"
 
     # TODO: info
-    state_key: EmptyString
-    url:       Optional[AnyUrl]
+    url: Optional[MxcUri] = None
 
 
-class CanonicalAlias(StateEvent):
-    class Matrix:
-        alias        = ("content", "alias")
-        alternatives = ("content", "alt_aliases")
+@dataclass
+class CanonicalAlias(Content):
+    type    = "m.room.canonical_alias"
+    aliases = {"alternatives": "alt_aliases"}
 
-    type = Const("m.room.canonical_alias")
-
-    state_key:    EmptyString
-    alias:        RoomAlias
-    alternatives: List[RoomAlias] = []
+    alias:        Optional[RoomAlias] = None
+    alternatives: List[RoomAlias]     = field(default_factory=list)
 
 
-class JoinRules(StateEvent):
+@dataclass
+class JoinRules(Content):
     class Rule(AutoStrEnum):
         public  = auto()
         knock   = auto()
         invite  = auto()
         private = auto()
 
-    class Matrix:
-        rule = ("content", "join_rule")
+    type    = "m.room.join_rules"
+    aliases = {"rule": "join_rule"}
 
-    type = Const("m.room.join_rules")
-
-    state_key: EmptyString
-    rule:      Rule
+    rule: Rule
 
 
-class HistoryVisibility(StateEvent):
+@dataclass
+class HistoryVisibility(Content):
     class Visibility(AutoStrEnum):
         invited        = auto()
         joined         = auto()
         shared         = auto()
         world_readable = auto()
 
-    class Matrix:
-        visibility = ("content", "history_visibility")
+    type    = "m.room.history_visibility"
+    aliases = {"visibility": "history_visibility"}
 
-    type = Const("m.room.history_visibility")
-
-    state_key:  EmptyString
     visibility: Visibility
 
 
-class GuestAccess(StateEvent):
+@dataclass
+class GuestAccess(Content):
     class Access(AutoStrEnum):
         can_join  = auto()
         forbidden = auto()
 
-    class Matrix:
-        access = ("content", "guest_access")
+    type    = "m.room.guest_access"
+    aliases = {"access": "guest_access"}
 
-    type = Const("m.room.guest_access")
-
-    state_key: EmptyString
-    access:    Access
+    access: Access
 
 
-class PinnedEvents(StateEvent):
-    class Matrix:
-        pinned = ("content", "pinned")
+@dataclass
+class PinnedEvents(Content):
+    type = "m.room.pinned_events"
 
-    type = Const("m.room.pinned_events")
-
-    state_key: EmptyString
-    pinned:    List[EventId] = []
+    pinned: List[EventId]
 
 
-class Tombstone(StateEvent):
-    class Matrix:
-        server_message   = ("content", "body")
-        replacement_room = ("content", "replacement_room")
+@dataclass
+class Tombstone(Content):
+    type    = "m.room.tombstone"
+    aliases = {"server_message": "body"}
 
-    type = Const("m.room.tombstone")
-
-    state_key:        EmptyString
     server_message:   str
     replacement_room: RoomId
 
 
-class Member(StateEvent):
+@dataclass
+class Member(Content):
     class Membership(AutoStrEnum):
         invite = auto()
         join   = auto()
@@ -147,19 +122,15 @@ class Member(StateEvent):
         leave  = auto()
         ban    = auto()
 
-    class Matrix:
-        avatar_url        = ("content", "avatar_url")
-        display_name      = ("content", "displayname")
-        membership        = ("content", "membership")
-        is_direct         = ("content", "is_direct")
-        third_party_name  = ("content", "third_party_invite", "display_name")
-        # invite_room_state = ("content", "unsigned", "invite_room_state"),
+    type    = "m.room.member"
+    aliases = {
+        "display_name": "displayname",
+        "third_party_name": ("third_party_invite", "display_name"),
+        # "invite_room_state": ("unsigned", "invite_room_state"),  # TODO
+    }
 
-    type = Const("m.room.member")
-
-    state_key:        UserId
     membership:       Membership
-    avatar_url:       Optional[AnyUrl] = None
+    avatar_url:       Optional[MxcUri] = None
     display_name:     Optional[str]    = None
     is_direct:        bool             = False
     third_party_name: Optional[str]    = None
@@ -170,22 +141,10 @@ class Member(StateEvent):
         return self.membership in (self.Membership.leave, self.membership.ban)
 
 
-class PowerLevels(StateEvent):
-    class Matrix:
-        invite         = ("content", "invite")
-        kick           = ("content", "kick")
-        ban            = ("content", "ban")
-        redact         = ("content", "redact")
-        events_default = ("content", "events_default")
-        state_default  = ("content", "state_default")
-        users_default  = ("content", "users_default")
-        events         = ("content", "events")
-        users          = ("content", "users")
-        notifications  = ("content", "notifications")
+@dataclass
+class PowerLevels(Content):
+    type = "m.room.power_levels"
 
-    type = Const("m.room.power_levels")
-
-    state_key:      EmptyString
     invite:         int               = 50
     kick:           int               = 50
     ban:            int               = 50
@@ -193,25 +152,18 @@ class PowerLevels(StateEvent):
     events_default: int               = 0
     state_default:  int               = 50
     users_default:  int               = 0
-    events:         Dict[str, int]    = {}
-    users:          Dict[UserId, int] = {}
-    notifications:  Dict[str, int]    = {"room": 50}
+    events:         Dict[str, int]    = field(default_factory=dict)
+    users:          Dict[UserId, int] = field(default_factory=dict)
+    notifications:  Dict[str, int]    = field(default_factory=dict)
 
-    @validator("notifications")
-    def add_room_notif(cls, value):
-        value.setdefault("room", 50)
-        return value
+    def __post_init__(self) -> None:
+        self.notifications.setdefault("room", 50)
 
 
-class ServerACL(StateEvent):
-    class Matrix:
-        allow_ip_literals = ("content", "allow_ip_literals")
-        allow             = ("content", "allow")
-        deny              = ("content", "deny")
+@dataclass
+class ServerACL(Content):
+    type = "m.room.server_acl"
 
-    type = Const("m.room.server_acl")
-
-    state_key:         EmptyString
     allow_ip_literals: bool      = True
-    allow:             List[str] = []
-    deny:              List[str] = []
+    allow:             List[str] = field(default_factory=list)
+    deny:              List[str] = field(default_factory=list)

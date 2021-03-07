@@ -1,38 +1,26 @@
 import asyncio
 import logging as log
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Set, Union
+from contextlib import suppress
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, Optional, Set, Type, Union
 
-from ..events import Event, RoomEvent
+from ..events import (
+    Event, InvalidEvent, InvitedRoomStateEvent, StateEvent, StateKind,
+    TimelineEvent, ToDeviceEvent,
+)
 from ..typing import RoomId, UserId
-from ..utils import FileModel, remove_none
-from .client_module import ClientModule
+from ..utils import log_errors, remove_none
+from .client_module import JSONClientModule
 from .encryption.errors import DecryptionError
 from .encryption.events import Megolm, Olm
 from .rooms.room import Room
 
-if TYPE_CHECKING:
-    from ..base_client import Client
-
 FilterType = Union[None, str, Dict[str, Any]]
 
 
-class Synchronization(ClientModule, FileModel):
+@dataclass
+class Synchronization(JSONClientModule):
     next_batch: Optional[str] = None
-
-    __json__ = {"exclude": {"client"}}
-
-
-    @property
-    def save_file(self) -> Path:
-        return self.client.save_dir / "sync.json"
-
-
-    @classmethod
-    async def load(cls, client: "Client") -> "Synchronization":
-        data = await cls._read_json(client.save_dir / "sync.json")
-        return cls(client=client, **data)
-
 
     async def sync(
         self,
@@ -46,11 +34,10 @@ class Synchronization(ClientModule, FileModel):
         parameters = {
             "timeout":      int(timeout * 1000),
             "filter":       sync_filter,
-            # or self.loaded_sync_token TODO
             "since":        since or self.next_batch,
             "full_state":   full_state,
-            # or self.client.presence.to_set TODO
             "set_presence": set_presence,
+            # or self.client.presence.to_set TODO
         }
 
         # TODO: timeout
@@ -62,8 +49,6 @@ class Synchronization(ClientModule, FileModel):
 
         if self.next_batch != result["next_batch"]:
             await self.handle_sync(result)
-            self.next_batch = result["next_batch"]
-            await self._save()
 
 
     async def loop(
@@ -87,8 +72,11 @@ class Synchronization(ClientModule, FileModel):
     async def handle_sync(self, sync: Dict[str, Any]) -> None:
         # TODO: device_lists, partial syncs
 
-        async def decrypt(event: Event, room_id: RoomId) -> Event:
-            if not isinstance(event, (Olm, Megolm)):
+        async def decrypt(event: Event, room_id: RoomId):
+            if not isinstance(event, (ToDeviceEvent, TimelineEvent)):
+                return event
+
+            if not isinstance(event.content, (Olm, Megolm)):
                 return event
 
             try:
@@ -97,48 +85,64 @@ class Synchronization(ClientModule, FileModel):
                 log.warn("Failed decrypting %r: %r\n", event, e)
                 return event
 
-        async def events_call(data: dict, key: str, coro: Callable) -> None:
+        async def events_call(
+            data: dict, key: str, evtype: Type[Event], coro: Callable,
+        ) -> None:
             for event in data.get(key, {}).get("events", ()):
-                Event.subtype_from_matrix(event)
-                await coro(await decrypt(ev, room.id))
+                with log_errors(InvalidEvent):
+                    ev = await decrypt(evtype.from_dict(event), room.id)
+                    await coro(ev)
 
-        async def room_events_call(data: dict, key: str, room: Room) -> None:
+        async def room_events_call(
+            data: dict, key: str, room: Room, invited: bool = False,
+        ) -> None:
+
+            state: Type[StateKind] = \
+                InvitedRoomStateEvent if invited else StateEvent
+
             for event in data.get(key, {}).get("events", ()):
-                ev       = Event.subtype_from_matrix(event)
-                is_state = key in ("state", "invite_state")
-                await room.handle_event(await decrypt(ev, room.id), is_state)
+                with log_errors(InvalidEvent):
+                    if "state_key" in event:
+                        st = await decrypt(state.from_dict(event), room.id)
+                        await room.handle_event(st)
+
+                    if key != "timeline":
+                        continue
+
+                    ev = await decrypt(TimelineEvent.from_dict(event), room.id)
+                    await room.handle_event(ev)
 
         users: Set[UserId] = set()
 
         for event in sync.get("to_device", {}).get("events", ()):
-            if Olm.matches_event(event):
-                parsed = Olm.from_matrix(event)
-                if isinstance(parsed, Olm):
-                    users.add(parsed.sender)
+            if Olm.matches(event):
+                with suppress(InvalidEvent):
+                    users.add(ToDeviceEvent.from_dict(event).sender)
 
         for kind in ("invite", "join", "leave"):
             for data in sync.get("rooms", {}).get(kind, {}).values():
                 for event in data.get("timeline", {}).get("events", ()):
-                    if Megolm.matches_event(event):
-                        parsed = Megolm.from_matrix(event)
-                        if isinstance(parsed, Megolm) and parsed.sender:
-                            users.add(parsed.sender)
+                    if Megolm.matches(event):
+                        with suppress(InvalidEvent):
+                            users.add(TimelineEvent.from_dict(event).sender)
 
         await self.client.e2e.query_devices({u: [] for u in users})
 
         coro = self.client.e2e.handle_to_device_event
-        await events_call(sync, "to_device", coro)
+        await events_call(sync, "to_device", ToDeviceEvent, coro)
 
         # events_call(sync, "account_data", noop)  # TODO
         # events_call(sync, "presence", noop)      # TODO
 
         rooms = self.client.rooms
 
-        async def set_room(room_id: str) -> Room:
+        async def set_room(room_id: RoomId) -> Room:
             if room_id in rooms._data:
                 return rooms._data[room_id]
 
-            room = await Room(client=self.client, id=room_id)
+            path = self.client.rooms.room_path(room_id)
+            room = await Room(path=path, client=self.client, id=room_id)
+
             rooms._data[room_id] = room
             return room
 
@@ -175,38 +179,40 @@ class Synchronization(ClientModule, FileModel):
             timeline   = data.get("timeline", {})
             limited    = timeline.get("limited")
             prev_batch = timeline.get("prev_batch")
-            after      = None
+
+            after: Optional[TimelineEvent] = None
 
             for event in timeline.get("events", []):
-                ev = await decrypt(Event.subtype_from_matrix(event), room.id)
-                if isinstance(ev, RoomEvent) and ev.event_id and ev.date:
-                    after = ev
+                with suppress(InvalidEvent):
+                    after = await decrypt(
+                        TimelineEvent.from_dict(event), room.id,
+                    )
                     break
 
             if limited and prev_batch and after:
                 if not room.timeline:
-                    await room.timeline.load_history(events_count=1)
+                    await room.timeline.load_history(count=1)
 
                 before_id = next(reversed(tuple(room.timeline)), None)
-                await room.timeline.add_gap(
-                    prev_batch,
-                    before_id,
-                    after.event_id,  # type: ignore
-                    after.date,      # type: ignore
+                await room.timeline.register_gap(
+                    prev_batch, before_id, after.id, after.date,
                 )
 
-            await events_call(data, "account_data", room.handle_event)
-            await events_call(data, "ephemeral", room.handle_event)
+            # await events_call(data, "account_data", room.handle_event)
+            # await events_call(data, "ephemeral", room.handle_event)
             await room_events_call(data, "state", room)
             await room_events_call(data, "timeline", room)
 
         for room_id, data in sync.get("rooms", {}).get("leave", {}).items():
             room      = await set_room(room_id)
             room.left = True
-            await events_call(data, "account_data", room.handle_event)
+            # await events_call(data, "account_data", room.handle_event)
             await room_events_call(data, "state", room)
             await room_events_call(data, "timeline", room)
 
         if "device_one_time_keys_count" in sync:
             up = sync["device_one_time_keys_count"].get("signed_curve25519", 0)
             await self.client.e2e.upload_one_time_keys(currently_uploaded=up)
+
+        self.next_batch = sync["next_batch"]
+        await self.save()

@@ -1,15 +1,18 @@
 import json
 import logging as log
-from typing import Any, Dict, List, Optional, Type, Union
+from dataclasses import dataclass
+from typing import Any, ClassVar, Dict, List, Optional, Type, Union
 from urllib.parse import quote
 
 import aiohttp
 
-from . import Client, ServerError
+from .base_client import Client
+from .errors import ServerError
 
 
+@dataclass
 class AiohttpClient(Client):
-    _session = aiohttp.ClientSession()
+    _session: ClassVar[aiohttp.ClientSession] = aiohttp.ClientSession()
 
 
     async def send(
