@@ -1,14 +1,9 @@
 import json
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 
-@dataclass
 class MioError(Exception):
-    debug: Any = field(init=False, repr=False, default=None)
-
-    def __str__(self) -> str:
-        return repr(self)
+    pass
 
 
 @dataclass

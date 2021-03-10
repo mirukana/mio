@@ -77,9 +77,8 @@ class Frozen:
             raise AttributeError(f"Cannot modify frozen class {self!r}")
 
 
-@dataclass
 class JSONLoadError(MioError):
-    error: Exception
+    pass
 
 
 @dataclass
@@ -146,7 +145,7 @@ class JSON:
     ) -> JSONT:
 
         if not isinstance(data, dict):
-            raise JSONLoadError(TypeError(f"Expected dict, got {data!r}"))
+            raise JSONLoadError(data, dict, "Expected dict")
 
         fields = {}
 
@@ -173,8 +172,7 @@ class JSON:
         try:
             return cls(**fields)  # type: ignore
         except TypeError as e:
-            breakpoint()
-            raise JSONLoadError(e)
+            raise JSONLoadError(cls, fields, next(iter(e.args), ""))
 
 
     @classmethod
@@ -349,22 +347,28 @@ class JSON:
     ) -> Any:
 
         if field_name and field_name in cls.loaders:
-            with convert_errors(JSONLoadError):
+            try:
                 return cls.loaders[field_name](value)
+            except Exception as e:  # noqa
+                raise JSONLoadError(cls, field_name, annotation, value, e)
 
         typ = cls._get_loadable_type(annotation, value)
         if not typ:
             return value
 
         if typ in cls.loaders:
-            with convert_errors(JSONLoadError):
+            try:
                 return cls.loaders[typ](value)
+            except Exception as e:  # noqa
+                raise JSONLoadError(cls, typ, value, e)
 
         # This won't work for types like List, Dict, etc
         for parent in deep_find_parent_classes(typ):
             if parent in cls.loaders:
-                with convert_errors(JSONLoadError):
+                try:
                     return cls.loaders[parent](value)
+                except Exception as e:  # noqa
+                    raise JSONLoadError(cls, parent, value, e)
 
         return value
 
@@ -374,8 +378,10 @@ class JSON:
         typ = cls._get_loadable_type(annotation, value)
 
         if typ:
-            with convert_errors(JSONLoadError):
+            try:
                 return typingplus.cast(typ, value)
+            except Exception as e:  # noqa:
+                raise JSONLoadError(cls, annotation, value, e)
 
         return value
 
@@ -501,13 +507,3 @@ def log_errors(
             debug("%s\n" % traceback.format_exc().rstrip())
         else:
             debug(e)
-
-
-@contextmanager
-def convert_errors(
-    into: Callable[[Exception], Exception], types: ErrorCatcher = Exception,
-) -> Iterator[None]:
-    try:
-        yield None
-    except types as e:
-        raise into(e)
