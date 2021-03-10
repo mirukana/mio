@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Dict
 
 from ...typing import RoomId
-from ...utils import Frozen, Map, Parent
+from ...utils import Frozen, IndexableMap, Parent
 from ..client_module import ClientModule
 from .room import Room
 
@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class Rooms(ClientModule, Frozen, Map[RoomId, Room]):
+class Rooms(ClientModule, Frozen, IndexableMap[RoomId, Room]):
     client: Parent["Client"]   = field(repr=False)
     _data:  Dict[RoomId, Room] = field(default_factory=dict)
 

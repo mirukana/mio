@@ -68,6 +68,14 @@ class Map(Mapping[KT, VT]):
 
 
 @dataclass
+class IndexableMap(Map[KT, VT]):
+    def __getitem__(self, key: Union[int, KT]) -> VT:
+        if isinstance(key, int):
+            return list(self._data.values())[key]  # type: ignore
+        return self._data[key]  # type: ignore
+
+
+@dataclass
 class Frozen:
     def __setattr__(self, name: str, value: Any) -> None:
         fields = self.__dataclass_fields__  # type: ignore
