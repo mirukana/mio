@@ -19,7 +19,6 @@ class Creation(Content):
     type    = "m.room.create"
     aliases = {"federate": "m.federate", "version": "room_version"}
 
-    creator:     UserId
     federate:    bool                  = True
     version:     str                   = "1"
     predecessor: Optional[Predecessor] = None
