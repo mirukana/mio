@@ -1,3 +1,4 @@
+import logging as log
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import ClassVar, Generic, Optional, Type, TypeVar
@@ -29,6 +30,7 @@ class Content(JSON, Frozen):
         try:
             return super().from_dict(data, **defaults)
         except JSONLoadError as e:
+            log.error("Failed parsing %s from %r: %r", cls.__name__, data, e)
             raise InvalidContent(data, e)
 
     @classmethod
@@ -68,6 +70,7 @@ class Event(JSON, Frozen, Generic[ContentT]):
             data = {**data, "source": data, "content": content}
             return super().from_dict(data, **defaults)
         except JSONLoadError as e:
+            log.error("Failed parsing %s from %r: %r", cls.__name__, data, e)
             raise InvalidEvent(data, content, e)
 
     @classmethod
