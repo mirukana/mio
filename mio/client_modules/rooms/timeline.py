@@ -15,7 +15,7 @@ from ...events.base_events import Content, InvalidEvent, TimelineEvent
 from ...events.room_state import Creation
 from ...typing import EventId
 from ...utils import (
-    JSON, Frozen, JSONFile, Map, Runtime, log_errors, remove_none,
+    JSON, Frozen, JSONFile, Map, Parent, Runtime, log_errors, remove_none,
 )
 
 if TYPE_CHECKING:
@@ -24,13 +24,12 @@ if TYPE_CHECKING:
 
 @dataclass
 class Gap(JSON):
+    room:             Parent["Room"] = field(repr=False)
     fill_token:       str
     event_before:     Optional[EventId]
     event_after:      EventId
     event_after_date: datetime
     filled:           bool = False
-
-    timeline: Runtime[Optional["Timeline"]] = field(default=None, repr=False)
 
 
     def __lt__(self, other: "Gap") -> bool:
@@ -40,15 +39,14 @@ class Gap(JSON):
     async def fill(
         self, max_events: Optional[int] = 100,
     ) -> List[TimelineEvent]:
-        assert self.timeline
 
-        if self.event_after not in self.timeline.gaps:
+        if self.event_after not in self.room.timeline.gaps:
             return []
 
-        client = self.timeline.room.client
+        client = self.room.client
         result = await client.send_json(
             method = "GET",
-            path   = [*client.api, "rooms", self.timeline.room.id, "messages"],
+            path   = [*client.api, "rooms", self.room.id, "messages"],
 
             parameters = remove_none({
                 "from":  self.fill_token,
@@ -61,8 +59,8 @@ class Gap(JSON):
 
         if not result.get("chunk"):
             self.filled = True
-            self.timeline.gaps.pop(self.event_after, None)
-            await self.timeline.save()
+            self.room.timeline.gaps.pop(self.event_after, None)
+            await self.room.timeline.save()
             return []
 
         evs: List[TimelineEvent] = []
@@ -71,19 +69,19 @@ class Gap(JSON):
             with log_errors(InvalidEvent):
                 evs.append(TimelineEvent.from_dict(ev))
 
-        await self.timeline.register_events(*evs)
+        await self.room.timeline.register_events(*evs)
 
         if any(
             isinstance(e.content, Creation) or e.id == self.event_before
             for e in evs
         ):
             self.filled = True
-            self.timeline.gaps.pop(self.event_after, None)
+            self.room.timeline.gaps.pop(self.event_after, None)
         else:
             self.event_after = result["chunk"][-1]
 
         self.fill_token = result["end"]
-        await self.timeline.save()
+        await self.room.timeline.save()
         return evs
 
 
@@ -91,19 +89,13 @@ class Gap(JSON):
 class Timeline(JSONFile, Frozen, Map[EventId, TimelineEvent]):
     json_exclude = {"path", "room", "_loaded_files", "_data"}
 
-    room: Runtime["Room"]    = field(repr=False)
+    room: Parent["Room"]     = field(repr=False)
     gaps: Dict[EventId, Gap] = field(default_factory=ValueSortedDict)
 
     _loaded_files: Runtime[Set[Path]] = field(default_factory=set)
 
     _data: Runtime[Dict[EventId, TimelineEvent]] = \
         field(default_factory=ValueSortedDict)
-
-
-    def __post_init__(self) -> None:
-        # TODO: make them JSONFile instead of doing this workaround
-        for gap in self.gaps.values():
-            gap.timeline = self
 
 
     @property
@@ -124,7 +116,7 @@ class Timeline(JSONFile, Frozen, Map[EventId, TimelineEvent]):
         event_after_date: datetime,
     ) -> None:
         self.gaps[event_after] = Gap(
-            timeline         = self,
+            room             = self.room,
             fill_token       = fill_token,
             event_before     = event_before,
             event_after      = event_after,

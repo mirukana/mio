@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Tuple
 from ...events.base_events import Event, StateKind, TimelineEvent
 from ...events.room_state import Member
 from ...typing import RoomId, UserId
-from ...utils import JSONFile, Runtime
+from ...utils import JSONFile, Parent, Runtime
 from .state import RoomState
 from .timeline import Timeline
 
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class Room(JSONFile):
-    client:  Runtime["Client"] = field(repr=False)
+    client:  Parent["Client"] = field(repr=False)
     id:      RoomId
 
     # Set by Synchronizer.handle_sync
@@ -33,10 +33,10 @@ class Room(JSONFile):
 
     async def __ainit__(self) -> None:
         self.timeline = \
-            await Timeline.load(self.path.parent / "timeline.json", room=self)
+            await Timeline.load(self.path.parent / "timeline.json", self)
 
         self.state = \
-            await RoomState.load(self.path.parent / "state.json", room=self)
+            await RoomState.load(self.path.parent / "state.json", self)
 
 
     async def handle_event(self, event: Event) -> None:

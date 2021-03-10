@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Dict
 
 from ...typing import RoomId
-from ...utils import Frozen, Map
+from ...utils import Frozen, Map, Parent
 from ..client_module import ClientModule
 from .room import Room
 
@@ -14,23 +14,17 @@ if TYPE_CHECKING:
 @dataclass
 class Rooms(ClientModule, Frozen, Map[RoomId, Room]):
     path:   Path               = field(repr=False)
-    client: "Client"           = field(repr=False)
+    client: Parent["Client"]   = field(repr=False)
     _data:  Dict[RoomId, Room] = field(default_factory=dict)
 
 
     @classmethod
-    async def load(cls, path: Path, **defaults) -> "ClientModule":
-        defaults["path"] = path
-        rooms            = cls(**defaults)
+    async def load(cls, path: Path, parent: "Client") -> "ClientModule":
+        rooms = cls(path=path, client=parent)
 
         for room_dir in path.glob("!*"):
-            id = RoomId(room_dir.name)
-
-            rooms._data[id] = await Room.load(
-                path   = rooms.room_path(id),
-                client = defaults["client"],
-                id     = id,
-            )
+            id              = RoomId(room_dir.name)
+            rooms._data[id] = await Room.load(rooms.room_path(id), parent)
 
         return rooms
 

@@ -38,7 +38,9 @@ _Missing     = object()
 NoneType     = type(None)
 
 _Runtime = object()
+_Parent  = object()
 Runtime  = Annotated[T, _Runtime]
+Parent   = Annotated[T, _Runtime, _Parent]
 
 
 class AsyncInit:
@@ -129,7 +131,10 @@ class JSON:
 
 
     @classmethod
-    def from_dict(cls: Type[JSONT], data: DictS, **defaults) -> JSONT:
+    def from_dict(
+        cls: Type[JSONT], data: DictS, parent: Optional["JSON"] = None,
+    ) -> JSONT:
+
         if not isinstance(data, dict):
             raise JSONLoadError(TypeError(f"Expected dict, got {data!r}"))
 
@@ -137,6 +142,10 @@ class JSON:
 
         for f in get_fields(cls):
             if getattr(f.type, "__origin__", None) is ClassVar:
+                continue
+
+            if parent and annotation_is_parent(f.type):
+                fields[f.name] = parent
                 continue
 
             path  = cls.aliases.get(f.name, f.name)
@@ -149,11 +158,10 @@ class JSON:
                     break
 
             if value is not _Missing:
-                fields[f.name] = cls._load(f.type, value, f.name)
-
+                fields[f.name] = cls._load(f.type, value, f.name, parent)
 
         try:
-            return cls(**{**defaults, **fields})  # type: ignore
+            return cls(**fields)  # type: ignore
         except TypeError as e:
             raise JSONLoadError(e)
 
@@ -221,30 +229,40 @@ class JSON:
 
 
     @classmethod
-    def _load(cls, typ: Any, data: Any, name: Optional[str] = None) -> Any:
-        typ     = unwrap_annotated(typ)
+    def _load(
+        cls,
+        annotation: Any,
+        value:      Any,
+        field_name: Optional[str]    = None,
+        parent:     Optional["JSON"] = None,
+    ) -> Any:
+
+        typ     = unwrap_annotated(annotation)
         datacls = is_dataclass(typ)
-        data    = cls._apply_loader(typ, data, name)
+        value    = cls._apply_loader(typ, value, field_name)
 
-        if datacls and is_subclass(typ, JSON) and isinstance(data, Mapping):
-            return typ.from_dict(data)
+        if datacls and is_subclass(typ, JSON) and isinstance(value, Mapping):
+            return typ.from_dict(value)
 
-        if datacls and isinstance(data, Mapping):
+        if datacls and isinstance(value, Mapping):
             return typ(**{
-                f.name: cls._load(f.type, data[f.name], f.name)
+                f.name:
+                    parent if parent and annotation_is_parent(f.type) else
+                    cls._load(f.type, value[f.name], f.name)
+
                 for f in get_fields(typ)
                 if getattr(f.type, "__origin__", None) is not ClassVar and
-                f.name in data
+                f.name in value
             })
 
-        data = cls._auto_cast(typ, data)
+        value = cls._auto_cast(typ, value)
         typo = getattr(typ, "__bound__", typ)
         typo = getattr(typo, "__origin__", typo)
 
         if typo is Union or isinstance(typo, (str, ForwardRef)):
-            return data
+            return value
 
-        if is_subclass(typo, Mapping) and isinstance(data, Mapping):
+        if is_subclass(typo, Mapping) and isinstance(value, Mapping):
             key_type, value_type = getattr(typ, "__args__", (Any, Any))
             key_type_origin      = getattr(key_type, "__origin__", key_type)
 
@@ -252,7 +270,7 @@ class JSON:
                 cls._load(
                     key_type,
                     k if is_subclass(key_type_origin, str) else json.loads(k),
-                ): cls._load(value_type, v) for k, v in data.items()
+                ): cls._load(value_type, v) for k, v in value.items()
             }
 
             try:
@@ -260,28 +278,28 @@ class JSON:
             except TypeError:  # happens for typing.Mapping/Dict/etc
                 return dct
 
-        if isinstance(data, (str, bytes)):
-            return data
+        if isinstance(value, (str, bytes)):
+            return value
 
-        if is_subclass(typo, Collection) and isinstance(data, Collection):
+        if is_subclass(typo, Collection) and isinstance(value, Collection):
             items: Collection
 
             if is_subclass(typo, tuple):
                 item_types = getattr(typ, "__args__", (Any, ...))
                 items      = tuple(
                     cls._load(item_types[0 if ... in item_types else i], v)
-                    for i, v in enumerate(data)
+                    for i, v in enumerate(value)
                 )
             else:
                 item_type = getattr(typ, "__args__", (Any,))[0]
-                items     = [cls._load(item_type, v) for v in data]
+                items     = [cls._load(item_type, v) for v in value]
 
             try:
                 return getattr(typ, "__origin__", typ)(items)
             except TypeError:  # happens for typing.List/Tuple/etc
                 return items
 
-        return data
+        return value
 
 
     @classmethod
@@ -311,12 +329,12 @@ class JSON:
 
     @classmethod
     def _apply_loader(
-        cls, annotation: Any, value: Any, name: Optional[str] = None,
+        cls, annotation: Any, value: Any, field_name: Optional[str] = None,
     ) -> Any:
 
-        if name and name in cls.loaders:
+        if field_name and field_name in cls.loaders:
             with convert_errors(JSONLoadError):
-                return cls.loaders[name](value)
+                return cls.loaders[field_name](value)
 
         typ = cls._get_loadable_type(annotation, value)
         if not typ:
@@ -350,6 +368,7 @@ class JSON:
 class JSONFile(JSON, AsyncInit):
     path: Runtime[Path] = field(repr=False)
 
+
     async def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         data = self.json
@@ -359,16 +378,19 @@ class JSONFile(JSON, AsyncInit):
 
 
     @classmethod
-    async def load(cls: Type[JSONFileT], path: Path, **defaults) -> JSONFileT:
-        defaults["path"] = path
+    async def load(
+        cls:    Type[JSONFileT],
+        path:   Path,
+        parent: Optional["Parent"] = None,
+    ) -> JSONFileT:
 
-        if not path.exists():
-            return await cls(**defaults)
+        data = {"path": path}
 
-        async with aiopen(path) as file:
-            text = await file.read()
+        if path.exists():
+            async with aiopen(path) as file:
+                data.update(json.loads(await file.read()))
 
-        return await cls.from_json(text, **defaults)
+        return await cls.from_dict(data, parent)
 
 
 class AutoStrEnum(Enum):
@@ -387,6 +409,10 @@ class AutoStrEnum(Enum):
 
 def annotation_is_runtime(ann: Any) -> bool:
     return get_origin(ann) is Annotated and _Runtime in ann.__metadata__
+
+
+def annotation_is_parent(ann: Any) -> bool:
+    return get_origin(ann) is Annotated and _Parent in ann.__metadata__
 
 
 def unwrap_annotated(ann: Any) -> Any:

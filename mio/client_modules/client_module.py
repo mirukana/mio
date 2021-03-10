@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, Type
+from typing import TYPE_CHECKING
 
-from ..utils import JSONFile, Runtime
+from ..utils import JSONFile, Parent
 
 if TYPE_CHECKING:
     from ..base_client import Client
@@ -10,16 +10,13 @@ if TYPE_CHECKING:
 
 @dataclass
 class ClientModule:
-    client: Runtime["Client"] = field(repr=False)
+    client: Parent["Client"] = field(repr=False)
 
     @classmethod
-    async def load(cls, path: Path, **defaults):
+    async def load(cls, path: Path, parent: "Client"):
         raise NotImplementedError()
 
 
 @dataclass
 class JSONClientModule(JSONFile, ClientModule):
-    @classmethod
-    def forward_references(cls) -> Dict[str, Type]:
-        from ..base_client import Client
-        return {"Client": Client}
+    pass

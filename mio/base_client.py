@@ -8,7 +8,7 @@ from .client_modules.encryption.encryption import Encryption
 from .client_modules.rooms import Rooms
 from .client_modules.synchronizer import Synchronization
 from .typing import HttpUrl, UserId
-from .utils import Frozen, JSONFile, Runtime, remove_none
+from .utils import Frozen, JSONFile, Parent, Runtime, remove_none
 
 if TYPE_CHECKING:
     from .client_modules import ClientModule
@@ -41,8 +41,10 @@ class Client(JSONFile, Frozen):
 
 
     @classmethod
-    async def load(cls, path: Union[Path, str], **defaults) -> "Client":
-        return await super().load(Path(path) / "client.json", **defaults)
+    async def load(
+        cls, path: Union[Path, str], parent: Optional["Parent"] = None,
+    ) -> "Client":
+        return await super().load(Path(path) / "client.json", parent)
 
 
     @classmethod
@@ -155,4 +157,4 @@ class Client(JSONFile, Frozen):
     ) -> None:
         # Using __setattr__ like that because the dataclass is frozen
         path = self.path.parent / path_last_part
-        setattr(self, name, await module.load(path, client=self))
+        setattr(self, name, await module.load(path, self))

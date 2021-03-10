@@ -26,9 +26,11 @@ class Content(JSON, Frozen):
     type: ClassVar[Optional[str]] = None
 
     @classmethod
-    def from_dict(cls: Type[ContentT], data: DictS, **defaults) -> ContentT:
+    def from_dict(
+        cls: Type[ContentT], data: DictS, parent: Optional["JSON"] = None,
+    ) -> ContentT:
         try:
-            return super().from_dict(data, **defaults)
+            return super().from_dict(data, parent)
         except JSONLoadError as e:
             log.error("Failed parsing %s from %r: %r", cls.__name__, data, e)
             raise InvalidContent(data, e)
@@ -64,11 +66,15 @@ class Event(JSON, Frozen, Generic[ContentT]):
         return dct
 
     @classmethod
-    def from_dict(cls: Type[EventT], data: DictS, **defaults) -> EventT:
+    def from_dict(
+        cls: Type[EventT], data: DictS, parent: Optional["JSON"] = None,
+    ) -> EventT:
+
         content = cls._get_content(data, data.get("content", {}))
+
         try:
             data = {**data, "source": data, "content": content}
-            return super().from_dict(data, **defaults)
+            return super().from_dict(data, parent)
         except JSONLoadError as e:
             log.error("Failed parsing %s from %r: %r", cls.__name__, data, e)
             raise InvalidEvent(data, content, e)
@@ -130,14 +136,17 @@ class StateEvent(StateKind[ContentT]):
     room_id:  Optional[RoomId]   = None
 
     @classmethod
-    def from_dict(cls: Type[StateEvT], data: DictS, **defaults) -> StateEvT:
+    def from_dict(
+        cls: Type[StateEvT], data: DictS, parent: Optional["JSON"] = None,
+    ) -> StateEvT:
+
         prev_dict = data.get("unsigned", {}).get("prev_content", {})
 
         if prev_dict:
             content = cls._get_content(data, prev_dict)
             data.setdefault("unsigned", {})["prev_content"] = content
 
-        return super().from_dict(data, **defaults)
+        return super().from_dict(data, parent)
 
 
 @dataclass

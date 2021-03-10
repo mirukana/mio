@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING, Dict, Optional
 
 from ...client_modules.encryption.events import EncryptionSettings
@@ -8,7 +7,7 @@ from ...events.base_events import (
 )
 from ...events.room_state import Member
 from ...typing import UserId
-from ...utils import Frozen, JSONFile, Map, Runtime
+from ...utils import Frozen, JSONFile, Map, Parent
 
 if TYPE_CHECKING:
     from .room import Room
@@ -23,8 +22,7 @@ class RoomState(JSONFile, Frozen, Map[str, Dict[str, StateKind]]):
         ).from_dict(v),
     }
 
-    path: Runtime[Path]   = field(repr=False)
-    room: Runtime["Room"] = field(repr=False)
+    room: Parent["Room"] = field(repr=False)
 
     # {event.type: {event.state_key: event}}
     _data: Dict[str, Dict[str, StateKind]] = field(default_factory=dict)
