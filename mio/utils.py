@@ -104,9 +104,11 @@ class JSON:
         data: DictS = {}
 
         for f in get_fields(self):
-            is_classvar = getattr(f.type, "__origin__", None) is ClassVar
+            value          = getattr(self, f.name)
+            unset_optional = f.default is None and value is None
+            is_classvar    = getattr(f.type, "__origin__", None) is ClassVar
 
-            if is_classvar or is_runtime_annotation(f.type):
+            if is_classvar or annotation_is_runtime(f.type) or unset_optional:
                 continue
 
             path = self.aliases.get(f.name, f.name)
@@ -116,7 +118,7 @@ class JSON:
             for part in path[:-1]:
                 dct = dct.setdefault(part, {})
 
-            dct[path[-1]] = self._dump(getattr(self, f.name), f.name)
+            dct[path[-1]] = self._dump(value, f.name)
 
         return data
 
@@ -188,7 +190,8 @@ class JSON:
                 f.name: self._dump(getattr(value, f.name), f.name)
                 for f in get_fields(value)
                 if not getattr(f.type, "__origin__", None) is ClassVar and
-                not is_runtime_annotation(f.type)
+                not annotation_is_runtime(f.type) and
+                not (f.default is None and getattr(value, f.name) is None)
             }
 
         if isinstance(value, Mapping):
@@ -382,7 +385,7 @@ class AutoStrEnum(Enum):
         return name
 
 
-def is_runtime_annotation(ann: Any) -> bool:
+def annotation_is_runtime(ann: Any) -> bool:
     return get_origin(ann) is Annotated and _Runtime in ann.__metadata__
 
 
