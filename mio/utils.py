@@ -27,7 +27,8 @@ except ModuleNotFoundError:
         log.error("\n".join((repr(a) for a in args)))
 
 ErrorCatcher  = Union[Type[Exception], Tuple[Type[Exception], ...]]
-Converters    = Dict[Union[str, Type], Callable[[Any], Any]]
+Loaders       = Dict[Union[str, Type], Callable[[Any, Any], Any]]
+Dumpers       = Dict[Union[str, Type], Callable[["JSON", Any], Any]]
 DictS         = Dict[str, Any]
 T             = TypeVar("T")
 KT            = TypeVar("KT")
@@ -85,19 +86,19 @@ class JSONLoadError(MioError):
 class JSON:
     aliases: ClassVar[Dict[str, Union[str, Sequence[str]]]] = {}
 
-    loaders: ClassVar[Converters] = {
-        bytes: lambda v: v.encode(),
-        datetime: lambda v: datetime.fromtimestamp(v / 1000),
-        timedelta: lambda v: timedelta(seconds=v / 1000),
+    loaders: ClassVar[Loaders] = {
+        bytes: lambda v, p: v.encode(),
+        datetime: lambda v, p: datetime.fromtimestamp(v / 1000),
+        timedelta: lambda v, p: timedelta(seconds=v / 1000),
     }
 
-    dumpers: ClassVar[Converters] = {
-        UUID: str,
-        Path: str,
-        Enum: lambda v: v.value,
-        bytes: lambda v: v.decode(),
-        datetime: lambda v: v.timestamp() * 1000,
-        timedelta: lambda v: v.total_seconds() * 1000,
+    dumpers: ClassVar[Dumpers] = {
+        UUID: lambda self, v: str(v),
+        Path: lambda self, v: str(v),
+        Enum: lambda self, v: v.value,
+        bytes: lambda self, v: v.decode(),
+        datetime: lambda self, v: v.timestamp() * 1000,
+        timedelta: lambda self, v: v.total_seconds() * 1000,
     }
 
 
@@ -140,9 +141,7 @@ class JSON:
 
 
     @classmethod
-    def from_dict(
-        cls: Type[JSONT], data: DictS, parent: Optional["JSON"] = None,
-    ) -> JSONT:
+    def from_dict(cls: Type[JSONT], data: DictS, parent) -> JSONT:
 
         if not isinstance(data, dict):
             raise JSONLoadError(data, dict, "Expected dict")
@@ -176,9 +175,7 @@ class JSON:
 
 
     @classmethod
-    def from_json(
-        cls: Type[JSONT], data: str, parent: Optional["JSON"] = None,
-    ) -> JSONT:
+    def from_json(cls: Type[JSONT], data: str, parent) -> JSONT:
         return cls.from_dict(json.loads(data), parent)
 
 
@@ -190,14 +187,14 @@ class JSON:
         # Use any dumper we that suits this value to convert it first
 
         if name and name in self.dumpers:
-            value = self.dumpers[name](value)
+            value = self.dumpers[name](self, value)
 
         if type(value) in self.dumpers:
-            value = self.dumpers[type(value)](value)
+            value = self.dumpers[type(value)](self, value)
 
         for parent in deep_find_parent_classes(type(value)):
             if parent in self.dumpers:
-                return self.dumpers[parent](value)
+                return self.dumpers[parent](self, value)
 
         # Process nested structures
 
@@ -250,7 +247,7 @@ class JSON:
 
         typ     = unwrap_annotated(annotation)
         datacls = is_dataclass(typ)
-        value    = cls._apply_loader(typ, value, field_name)
+        value    = cls._apply_loader(typ, value, parent, field_name)
 
         if datacls and is_subclass(typ, JSON) and isinstance(value, Mapping):
             return typ.from_dict(value, parent)
@@ -343,12 +340,16 @@ class JSON:
 
     @classmethod
     def _apply_loader(
-        cls, annotation: Any, value: Any, field_name: Optional[str] = None,
+        cls,
+        annotation: Any,
+        value:      Any,
+        parent:     Optional["JSON"] = None,
+        field_name: Optional[str]    = None,
     ) -> Any:
 
         if field_name and field_name in cls.loaders:
             try:
-                return cls.loaders[field_name](value)
+                return cls.loaders[field_name](value, parent)
             except Exception as e:  # noqa
                 raise JSONLoadError(cls, field_name, annotation, value, e)
 
@@ -358,15 +359,15 @@ class JSON:
 
         if typ in cls.loaders:
             try:
-                return cls.loaders[typ](value)
+                return cls.loaders[typ](value, parent)
             except Exception as e:  # noqa
                 raise JSONLoadError(cls, typ, value, e)
 
         # This won't work for types like List, Dict, etc
-        for parent in deep_find_parent_classes(typ):
-            if parent in cls.loaders:
+        for parent_cls in deep_find_parent_classes(typ):
+            if parent_cls in cls.loaders:
                 try:
-                    return cls.loaders[parent](value)
+                    return cls.loaders[parent_cls](value, parent)
                 except Exception as e:  # noqa
                     raise JSONLoadError(cls, parent, value, e)
 
@@ -416,7 +417,6 @@ class JSONFileBase(JSON, AsyncInit):
 class JSONFile(JSONFileBase, AsyncInit):
     @property
     def path(self) -> Path:
-        assert self.parent
         return self.get_path(self.parent)
 
 

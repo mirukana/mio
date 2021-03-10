@@ -22,6 +22,7 @@ from .events import Algorithm, EncryptionSettings, Megolm, Olm, RoomKey
 
 if TYPE_CHECKING:
     from ...base_client import Client
+    from ...client_modules.rooms import Room
 
 # TODO: https://github.com/matrix-org/matrix-doc/pull/2732 (fallback OTK)
 # TODO: protect against concurrency and saving sessions before sharing
@@ -44,11 +45,11 @@ OutboundGroupSessionsType = Dict[
 ]
 
 
-def _olm_pickle(obj) -> str:
+def _olm_pickle(self, obj) -> str:
     return obj.pickle().decode()
 
 
-def _olm_unpickle(value: str, obj_type: Type) -> Any:
+def _olm_unpickle(value: str, parent, obj_type: Type) -> Any:
     return obj_type.from_pickle(value.encode())
 
 
@@ -237,21 +238,25 @@ class Encryption(JSONClientModule):
         room_id: Optional[RoomId] = None,
     ) -> Union[ToDeviceEvent, TimelineEvent]:
 
+        parent: Union["Client", "Room"]
         verror: Optional[err.VerificationError]
 
         if isinstance(event.content, Olm):
+            parent          = self.client
             payload, verror = await self._decrypt_olm_cipher(event)
         else:
             if not room_id:
                 raise TypeError("room_id argument required for Megolm event")
 
+            parent          = self.client.rooms[room_id]
             payload, verror = await self._decrypt_megolm_cipher(room_id, event)
+
 
         clear = type(event).from_dict({
             **event.source,
             **payload,
             "decryption": Decryption(event.source, payload, verror),
-        })
+        }, parent)
 
         if verror:
             log.warning("Error verifying decrypted event %r\n", clear)

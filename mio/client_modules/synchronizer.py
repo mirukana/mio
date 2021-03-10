@@ -102,8 +102,9 @@ class Synchronization(JSONClientModule):
         ) -> None:
             for event in data.get(key, {}).get("events", ()):
                 with log_errors(InvalidEvent):
-                    ev = await decrypt(evtype.from_dict(event), room.id)
-                    await coro(ev)
+                    await coro(await decrypt(
+                        evtype.from_dict(event, self.client), room.id,
+                    ))
 
         async def room_events_call(
             data: dict, key: str, room: Room, invited: bool = False,
@@ -115,28 +116,30 @@ class Synchronization(JSONClientModule):
             for event in data.get(key, {}).get("events", ()):
                 with log_errors(InvalidEvent):
                     if "state_key" in event:
-                        st = await decrypt(state.from_dict(event), room.id)
-                        await room.handle_event(st)
+                        await room.handle_event(await decrypt(
+                            state.from_dict(event, room), room.id,
+                        ))
 
                     if key != "timeline":
                         continue
 
-                    ev = await decrypt(TimelineEvent.from_dict(event), room.id)
-                    await room.handle_event(ev)
+                    await room.handle_event(await decrypt(
+                        TimelineEvent.from_dict(event, room), room.id,
+                    ))
 
         users: Set[UserId] = set()
 
         for event in sync.get("to_device", {}).get("events", ()):
             if Olm.matches(event):
                 with suppress(InvalidEvent):
-                    users.add(ToDeviceEvent.from_dict(event).sender)
+                    users.add(event["sender"])
 
         for kind in ("invite", "join", "leave"):
             for data in sync.get("rooms", {}).get(kind, {}).values():
                 for event in data.get("timeline", {}).get("events", ()):
                     if Megolm.matches(event):
                         with suppress(InvalidEvent):
-                            users.add(TimelineEvent.from_dict(event).sender)
+                            users.add(event["sender"])
 
         await self.client.e2e.query_devices({u: [] for u in users})
 
@@ -195,7 +198,7 @@ class Synchronization(JSONClientModule):
             for event in timeline.get("events", []):
                 with suppress(InvalidEvent):
                     after = await decrypt(
-                        TimelineEvent.from_dict(event), room.id,
+                        TimelineEvent.from_dict(event, room), room.id,
                     )
                     break
 

@@ -67,7 +67,7 @@ class Gap(JSON):
 
         for ev in result["chunk"]:
             with log_errors(InvalidEvent):
-                evs.append(TimelineEvent.from_dict(ev))
+                evs.append(TimelineEvent.from_dict(ev, self.room))
 
         await self.room.timeline.register_events(*evs)
 
@@ -176,7 +176,7 @@ class Timeline(JSONFile, Frozen, Map[EventId, TimelineEvent]):
 
                 for ev in events:
                     with log_errors(InvalidEvent, trace=True):
-                        loaded.append(TimelineEvent.from_dict(ev))
+                        loaded.append(TimelineEvent.from_dict(ev, self.room))
 
                 if len(loaded) >= count:
                     break

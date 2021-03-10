@@ -49,7 +49,7 @@ class Client(JSONFileBase, Frozen):
     @classmethod
     async def load(cls, base_dir: Union[Path, str]) -> "Client":
         data = await cls._read_file(Path(base_dir) / "client.json")
-        return await cls.from_dict({**data, "base_dir": base_dir})
+        return await cls.from_dict({**data, "base_dir": base_dir}, None)
 
 
     @classmethod

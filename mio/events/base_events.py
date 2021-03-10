@@ -1,13 +1,17 @@
 import logging as log
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import ClassVar, Generic, Optional, Type, TypeVar
+from typing import TYPE_CHECKING, ClassVar, Generic, Optional, Type, TypeVar
 
 from ..typing import EventId, RoomId, UserId
 from ..utils import (
-    JSON, DictS, Frozen, JSONLoadError, Runtime, deep_find_subclasses,
+    JSON, DictS, Frozen, JSONLoadError, Parent, Runtime, deep_find_subclasses,
     deep_merge_dict,
 )
+
+if TYPE_CHECKING:
+    from ..base_client import Client
+    from ..client_modules.rooms import Room
 
 EventT   = TypeVar("EventT", bound="Event")
 ContentT = TypeVar("ContentT", bound="Content")
@@ -66,10 +70,7 @@ class Event(JSON, Frozen, Generic[ContentT]):
         return dct
 
     @classmethod
-    def from_dict(
-        cls: Type[EventT], data: DictS, parent: Optional["JSON"] = None,
-    ) -> EventT:
-
+    def from_dict(cls: Type[EventT], data: DictS, parent) -> EventT:
         content = cls._get_content(data, data.get("content", {}))
 
         try:
@@ -96,6 +97,7 @@ class Event(JSON, Frozen, Generic[ContentT]):
 class TimelineEvent(Event[ContentT]):
     aliases = {"id": "event_id", "date": "origin_server_ts"}
 
+    room:       Parent["Room"] = field(repr=False)
     content:    ContentT
     id:         EventId
     sender:     UserId
@@ -111,6 +113,7 @@ class TimelineEvent(Event[ContentT]):
 
 @dataclass
 class StateKind(Event[ContentT]):
+    room:      Parent["Room"] = field(repr=False)
     content:   ContentT
     state_key: str
     sender:    UserId
@@ -137,7 +140,7 @@ class StateEvent(StateKind[ContentT]):
 
     @classmethod
     def from_dict(
-        cls: Type[StateEvT], data: DictS, parent: Optional["JSON"] = None,
+        cls: Type[StateEvT], data: DictS, parent: "Room",
     ) -> StateEvT:
 
         prev_dict = data.get("unsigned", {}).get("prev_content", {})
@@ -151,6 +154,7 @@ class StateEvent(StateKind[ContentT]):
 
 @dataclass
 class ToDeviceEvent(Event[ContentT]):
+    client:     Parent["Client"] = field(repr=False)
     content:    ContentT
     sender:     UserId
     decryption: Runtime[Optional[Decryption]] = None

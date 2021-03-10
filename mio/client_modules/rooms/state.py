@@ -18,9 +18,9 @@ if TYPE_CHECKING:
 class RoomState(JSONFile, Frozen, Map[str, Dict[str, StateKind]]):
     loaders = {
         **JSONFile.loaders,  # type: ignore
-        StateKind: lambda v: (  # type: ignore
+        StateKind: lambda v, parent: (  # type: ignore
             StateEvent if "event_id" in v else InvitedRoomStateEvent
-        ).from_dict(v),
+        ).from_dict(v, parent),
     }
 
     room: Parent["Room"] = field(repr=False)
