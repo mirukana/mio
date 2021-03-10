@@ -11,19 +11,18 @@ from .base_events import Content
 
 @dataclass
 class Creation(Content):
-    type    = "m.room.create"
-    aliases = {
-        "federate": "m.federate",
-        "version": "room_version",
-        "previous_room_id":  ("predecessor", "room_id"),
-        "previous_event_id": ("predecessor", "event_id"),
-    }
+    @dataclass
+    class Predecessor:
+        event_id: EventId
+        room_id:  RoomId
 
-    creator:           UserId
-    federate:          bool              = True
-    version:           str               = "1"
-    previous_room_id:  Optional[RoomId]  = None
-    previous_event_id: Optional[EventId] = None
+    type    = "m.room.create"
+    aliases = {"federate": "m.federate", "version": "room_version"}
+
+    creator:     UserId
+    federate:    bool                  = True
+    version:     str                   = "1"
+    predecessor: Optional[Predecessor] = None
 
 
 @dataclass
