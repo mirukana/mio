@@ -4,8 +4,10 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime
 from functools import partial
+from pathlib import Path
 from typing import (
-    Any, Collection, Dict, List, Optional, Set, Tuple, Type, Union,
+    TYPE_CHECKING, Any, Collection, Dict, List, Optional, Set, Tuple, Type,
+    Union,
 )
 from uuid import uuid4
 
@@ -17,6 +19,9 @@ from ..client_module import JSONClientModule
 from . import errors as err
 from .devices import Device
 from .events import Algorithm, EncryptionSettings, Megolm, Olm, RoomKey
+
+if TYPE_CHECKING:
+    from ...base_client import Client
 
 # TODO: https://github.com/matrix-org/matrix-doc/pull/2732 (fallback OTK)
 # TODO: protect against concurrency and saving sessions before sharing
@@ -93,6 +98,11 @@ class Encryption(JSONClientModule):
     @property
     def own_device(self) -> Device:
         return self.devices[self.client.user_id][self.client.device_id]
+
+
+    @classmethod
+    def get_path(cls, parent: "Client", **kwargs) -> Path:
+        return parent.path.parent / "encryption.json"
 
 
     async def query_devices(

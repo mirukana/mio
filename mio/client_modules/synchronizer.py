@@ -2,7 +2,10 @@ import asyncio
 import logging as log
 from contextlib import suppress
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Set, Type, Union
+from pathlib import Path
+from typing import (
+    TYPE_CHECKING, Any, Callable, Dict, Optional, Set, Type, Union,
+)
 
 from ..events import (
     Event, InvalidEvent, InvitedRoomStateEvent, StateEvent, StateKind,
@@ -15,12 +18,21 @@ from .encryption.errors import DecryptionError
 from .encryption.events import Megolm, Olm
 from .rooms.room import Room
 
+if TYPE_CHECKING:
+    from ..base_client import Client
+
 FilterType = Union[None, str, Dict[str, Any]]
 
 
 @dataclass
 class Synchronization(JSONClientModule):
     next_batch: Optional[str] = None
+
+
+    @classmethod
+    def get_path(cls, parent: "Client", **kwargs) -> Path:
+        return parent.path.parent / "sync.json"
+
 
     async def sync(
         self,
@@ -140,9 +152,7 @@ class Synchronization(JSONClientModule):
             if room_id in rooms._data:
                 return rooms._data[room_id]
 
-            path = self.client.rooms.room_path(room_id)
-            room = await Room(path=path, client=self.client, id=room_id)
-
+            room = await Room(client=self.client, id=room_id)
             rooms._data[room_id] = room
             return room
 

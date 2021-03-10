@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING, Dict
 
 from ...typing import RoomId
@@ -13,18 +12,17 @@ if TYPE_CHECKING:
 
 @dataclass
 class Rooms(ClientModule, Frozen, Map[RoomId, Room]):
-    path:   Path               = field(repr=False)
     client: Parent["Client"]   = field(repr=False)
     _data:  Dict[RoomId, Room] = field(default_factory=dict)
 
 
     @classmethod
-    async def load(cls, path: Path, parent: "Client") -> "ClientModule":
-        rooms = cls(path=path, client=parent)
+    async def load(cls, parent: "Client") -> "ClientModule":
+        rooms = cls(parent)
 
-        for room_dir in path.glob("!*"):
+        for room_dir in (parent.path.parent / "rooms").glob("!*"):
             id              = RoomId(room_dir.name)
-            rooms._data[id] = await Room.load(rooms.room_path(id), parent)
+            rooms._data[id] = await Room.load(parent, id=id)
 
         return rooms
 
@@ -42,7 +40,3 @@ class Rooms(ClientModule, Frozen, Map[RoomId, Room]):
     @property
     def left(self) -> Dict[RoomId, Room]:
         return {k: v for k, v in self.items() if v.left}
-
-
-    def room_path(self, room_id: str) -> Path:
-        return self.path / room_id / "room.json"

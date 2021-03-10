@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Tuple
 
 from ...events.base_events import Event, StateKind, TimelineEvent
@@ -31,12 +32,19 @@ class Room(JSONFile):
     state:    Runtime[RoomState] = field(init=False, repr=False)
 
 
-    async def __ainit__(self) -> None:
-        self.timeline = \
-            await Timeline.load(self.path.parent / "timeline.json", self)
+    @property
+    def path(self) -> Path:
+        return self.get_path(self.parent, id=self.id)  # type: ignore
 
-        self.state = \
-            await RoomState.load(self.path.parent / "state.json", self)
+
+    @classmethod
+    def get_path(cls, parent: "Client", **kwargs) -> Path:
+        return parent.path.parent / "rooms" / kwargs["id"] / "room.json"
+
+
+    async def __ainit__(self) -> None:
+        self.timeline = await Timeline.load(self)
+        self.state    = await RoomState.load(self)
 
 
     async def handle_event(self, event: Event) -> None:

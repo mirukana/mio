@@ -8,14 +8,15 @@ from .client_modules.encryption.encryption import Encryption
 from .client_modules.rooms import Rooms
 from .client_modules.synchronizer import Synchronization
 from .typing import HttpUrl, UserId
-from .utils import Frozen, JSONFile, Parent, Runtime, remove_none
+from .utils import Frozen, JSONFileBase, Runtime, remove_none
 
 if TYPE_CHECKING:
     from .client_modules import ClientModule
 
 
 @dataclass
-class Client(JSONFile, Frozen):
+class Client(JSONFileBase, Frozen):
+    base_dir:     Runtime[Path]
     server:       HttpUrl
     user_id:      UserId
     access_token: str
@@ -40,23 +41,27 @@ class Client(JSONFile, Frozen):
         return [self.server, "_matrix", "client", "r0"]
 
 
+    @property
+    def path(self) -> Path:
+        return self.base_dir / "client.json"
+
+
     @classmethod
-    async def load(
-        cls, path: Union[Path, str], parent: Optional["Parent"] = None,
-    ) -> "Client":
-        return await super().load(Path(path) / "client.json", parent)
+    async def load(cls, base_dir: Union[Path, str]) -> "Client":
+        data = await cls._read_file(Path(base_dir) / "client.json")
+        return await cls.from_dict({**data, "base_dir": base_dir})
 
 
     @classmethod
     async def login(
         cls,
-        save_dir: Union[Path, str],
+        base_dir: Union[Path, str],
         server:   HttpUrl,
         auth:     Dict[str, Any],
     ) -> "Client":
         """Login to a homeserver using a custom authentication dict.
 
-        The `save_dir`, folder where client data will be stored, can contain
+        The `base_dir`, folder where client data will be stored, can contain
         `{user_id}` and `{device_id}` placeholders that will be
         automatically filled.
         """
@@ -68,12 +73,12 @@ class Client(JSONFile, Frozen):
             body   = auth,
         )
 
-        save_dir = str(save_dir).format(
+        base_dir = str(base_dir).format(
             user_id=result["user_id"], device_id=result["device_id"],
         )
 
         return await cls(
-            path         = Path(save_dir) / "client.json",
+            base_dir     = Path(base_dir),
             server       = server,
             user_id      = result["user_id"],
             access_token = result["access_token"],
@@ -84,7 +89,7 @@ class Client(JSONFile, Frozen):
     @classmethod
     async def login_password(
         cls,
-        save_dir:            Union[Path, str],
+        base_dir:            Union[Path, str],
         server:              HttpUrl,
         user:                str,
         password:            str,
@@ -100,13 +105,13 @@ class Client(JSONFile, Frozen):
             "initial_device_display_name": initial_device_name,
         }
 
-        return await cls.login(save_dir, server, remove_none(auth))
+        return await cls.login(base_dir, server, remove_none(auth))
 
 
     @classmethod
     async def login_token(
         cls,
-        save_dir:            Union[Path, str],
+        base_dir:            Union[Path, str],
         server:              HttpUrl,
         user:                str,
         token:               str,
@@ -122,7 +127,7 @@ class Client(JSONFile, Frozen):
             "initial_device_display_name": initial_device_name,
         }
 
-        return await cls.login(save_dir, server, remove_none(auth))
+        return await cls.login(base_dir, server, remove_none(auth))
 
 
     async def send(
@@ -156,5 +161,4 @@ class Client(JSONFile, Frozen):
         self, name: str, module: Type["ClientModule"], path_last_part: str,
     ) -> None:
         # Using __setattr__ like that because the dataclass is frozen
-        path = self.path.parent / path_last_part
-        setattr(self, name, await module.load(path, self))
+        setattr(self, name, await module.load(self))

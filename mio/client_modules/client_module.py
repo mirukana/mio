@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ..utils import JSONFile, Parent
@@ -13,8 +12,8 @@ class ClientModule:
     client: Parent["Client"] = field(repr=False)
 
     @classmethod
-    async def load(cls, path: Path, parent: "Client"):
-        raise NotImplementedError()
+    async def load(cls, parent: "Client"):
+        return cls(parent)
 
 
 @dataclass

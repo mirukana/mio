@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Dict, Optional
 
 from ...client_modules.encryption.events import EncryptionSettings
@@ -31,6 +32,11 @@ class RoomState(JSONFile, Frozen, Map[str, Dict[str, StateKind]]):
     @property
     def encryption(self) -> Optional[StateKind[EncryptionSettings]]:
         return self.get(EncryptionSettings.type, {}).get("")
+
+
+    @classmethod
+    def get_path(cls, parent: "Room", **kwargs) -> Path:
+        return parent.path.parent / "state.json"
 
 
     def users(

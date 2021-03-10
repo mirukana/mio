@@ -87,8 +87,6 @@ class Gap(JSON):
 
 @dataclass
 class Timeline(JSONFile, Frozen, Map[EventId, TimelineEvent]):
-    json_exclude = {"path", "room", "_loaded_files", "_data"}
-
     room: Parent["Room"]     = field(repr=False)
     gaps: Dict[EventId, Gap] = field(default_factory=ValueSortedDict)
 
@@ -101,6 +99,11 @@ class Timeline(JSONFile, Frozen, Map[EventId, TimelineEvent]):
     @property
     def fully_loaded(self) -> bool:
         return not self.gaps
+
+
+    @classmethod
+    def get_path(cls, parent: "Room", **kwargs) -> Path:
+        return parent.path.parent / "timeline.json"
 
 
     def get_event_file(self, event: TimelineEvent) -> Path:
