@@ -11,7 +11,7 @@ from ....core.types import MxcUri
 
 @dataclass
 class Member(EventContent):
-    class Membership(AutoStrEnum):
+    class Kind(AutoStrEnum):
         invite = auto()
         join   = auto()
         knock  = auto()
@@ -25,7 +25,7 @@ class Member(EventContent):
         # "invite_room_state": ("unsigned", "invite_room_state"),  # TODO
     }
 
-    membership:       Membership
+    membership:       Kind
     avatar_url:       Optional[MxcUri] = None
     display_name:     Optional[str]    = None
     is_direct:        bool             = False
@@ -34,4 +34,4 @@ class Member(EventContent):
 
     @property
     def left(self) -> bool:
-        return self.membership in (self.Membership.leave, self.membership.ban)
+        return self.membership in (self.Kind.leave, self.Kind.ban)

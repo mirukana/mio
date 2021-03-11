@@ -50,10 +50,10 @@ class RoomState(JSONFile, Map[str, Dict[str, StateBase]]):
             return self.get(Member.type, {})  # type: ignore
 
         include = {
-            Member.Membership.invite: invitees,
-            Member.Membership.join: joined,
-            Member.Membership.leave: left,
-            Member.Membership.ban: banned,
+            Member.Kind.invite: invitees,
+            Member.Kind.join: joined,
+            Member.Kind.leave: left,
+            Member.Kind.ban: banned,
         }
 
         return {
@@ -90,8 +90,7 @@ class RoomState(JSONFile, Map[str, Dict[str, StateBase]]):
 
     @property
     def inviter(self) -> Optional[UserId]:
-        invite  = Member.Membership.invite
-        invited = self.us and self.us.content.membership == invite
+        invited = self.us and self.us.content.membership == Member.Kind.invite
         return self.us.sender if self.us and invited else None
 
 
