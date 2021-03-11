@@ -84,7 +84,7 @@ class Synchronization(JSONClientModule):
     async def handle_sync(self, sync: Dict[str, Any]) -> None:
         # TODO: device_lists, partial syncs
 
-        async def decrypt(event: Event, room_id: RoomId):
+        async def decrypt(event: Event, room_id: Optional[RoomId] = None):
             if not isinstance(event, (ToDeviceEvent, TimelineEvent)):
                 return event
 
@@ -103,7 +103,7 @@ class Synchronization(JSONClientModule):
             for event in data.get(key, {}).get("events", ()):
                 with log_errors(InvalidEvent):
                     await coro(await decrypt(
-                        evtype.from_dict(event, self.client), room.id,
+                        evtype.from_dict(event, self.client),
                     ))
 
         async def room_events_call(

@@ -251,11 +251,9 @@ class Encryption(JSONClientModule):
             payload, verror = await self._decrypt_megolm_cipher(room_id, event)
 
 
-        clear = type(event).from_dict({
-            **event.source,
-            **payload,
-            "decryption": Decryption(event.source, payload, verror),
-        }, parent)
+        clear      = type(event).from_dict({**event.source, **payload}, parent)
+        decryption = Decryption(event.source, payload, verror)
+        object.__setattr__(clear, "decryption", decryption)
 
         if verror:
             log.warning("Error verifying decrypted event %r\n", clear)
@@ -670,7 +668,6 @@ class Encryption(JSONClientModule):
             cipher = Olm.Cipher(type=msg.message_type, body=msg.ciphertext)
 
             olms[device] = Olm(
-                sender            = self.client.user_id,
                 sender_curve25519 = self.own_device.curve25519,
                 ciphertext        = {device.curve25519: cipher},
             )

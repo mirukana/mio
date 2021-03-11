@@ -41,7 +41,6 @@ class Olm(Content):
 
     algorithm: ClassVar[str] = Algorithm.olm_v1.value
 
-    sender:            UserId
     sender_curve25519: str
     ciphertext:        Dict[str, Cipher]  # {recipient_curve_25519: Cipher}
 
