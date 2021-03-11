@@ -1,4 +1,5 @@
 import json
+import sys
 from dataclasses import dataclass
 from dataclasses import fields as get_fields
 from dataclasses import is_dataclass, replace
@@ -13,11 +14,15 @@ from uuid import UUID
 
 import typingplus
 from aiofiles import open as aiopen
-from typing_extensions import Annotated, get_origin
 
 from .errors import MioError
 from .types import DictS, NoneType, T
 from .utils import deep_find_parent_classes
+
+if sys.version_info >= (3, 9):
+    from typing_extensions import Annotated, get_origin
+else:
+    from typing import Annotated, get_origin
 
 Loaders       = Dict[Union[str, Type], Callable[[Any, Any], Any]]
 Dumpers       = Dict[Union[str, Type], Callable[["JSON", Any], Any]]
