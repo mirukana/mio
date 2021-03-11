@@ -25,7 +25,7 @@ class Creation(EventContent):
 
 
 @dataclass
-class EncryptionSettings(EventContent):
+class Encryption(EventContent):
     type    = "m.room.encryption"
     aliases = {
         "sessions_max_age": "rotation_period_ms",

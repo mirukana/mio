@@ -17,7 +17,7 @@ from ...core.types import EventId, RoomId, UserId
 from ..devices.device import Device
 from ..devices.events import ToDeviceEvent
 from ..module import JSONClientModule
-from ..rooms.contents.settings import EncryptionSettings
+from ..rooms.contents.settings import Encryption
 from ..rooms.timeline import TimelineEvent
 from . import Algorithm
 from . import errors as err
@@ -329,7 +329,7 @@ class E2E(JSONClientModule):
         self,
         room_id:   RoomId,
         for_users: Collection[UserId],
-        settings:  EncryptionSettings,
+        settings:  Encryption,
         content:   EventContent,
     ) -> Megolm:
 

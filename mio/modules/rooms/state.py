@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Dict, Optional
 from ...core.contents import EventContent
 from ...core.data import JSONFile, Map, Parent
 from ...core.types import UserId
-from .contents.settings import EncryptionSettings
+from .contents.settings import Encryption
 from .contents.users import Member
 from .events import InvitedRoomStateEvent, StateEvent, StateKind
 
@@ -29,8 +29,8 @@ class RoomState(JSONFile, Map[str, Dict[str, StateKind]]):
 
 
     @property
-    def encryption(self) -> Optional[StateKind[EncryptionSettings]]:
-        return self.get(EncryptionSettings.type, {}).get("")
+    def encryption(self) -> Optional[StateKind[Encryption]]:
+        return self.get(Encryption.type, {}).get("")
 
 
     @classmethod
