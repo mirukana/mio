@@ -1,35 +1,43 @@
 import json
+import logging as log
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any, ClassVar, Dict, List, Optional, Type, Union
+from urllib.parse import quote
 
-from .client_modules.authentication import Authentication
-from .client_modules.encryption.encryption import Encryption
-from .client_modules.rooms import Rooms
-from .client_modules.synchronizer import Synchronization
-from .typing import HttpUrl, UserId
-from .utils import JSONFileBase, Runtime, remove_none
+import aiohttp
+
+from .core.data import JSONFileBase, Runtime
+from .core.errors import ServerError
+from .core.types import HttpUrl, UserId
+from .core.utils import remove_none
+from .modules.auth import Auth
+from .modules.e2e.e2e import E2E
+from .modules.rooms.rooms import Rooms
+from .modules.sync import Sync
 
 
 @dataclass
 class Client(JSONFileBase):
+    _session: ClassVar[aiohttp.ClientSession] = aiohttp.ClientSession()
+
     base_dir:     Runtime[Path]
     server:       HttpUrl
     user_id:      UserId
     access_token: str
     device_id:    str
 
-    auth:  Runtime[Authentication]  = field(init=False, repr=False)
-    rooms: Runtime[Rooms]           = field(init=False, repr=False)
-    sync:  Runtime[Synchronization] = field(init=False, repr=False)
-    e2e:   Runtime[Encryption]      = field(init=False, repr=False)
+    auth:  Runtime[Auth]  = field(init=False, repr=False)
+    rooms: Runtime[Rooms] = field(init=False, repr=False)
+    sync:  Runtime[Sync]  = field(init=False, repr=False)
+    e2e:   Runtime[E2E]   = field(init=False, repr=False)
 
 
     async def __ainit__(self) -> None:
-        self.auth  = await Authentication.load(self)
+        self.auth  = await Auth.load(self)
         self.rooms = await Rooms.load(self)
-        self.sync  = await Synchronization.load(self)
-        self.e2e   = await Encryption.load(self)
+        self.sync  = await Sync.load(self)
+        self.e2e   = await E2E.load(self)
         await self.save()
 
 
@@ -136,7 +144,40 @@ class Client(JSONFileBase):
         headers:    Optional[Dict[str, Any]] = None,
     ) -> bytes:
 
-        raise NotImplementedError()
+        headers     = headers or {}
+        parameters  = parameters or {}
+        joined_path = "/".join(quote(p, safe="") for p in path[1:])
+
+        if hasattr(obj, "access_token"):
+            headers["Authorization"] = f"Bearer {obj.access_token}"
+
+        for key, value in parameters.items():
+            if not isinstance(value, str):
+                parameters[key] = json.dumps(
+                    value, ensure_ascii=False, separators=(",", ":"),
+                )
+
+        response = await obj._session.request(
+            method  = method,
+            url     = f"{path[0]}/{joined_path}",
+            params  = parameters,
+            data    = data,
+            headers = headers,
+        )
+
+        read = await response.read()
+
+        log.debug(
+            "Sent %s %s %r %r\n\nReceived %r\n",
+            method, joined_path, parameters, data, read,
+        )
+
+        try:
+            response.raise_for_status()
+        except aiohttp.ClientResponseError as e:
+            raise ServerError.from_response(e.status, e.message, read)  # noqa
+
+        return read
 
 
     async def send_json(

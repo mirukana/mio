@@ -6,25 +6,25 @@ from typing import (
     TYPE_CHECKING, Any, Callable, Dict, Optional, Set, Type, Union,
 )
 
-from ..events import (
-    Event, InvalidEvent, InvitedRoomStateEvent, StateEvent, StateKind,
-    TimelineEvent, ToDeviceEvent,
-)
-from ..typing import RoomId, UserId
-from ..utils import log_errors, remove_none
-from .client_module import JSONClientModule
-from .encryption.errors import DecryptionError
-from .encryption.events import Megolm, Olm
+from ..core.events import Event, InvalidEvent
+from ..core.types import RoomId, UserId
+from ..core.utils import log_errors, remove_none
+from .devices.events import ToDeviceEvent
+from .e2e.contents import Megolm, Olm
+from .e2e.errors import DecryptionError
+from .module import JSONClientModule
 from .rooms.room import Room
+from .rooms.state import InvitedRoomStateEvent, StateEvent, StateKind
+from .rooms.timeline import TimelineEvent
 
 if TYPE_CHECKING:
-    from ..base_client import Client
+    from ..client import Client
 
 FilterType = Union[None, str, Dict[str, Any]]
 
 
 @dataclass
-class Synchronization(JSONClientModule):
+class Sync(JSONClientModule):
     next_batch: Optional[str] = None
 
 

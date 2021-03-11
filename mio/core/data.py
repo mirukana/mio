@@ -1,7 +1,4 @@
 import json
-import logging as log
-import traceback
-from contextlib import contextmanager
 from dataclasses import dataclass
 from dataclasses import fields as get_fields
 from dataclasses import is_dataclass, replace
@@ -9,8 +6,8 @@ from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
 from typing import (
-    Any, Callable, ClassVar, Collection, Dict, ForwardRef, Generator, Iterator,
-    Mapping, MutableMapping, Optional, Sequence, Tuple, Type, TypeVar, Union,
+    Any, Callable, ClassVar, Collection, Dict, ForwardRef, Iterator, Mapping,
+    Optional, Sequence, Type, TypeVar, Union,
 )
 from uuid import UUID
 
@@ -19,30 +16,36 @@ from aiofiles import open as aiopen
 from typing_extensions import Annotated, get_origin
 
 from .errors import MioError
+from .types import DictS, NoneType, T
+from .utils import deep_find_parent_classes
 
-try:
-    from devtools import debug
-except ModuleNotFoundError:
-    def debug(*args) -> None:
-        log.error("\n".join((repr(a) for a in args)))
-
-ErrorCatcher  = Union[Type[Exception], Tuple[Type[Exception], ...]]
 Loaders       = Dict[Union[str, Type], Callable[[Any, Any], Any]]
 Dumpers       = Dict[Union[str, Type], Callable[["JSON", Any], Any]]
-DictS         = Dict[str, Any]
-T             = TypeVar("T")
 KT            = TypeVar("KT")
 VT            = TypeVar("VT")
 JSONT         = TypeVar("JSONT", bound="JSON")
 JSONFileBaseT = TypeVar("JSONFileBaseT", bound="JSONFileBase")
 JSONFileT     = TypeVar("JSONFileT", bound="JSONFile")
 _Missing      = object()
-NoneType      = type(None)
 
 _Runtime = object()
 _Parent  = object()
 Runtime  = Annotated[T, _Runtime]
 Parent   = Annotated[T, _Runtime, _Parent]
+
+
+class AutoStrEnum(Enum):
+    """An Enum where auto() assigns the member's name instead of an integer.
+
+    Example:
+    >>> class Fruits(AutoStrEnum): apple = auto()
+    >>> Fruits.apple.value
+    "apple"
+    """
+
+    @staticmethod
+    def _generate_next_value_(name: str, *_):
+        return name
 
 
 class AsyncInit:
@@ -72,6 +75,7 @@ class IndexableMap(Map[KT, VT]):
     def __getitem__(self, key: Union[int, KT]) -> VT:
         if isinstance(key, int):
             return list(self._data.values())[key]  # type: ignore
+
         return self._data[key]  # type: ignore
 
 
@@ -430,20 +434,6 @@ class JSONFile(JSONFileBase, AsyncInit):
         return await cls.from_dict(data, parent)
 
 
-class AutoStrEnum(Enum):
-    """An Enum where auto() assigns the member's name instead of an integer.
-
-    Example:
-    >>> class Fruits(AutoStrEnum): apple = auto()
-    >>> Fruits.apple.value
-    "apple"
-    """
-
-    @staticmethod
-    def _generate_next_value_(name: str, *_):
-        return name
-
-
 def annotation_is_runtime(ann: Any) -> bool:
     return get_origin(ann) is Annotated and _Runtime in ann.__metadata__
 
@@ -460,47 +450,3 @@ def is_subclass(value: Any, typ: Any) -> bool:
     if value is Any or typ is Any:
         return typ is value
     return issubclass(value, typ)
-
-
-def remove_none(from_dict: dict) -> dict:
-    return {k: v for k, v in from_dict.items() if v is not None}
-
-
-def deep_find_parent_classes(cls: Type) -> Generator[Type, None, None]:
-    for parent in getattr(cls, "__bases__", ()):
-        yield parent
-        yield from deep_find_parent_classes(parent)
-
-
-def deep_find_subclasses(cls: Type) -> Generator[Type, None, None]:
-    for subclass in getattr(cls, "__subclasses__", lambda: ())():
-        yield subclass
-        yield from deep_find_subclasses(subclass)
-
-
-def deep_merge_dict(dict1: MutableMapping, dict2: Mapping) -> None:
-    """Recursively update `dict1` with `dict2`'s keys."""
-    # https://gist.github.com/angstwad/bf22d1822c38a92ec0a9
-
-    for k in dict2:
-        if (
-            k in dict1 and
-            isinstance(dict1[k], Mapping) and
-            isinstance(dict2[k], Mapping)
-        ):
-            deep_merge_dict(dict1[k], dict2[k])
-        else:
-            dict1[k] = dict2[k]
-
-
-@contextmanager
-def log_errors(
-    types: ErrorCatcher = Exception, trace: bool = False,
-) -> Iterator[None]:
-    try:
-        yield None
-    except types as e:
-        if trace:
-            debug("%s\n" % traceback.format_exc().rstrip())
-        else:
-            debug(e)

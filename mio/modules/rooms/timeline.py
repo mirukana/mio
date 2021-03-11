@@ -10,85 +10,23 @@ from uuid import uuid4
 from aiofiles import open as aiopen
 from sortedcollections import ValueSortedDict
 
-from ...client_modules.encryption.events import Megolm
-from ...events.base_events import Content, InvalidEvent, TimelineEvent
-from ...events.room_state import Creation
-from ...typing import EventId
-from ...utils import (
-    JSON, IndexableMap, JSONFile, Parent, Runtime, log_errors, remove_none,
-)
+from ...core.contents import Content
+from ...core.data import JSON, IndexableMap, JSONFile, Parent, Runtime
+from ...core.events import InvalidEvent
+from ...core.types import EventId
+from ...core.utils import log_errors, remove_none
+from ..e2e.contents import Megolm
+from .contents.settings import Creation
+from .events import TimelineEvent
 
 if TYPE_CHECKING:
     from .room import Room
 
 
 @dataclass
-class Gap(JSON):
-    room:             Parent["Room"] = field(repr=False)
-    fill_token:       str
-    event_before:     Optional[EventId]
-    event_after:      EventId
-    event_after_date: datetime
-    filled:           bool = False
-
-
-    def __lt__(self, other: "Gap") -> bool:
-        return self.event_after_date < other.event_after_date
-
-
-    async def fill(
-        self, max_events: Optional[int] = 100,
-    ) -> List[TimelineEvent]:
-
-        if self.event_after not in self.room.timeline.gaps:
-            return []
-
-        client = self.room.client
-        result = await client.send_json(
-            method = "GET",
-            path   = [*client.api, "rooms", self.room.id, "messages"],
-
-            parameters = remove_none({
-                "from":  self.fill_token,
-                "dir":   "b",  # direction: backwards
-                "limit": max_events,
-            }),
-        )
-
-        # for event in result.get("state", [])  # TODO (for lazy loading)
-
-        if not result.get("chunk"):
-            self.filled = True
-            self.room.timeline.gaps.pop(self.event_after, None)
-            await self.room.timeline.save()
-            return []
-
-        evs: List[TimelineEvent] = []
-
-        for ev in result["chunk"]:
-            with log_errors(InvalidEvent):
-                evs.append(TimelineEvent.from_dict(ev, self.room))
-
-        await self.room.timeline.register_events(*evs)
-
-        if any(
-            isinstance(e.content, Creation) or e.id == self.event_before
-            for e in evs
-        ):
-            self.filled = True
-            self.room.timeline.gaps.pop(self.event_after, None)
-        else:
-            self.event_after = result["chunk"][-1]
-
-        self.fill_token = result["end"]
-        await self.room.timeline.save()
-        return evs
-
-
-@dataclass
 class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
-    room: Parent["Room"]     = field(repr=False)
-    gaps: Dict[EventId, Gap] = field(default_factory=ValueSortedDict)
+    room: Parent["Room"]       = field(repr=False)
+    gaps: Dict[EventId, "Gap"] = field(default_factory=ValueSortedDict)
 
     _loaded_files: Runtime[Set[Path]] = field(default_factory=set)
 
@@ -221,3 +159,66 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
             events += await gap.fill(min_events)
 
         return events
+
+
+@dataclass
+class Gap(JSON):
+    room:             Parent["Room"] = field(repr=False)
+    fill_token:       str
+    event_before:     Optional[EventId]
+    event_after:      EventId
+    event_after_date: datetime
+    filled:           bool = False
+
+
+    def __lt__(self, other: "Gap") -> bool:
+        return self.event_after_date < other.event_after_date
+
+
+    async def fill(
+        self, max_events: Optional[int] = 100,
+    ) -> List[TimelineEvent]:
+
+        if self.event_after not in self.room.timeline.gaps:
+            return []
+
+        client = self.room.client
+        result = await client.send_json(
+            method = "GET",
+            path   = [*client.api, "rooms", self.room.id, "messages"],
+
+            parameters = remove_none({
+                "from":  self.fill_token,
+                "dir":   "b",  # direction: backwards
+                "limit": max_events,
+            }),
+        )
+
+        # for event in result.get("state", [])  # TODO (for lazy loading)
+
+        if not result.get("chunk"):
+            self.filled = True
+            self.room.timeline.gaps.pop(self.event_after, None)
+            await self.room.timeline.save()
+            return []
+
+        evs: List[TimelineEvent] = []
+
+        for ev in result["chunk"]:
+            with log_errors(InvalidEvent):
+                evs.append(TimelineEvent.from_dict(ev, self.room))
+
+        await self.room.timeline.register_events(*evs)
+
+        if any(
+            isinstance(e.content, Creation) or e.id == self.event_before
+            for e in evs
+        ):
+            self.filled = True
+            self.room.timeline.gaps.pop(self.event_after, None)
+        else:
+            self.event_after = result["chunk"][-1]
+
+        self.fill_token = result["end"]
+        await self.room.timeline.save()
+        return evs

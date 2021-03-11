@@ -1,10 +1,15 @@
 import re
+from typing import Any, Dict, TypeVar
 
 from phantom.base import Phantom, Predicate
 from phantom.predicates.boolean import both
 from phantom.predicates.collection import count
 from phantom.predicates.interval import open
 from phantom.predicates.re import is_match
+
+DictS    = Dict[str, Any]
+T        = TypeVar("T")
+NoneType = type(None)
 
 HOST_REGEX    = r"[a-zA-Z\d.:-]*[a-zA-Z\d]"
 USER_ID_REGEX = rf"^@[\x21-\x39\x3B-\x7E]+:{HOST_REGEX}$"

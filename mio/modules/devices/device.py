@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from ...typing import UserId
+from ...core.types import UserId
 
 
 @dataclass(unsafe_hash=True)

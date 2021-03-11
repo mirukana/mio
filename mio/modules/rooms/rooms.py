@@ -1,13 +1,13 @@
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Dict
 
-from ...typing import RoomId
-from ...utils import IndexableMap, Parent
-from ..client_module import ClientModule
+from ...core.data import IndexableMap, Parent
+from ...core.types import RoomId
+from ..module import ClientModule
 from .room import Room
 
 if TYPE_CHECKING:
-    from ...base_client import Client
+    from ...client import Client
 
 
 @dataclass

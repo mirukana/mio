@@ -1,10 +1,10 @@
 from dataclasses import dataclass
 
-from .client_module import ClientModule
+from .module import ClientModule
 
 
 @dataclass
-class Authentication(ClientModule):
+class Auth(ClientModule):
     async def logout(self) -> None:
         await self.client.send_json("POST", [*self.client.api, "logout"])
 

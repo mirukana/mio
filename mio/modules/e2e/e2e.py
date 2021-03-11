@@ -12,15 +12,19 @@ from uuid import uuid4
 
 import olm
 
-from ...events import Content, TimelineEvent, ToDeviceEvent
-from ...typing import EventId, RoomId, UserId
-from ..client_module import JSONClientModule
+from ...core.contents import Content
+from ...core.types import EventId, RoomId, UserId
+from ..devices.device import Device
+from ..devices.events import ToDeviceEvent
+from ..module import JSONClientModule
+from ..rooms.contents.settings import EncryptionSettings
+from ..rooms.timeline import TimelineEvent
+from . import Algorithm
 from . import errors as err
-from .devices import Device
-from .events import Algorithm, EncryptionSettings, Megolm, Olm, RoomKey
+from .contents import Megolm, Olm, RoomKey
 
 if TYPE_CHECKING:
-    from ...base_client import Client
+    from ...client import Client
 
 # TODO: https://github.com/matrix-org/matrix-doc/pull/2732 (fallback OTK)
 # TODO: protect against concurrency and saving sessions before sharing
@@ -51,7 +55,7 @@ def _olm_unpickle(value: str, parent, obj_type: Type) -> Any:
 
 
 @dataclass
-class Encryption(JSONClientModule):
+class E2E(JSONClientModule):
     dumpers = {
         **JSONClientModule.dumpers,  # type: ignore
         olm.Account: _olm_pickle,
@@ -100,7 +104,7 @@ class Encryption(JSONClientModule):
 
     @classmethod
     def get_path(cls, parent: "Client", **kwargs) -> Path:
-        return parent.path.parent / "encryption.json"
+        return parent.path.parent / "e2e.json"
 
 
     async def query_devices(
@@ -581,7 +585,7 @@ class Encryption(JSONClientModule):
 
         try:
             olm.ed25519_verify(
-                signer_ed25519, Encryption._canonical_json(dct), signature,
+                signer_ed25519, E2E._canonical_json(dct), signature,
             )
         except olm.OlmVerifyError as e:
             raise err.SignedDictVerificationError(e.args[0])

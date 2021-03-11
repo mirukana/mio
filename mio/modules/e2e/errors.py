@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict
 
-from ...errors import MioError
-from .devices import Device
+from ...core.errors import MioError
+from ..devices.device import Device
 
 if TYPE_CHECKING:
-    from .events import Olm
+    from .contents import Olm
 
 
 @dataclass

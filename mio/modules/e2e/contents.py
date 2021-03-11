@@ -1,28 +1,10 @@
-from datetime import timedelta
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, ClassVar, Dict
 
-from ...events.base_events import Content, dataclass
-from ...typing import RoomId, UserId
-
-
-@dataclass
-class Algorithm(Enum):
-    olm_v1    = "m.olm.v1.curve25519-aes-sha2"
-    megolm_v1 = "m.megolm.v1.aes-sha2"
-
-
-@dataclass
-class EncryptionSettings(Content):
-    type    = "m.room.encryption"
-    aliases = {
-        "sessions_max_age": "rotation_period_ms",
-        "sessions_max_messages": "rotation_period_msgs",
-    }
-
-    sessions_max_age:      timedelta = timedelta(weeks=1)
-    sessions_max_messages: int       = 100
-    algorithm:             str       = Algorithm.megolm_v1.value
+from ...core.contents import Content
+from ...core.types import RoomId
+from . import Algorithm
 
 
 @dataclass

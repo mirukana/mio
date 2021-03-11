@@ -1,6 +1,7 @@
+from dataclasses import dataclass
 from typing import Optional
 
-from .base_events import Content, dataclass
+from ....core.contents import Content
 
 
 @dataclass

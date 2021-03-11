@@ -2,13 +2,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, Optional
 
-from ...client_modules.encryption.events import EncryptionSettings
-from ...events.base_events import (
-    Content, InvitedRoomStateEvent, StateEvent, StateKind,
-)
-from ...events.room_state import Member
-from ...typing import UserId
-from ...utils import JSONFile, Map, Parent
+from ...core.contents import Content
+from ...core.data import JSONFile, Map, Parent
+from ...core.types import UserId
+from .contents.settings import EncryptionSettings
+from .contents.users import Member
+from .events import InvitedRoomStateEvent, StateEvent, StateKind
 
 if TYPE_CHECKING:
     from .room import Room
