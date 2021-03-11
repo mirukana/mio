@@ -32,9 +32,8 @@ Payload = Dict[str, Any]
 MessageIndice = Dict[int, Tuple[EventId, datetime]]
 
 InboundGroupSessionsType = Dict[
-    # room_id, sender_curve25519 and session_id separated by a \t
-    # We use this weird format because json.dumps doesn't support tuple keys
-    str,
+    # (room_id, sender_curve25519, session_id)
+    Tuple[RoomId, str, str],
     # (session, sender_ed25519, message_indices)
     Tuple[olm.InboundGroupSession, str, MessageIndice],
 ]
@@ -226,9 +225,9 @@ class Encryption(JSONClientModule):
         ses = self.in_group_sessions
         key = (content.room_id, sender_curve25519, content.session_id)
 
-        if "\t".join(key) not in ses:
-            session             = olm.InboundGroupSession(content.session_key)
-            ses["\t".join(key)] = (session, sender_ed25519, {})
+        if key not in ses:
+            session  = olm.InboundGroupSession(content.session_key)
+            ses[key] = (session, sender_ed25519, {})
             await self.save()
 
 
@@ -284,8 +283,7 @@ class Encryption(JSONClientModule):
             encrypted_events_count > settings.sessions_max_messages
         ):
             # Create a corresponding InboundGroupSession:
-            tuple_key  = (room_id, self.own_device.curve25519, session.id)
-            key        = "\t".join(tuple_key)
+            key        = (room_id, self.own_device.curve25519, session.id)
             our_ed     = self.own_device.ed25519
             in_session = olm.InboundGroupSession(session.session_key)
 
@@ -586,15 +584,15 @@ class Encryption(JSONClientModule):
         self, room_id: RoomId, event: TimelineEvent[Megolm],
     ) -> Tuple[Payload, Optional[err.MegolmVerificationError]]:
 
-        content   = event.content
-        tuple_key = (room_id, content.sender_curve25519, content.session_id)
+        content = event.content
+        key     = (room_id, content.sender_curve25519, content.session_id)
 
         try:
             session, starter_ed25519, decrypted_indice = \
-                self.in_group_sessions["\t".join(tuple_key)]
+                self.in_group_sessions[key]
         except KeyError:
             # TODO: unwedge, request keys?
-            raise err.NoInboundGroupSessionToDecrypt(*tuple_key)
+            raise err.NoInboundGroupSessionToDecrypt(*key)
 
         verif_error: Optional[err.MegolmVerificationError]
         verif_error = err.MegolmPayloadWrongSender(
