@@ -251,9 +251,8 @@ class Encryption(JSONClientModule):
             payload, verror = await self._decrypt_megolm_cipher(room_id, event)
 
 
-        clear      = type(event).from_dict({**event.source, **payload}, parent)
-        decryption = Decryption(event.source, payload, verror)
-        object.__setattr__(clear, "decryption", decryption)
+        clear = type(event).from_dict({**event.source, **payload}, parent)
+        clear.decryption = Decryption(event.source, payload, verror)
 
         if verror:
             log.warning("Error verifying decrypted event %r\n", clear)

@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Dict
 
 from ...typing import RoomId
-from ...utils import Frozen, IndexableMap, Parent
+from ...utils import IndexableMap, Parent
 from ..client_module import ClientModule
 from .room import Room
 
@@ -11,13 +11,13 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class Rooms(ClientModule, Frozen, IndexableMap[RoomId, Room]):
+class Rooms(ClientModule, IndexableMap[RoomId, Room]):
     client: Parent["Client"]   = field(repr=False)
     _data:  Dict[RoomId, Room] = field(default_factory=dict)
 
 
     @classmethod
-    async def load(cls, parent: "Client") -> "ClientModule":
+    async def load(cls, parent: "Client") -> "Rooms":
         rooms = cls(parent)
 
         for room_dir in (parent.path.parent / "rooms").glob("!*"):

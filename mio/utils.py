@@ -75,17 +75,6 @@ class IndexableMap(Map[KT, VT]):
         return self._data[key]  # type: ignore
 
 
-@dataclass
-class Frozen:
-    def __setattr__(self, name: str, value: Any) -> None:
-        fields = self.__dataclass_fields__  # type: ignore
-
-        if name in fields and name not in self.__dict__:
-            super().__setattr__(name, value)
-        else:
-            raise AttributeError(f"Cannot modify frozen class {self!r}")
-
-
 class JSONLoadError(MioError):
     pass
 

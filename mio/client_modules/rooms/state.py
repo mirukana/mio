@@ -8,14 +8,14 @@ from ...events.base_events import (
 )
 from ...events.room_state import Member
 from ...typing import UserId
-from ...utils import Frozen, JSONFile, Map, Parent
+from ...utils import JSONFile, Map, Parent
 
 if TYPE_CHECKING:
     from .room import Room
 
 
 @dataclass
-class RoomState(JSONFile, Frozen, Map[str, Dict[str, StateKind]]):
+class RoomState(JSONFile, Map[str, Dict[str, StateKind]]):
     loaders = {
         **JSONFile.loaders,  # type: ignore
         StateKind: lambda v, parent: (  # type: ignore

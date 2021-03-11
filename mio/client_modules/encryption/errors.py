@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict
 
 from ...errors import MioError
-from ...utils import Frozen
 from .devices import Device
 
 if TYPE_CHECKING:
@@ -10,7 +9,7 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class EncryptionModuleError(MioError, Frozen):
+class EncryptionModuleError(MioError):
     pass
 
 

@@ -15,8 +15,7 @@ from ...events.base_events import Content, InvalidEvent, TimelineEvent
 from ...events.room_state import Creation
 from ...typing import EventId
 from ...utils import (
-    JSON, Frozen, IndexableMap, JSONFile, Parent, Runtime, log_errors,
-    remove_none,
+    JSON, IndexableMap, JSONFile, Parent, Runtime, log_errors, remove_none,
 )
 
 if TYPE_CHECKING:
@@ -87,7 +86,7 @@ class Gap(JSON):
 
 
 @dataclass
-class Timeline(JSONFile, Frozen, IndexableMap[EventId, TimelineEvent]):
+class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
     room: Parent["Room"]     = field(repr=False)
     gaps: Dict[EventId, Gap] = field(default_factory=ValueSortedDict)
 

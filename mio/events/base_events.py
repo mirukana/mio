@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, ClassVar, Generic, Optional, Type, TypeVar
 
 from ..typing import EventId, RoomId, UserId
 from ..utils import (
-    JSON, DictS, Frozen, JSONLoadError, Parent, Runtime, deep_find_subclasses,
+    JSON, DictS, JSONLoadError, Parent, Runtime, deep_find_subclasses,
     deep_merge_dict,
 )
 
@@ -19,14 +19,14 @@ StateEvT = TypeVar("StateEvT", bound="StateEvent")
 
 
 @dataclass
-class Decryption(Frozen):
+class Decryption:
     source:             DictS
     payload:            DictS
     verification_error: Optional[Exception] = None
 
 
 @dataclass
-class Content(JSON, Frozen):
+class Content(JSON):
     type: ClassVar[Optional[str]] = None
 
     @classmethod
@@ -55,7 +55,7 @@ class InvalidContent(Exception, Content):
 
 
 @dataclass
-class Event(JSON, Frozen, Generic[ContentT]):
+class Event(JSON, Generic[ContentT]):
     source:  Runtime[DictS] = field(repr=False)
     content: ContentT
 

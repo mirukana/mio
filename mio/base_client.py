@@ -1,21 +1,18 @@
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union
+from typing import Any, Dict, List, Optional, Type, Union
 
 from .client_modules.authentication import Authentication
 from .client_modules.encryption.encryption import Encryption
 from .client_modules.rooms import Rooms
 from .client_modules.synchronizer import Synchronization
 from .typing import HttpUrl, UserId
-from .utils import Frozen, JSONFileBase, Runtime, remove_none
-
-if TYPE_CHECKING:
-    from .client_modules import ClientModule
+from .utils import JSONFileBase, Runtime, remove_none
 
 
 @dataclass
-class Client(JSONFileBase, Frozen):
+class Client(JSONFileBase):
     base_dir:     Runtime[Path]
     server:       HttpUrl
     user_id:      UserId
@@ -29,10 +26,10 @@ class Client(JSONFileBase, Frozen):
 
 
     async def __ainit__(self) -> None:
-        await self._load_module("auth", Authentication, "auth.json")
-        await self._load_module("rooms", Rooms, "rooms")
-        await self._load_module("sync", Synchronization, "sync.json")
-        await self._load_module("e2e", Encryption, "e2e.json")
+        self.auth  = await Authentication.load(self)
+        self.rooms = await Rooms.load(self)
+        self.sync  = await Synchronization.load(self)
+        self.e2e   = await Encryption.load(self)
         await self.save()
 
 
@@ -155,10 +152,3 @@ class Client(JSONFileBase, Frozen):
         data   = None if body is None else json.dumps(body).encode()
         result = await cls.send(obj, method, path, parameters, data, headers)
         return json.loads(result)
-
-
-    async def _load_module(
-        self, name: str, module: Type["ClientModule"], path_last_part: str,
-    ) -> None:
-        # Using __setattr__ like that because the dataclass is frozen
-        setattr(self, name, await module.load(self))
