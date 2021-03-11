@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, Optional
 
-from ...core.contents import Content
+from ...core.contents import EventContent
 from ...core.data import JSONFile, Map, Parent
 from ...core.types import UserId
 from .contents.settings import EncryptionSettings
@@ -101,7 +101,7 @@ class RoomState(JSONFile, Map[str, Dict[str, StateKind]]):
         await self.save()
 
 
-    async def send(self, content: Content, state_key: str = "") -> str:
+    async def send(self, content: EventContent, state_key: str = "") -> str:
         assert content.type
         room = self.room
         path = [*room.client.api, "rooms", room.id, "state", content.type]

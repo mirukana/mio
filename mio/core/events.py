@@ -2,7 +2,7 @@ import logging as log
 from dataclasses import dataclass, field
 from typing import Generic, Optional, Type, TypeVar
 
-from .contents import Content, ContentT, InvalidContent
+from .contents import ContentT, EventContent, InvalidContent
 from .data import JSON, JSONLoadError, Runtime
 from .types import DictS
 from .utils import deep_find_subclasses, deep_merge_dict
@@ -37,8 +37,8 @@ class Event(JSON, Generic[ContentT]):
             raise InvalidEvent(data, content, e)
 
     @classmethod
-    def _get_content(cls, event: DictS, content: DictS) -> Content:
-        content_subs = deep_find_subclasses(Content)
+    def _get_content(cls, event: DictS, content: DictS) -> EventContent:
+        content_subs = deep_find_subclasses(EventContent)
         content_cls  = next(
             (c for c in content_subs if c.matches(event)),
             InvalidContent,

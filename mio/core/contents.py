@@ -5,11 +5,11 @@ from typing import ClassVar, Optional, Type, TypeVar
 from .data import JSON, JSONLoadError, Runtime
 from .types import DictS
 
-ContentT = TypeVar("ContentT", bound="Content")
+ContentT = TypeVar("ContentT", bound="EventContent")
 
 
 @dataclass
-class Content(JSON):
+class EventContent(JSON):
     type: ClassVar[Optional[str]] = None
 
     @classmethod
@@ -28,7 +28,7 @@ class Content(JSON):
 
 
 @dataclass
-class InvalidContent(Exception, Content):
+class InvalidContent(Exception, EventContent):
     source: Runtime[DictS]
     error:  Runtime[JSONLoadError]
 

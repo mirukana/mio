@@ -2,13 +2,13 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, ClassVar, Dict
 
-from ...core.contents import Content
+from ...core.contents import EventContent
 from ...core.types import RoomId
 from . import Algorithm
 
 
 @dataclass
-class Olm(Content):
+class Olm(EventContent):
     @dataclass
     class Cipher:
         class Type(Enum):
@@ -33,7 +33,7 @@ class Olm(Content):
 
 
 @dataclass
-class Megolm(Content):
+class Megolm(EventContent):
     type    = "m.room.encrypted"
     aliases = {"sender_curve25519": "sender_key"}
 
@@ -51,7 +51,7 @@ class Megolm(Content):
 
 
 @dataclass
-class RoomKey(Content):
+class RoomKey(EventContent):
     type = "m.room_key"
 
     algorithm:   Algorithm

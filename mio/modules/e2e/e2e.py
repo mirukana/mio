@@ -12,7 +12,7 @@ from uuid import uuid4
 
 import olm
 
-from ...core.contents import Content
+from ...core.contents import EventContent
 from ...core.types import EventId, RoomId, UserId
 from ..devices.device import Device
 from ..devices.events import ToDeviceEvent
@@ -330,7 +330,7 @@ class E2E(JSONClientModule):
         room_id:   RoomId,
         for_users: Collection[UserId],
         settings:  EncryptionSettings,
-        content:   Content,
+        content:   EventContent,
     ) -> Megolm:
 
         default = (olm.OutboundGroupSession(), datetime.now(), 0)
@@ -594,7 +594,7 @@ class E2E(JSONClientModule):
 
 
     async def _encrypt_to_devices(
-        self, content: Content, *devices: Device,
+        self, content: EventContent, *devices: Device,
     ) -> Tuple[Dict[Device, Olm], Set[Device]]:
 
         sessions:         Dict[Device, olm.OutboundSession] = {}

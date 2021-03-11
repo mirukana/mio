@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from ....core.contents import Content
+from ....core.contents import EventContent
 
 
 @dataclass
-class Redaction(Content):
+class Redaction(EventContent):
     type = "m.room.redaction"
 
     reason: Optional[str] = None

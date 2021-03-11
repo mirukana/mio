@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 from typing import Any, ClassVar, Dict, Optional
 
-from ....core.contents import Content
+from ....core.contents import EventContent
 
 
 @dataclass
-class Message(Content):
+class Message(EventContent):
     type:    ClassVar[Optional[str]] = "m.room.message"
     msgtype: ClassVar[Optional[str]] = None
 

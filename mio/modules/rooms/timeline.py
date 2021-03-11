@@ -10,7 +10,7 @@ from uuid import uuid4
 from aiofiles import open as aiopen
 from sortedcollections import ValueSortedDict
 
-from ...core.contents import Content
+from ...core.contents import EventContent
 from ...core.data import JSON, IndexableMap, JSONFile, Parent, Runtime
 from ...core.events import InvalidEvent
 from ...core.types import EventId
@@ -124,7 +124,7 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
 
 
     async def send(
-        self, content: Content, transaction_id: Optional[str] = None,
+        self, content: EventContent, transaction_id: Optional[str] = None,
     ) -> str:
         room = self.room
 

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from enum import auto
 from typing import Optional
 
-from ....core.contents import Content
+from ....core.contents import EventContent
 from ....core.data import AutoStrEnum
 from ....core.types import MxcUri
 
@@ -10,7 +10,7 @@ from ....core.types import MxcUri
 
 
 @dataclass
-class Member(Content):
+class Member(EventContent):
     class Membership(AutoStrEnum):
         invite = auto()
         join   = auto()

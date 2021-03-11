@@ -3,14 +3,14 @@ from datetime import timedelta
 from enum import auto
 from typing import Dict, List, Optional
 
-from ....core.contents import Content
+from ....core.contents import EventContent
 from ....core.data import AutoStrEnum
 from ....core.types import EventId, MxcUri, RoomAlias, RoomId, UserId
 from ...e2e import Algorithm
 
 
 @dataclass
-class Creation(Content):
+class Creation(EventContent):
     @dataclass
     class Predecessor:
         event_id: EventId
@@ -25,7 +25,7 @@ class Creation(Content):
 
 
 @dataclass
-class EncryptionSettings(Content):
+class EncryptionSettings(EventContent):
     type    = "m.room.encryption"
     aliases = {
         "sessions_max_age": "rotation_period_ms",
@@ -38,21 +38,21 @@ class EncryptionSettings(Content):
 
 
 @dataclass
-class Name(Content):
+class Name(EventContent):
     type = "m.room.name"
 
     name: Optional[str] = None
 
 
 @dataclass
-class Topic(Content):
+class Topic(EventContent):
     type = "m.room.topic"
 
     topic: Optional[str] = None
 
 
 @dataclass
-class Avatar(Content):
+class Avatar(EventContent):
     type = "m.room.avatar"
 
     # TODO: info
@@ -60,7 +60,7 @@ class Avatar(Content):
 
 
 @dataclass
-class CanonicalAlias(Content):
+class CanonicalAlias(EventContent):
     type    = "m.room.canonical_alias"
     aliases = {"alternatives": "alt_aliases"}
 
@@ -69,7 +69,7 @@ class CanonicalAlias(Content):
 
 
 @dataclass
-class JoinRules(Content):
+class JoinRules(EventContent):
     class Rule(AutoStrEnum):
         public  = auto()
         knock   = auto()
@@ -83,7 +83,7 @@ class JoinRules(Content):
 
 
 @dataclass
-class HistoryVisibility(Content):
+class HistoryVisibility(EventContent):
     class Visibility(AutoStrEnum):
         invited        = auto()
         joined         = auto()
@@ -97,7 +97,7 @@ class HistoryVisibility(Content):
 
 
 @dataclass
-class GuestAccess(Content):
+class GuestAccess(EventContent):
     class Access(AutoStrEnum):
         can_join  = auto()
         forbidden = auto()
@@ -109,14 +109,14 @@ class GuestAccess(Content):
 
 
 @dataclass
-class PinnedEvents(Content):
+class PinnedEvents(EventContent):
     type = "m.room.pinned_events"
 
     pinned: List[EventId]
 
 
 @dataclass
-class Tombstone(Content):
+class Tombstone(EventContent):
     type    = "m.room.tombstone"
     aliases = {"server_message": "body"}
 
@@ -125,7 +125,7 @@ class Tombstone(Content):
 
 
 @dataclass
-class PowerLevels(Content):
+class PowerLevels(EventContent):
     type = "m.room.power_levels"
 
     invite:         int               = 50
@@ -144,7 +144,7 @@ class PowerLevels(Content):
 
 
 @dataclass
-class ServerACL(Content):
+class ServerACL(EventContent):
     type = "m.room.server_acl"
 
     allow_ip_literals: bool      = True
