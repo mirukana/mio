@@ -12,8 +12,8 @@ from uuid import uuid4
 
 import olm
 
-from ...core.contents import EventContent
-from ...core.types import EventId, RoomId, UserId
+from ..core.contents import EventContent
+from ..core.types import EventId, RoomId, UserId
 from ..devices.device import Device
 from ..devices.events import ToDeviceEvent
 from ..module import JSONClientModule
@@ -24,7 +24,7 @@ from . import errors as err
 from .contents import Megolm, Olm, RoomKey
 
 if TYPE_CHECKING:
-    from ...client import Client
+    from ..client import Client
 
 # TODO: https://github.com/matrix-org/matrix-doc/pull/2732 (fallback OTK)
 # TODO: protect against concurrency and saving sessions before sharing

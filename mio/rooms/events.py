@@ -3,10 +3,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional, Type, TypeVar
 
-from ...core.contents import ContentT
-from ...core.data import Parent, Runtime
-from ...core.events import Event
-from ...core.types import DictS, EventId, RoomId, UserId
+from ..core.contents import ContentT
+from ..core.data import Parent, Runtime
+from ..core.events import Event
+from ..core.types import DictS, EventId, RoomId, UserId
 from ..e2e.contents import Megolm
 from ..e2e.errors import MegolmVerificationError
 

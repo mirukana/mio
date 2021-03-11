@@ -7,14 +7,14 @@ from urllib.parse import quote
 
 import aiohttp
 
+from .auth import Auth
 from .core.data import JSONFileBase, Runtime
 from .core.errors import ServerError
 from .core.types import HttpUrl, UserId
 from .core.utils import remove_none
-from .modules.auth import Auth
-from .modules.e2e.e2e import E2E
-from .modules.rooms.rooms import Rooms
-from .modules.sync import Sync
+from .e2e.e2e import E2E
+from .rooms.rooms import Rooms
+from .sync import Sync
 
 
 @dataclass

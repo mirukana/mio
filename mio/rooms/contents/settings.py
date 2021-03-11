@@ -3,9 +3,9 @@ from datetime import timedelta
 from enum import auto
 from typing import Dict, List, Optional
 
-from ....core.contents import EventContent
-from ....core.data import AutoStrEnum
-from ....core.types import EventId, MxcUri, RoomAlias, RoomId, UserId
+from ...core.contents import EventContent
+from ...core.data import AutoStrEnum
+from ...core.types import EventId, MxcUri, RoomAlias, RoomId, UserId
 from ...e2e import Algorithm
 
 

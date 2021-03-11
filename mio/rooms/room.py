@@ -2,16 +2,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Tuple
 
-from ...core.data import JSONFile, Parent, Runtime
-from ...core.events import Event
-from ...core.types import RoomId, UserId
+from ..core.data import JSONFile, Parent, Runtime
+from ..core.events import Event
+from ..core.types import RoomId, UserId
 from .contents.users import Member
 from .events import StateBase, TimelineEvent
 from .state import RoomState
 from .timeline import Timeline
 
 if TYPE_CHECKING:
-    from ...client import Client
+    from ..client import Client
 
 
 

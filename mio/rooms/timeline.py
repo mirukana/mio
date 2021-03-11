@@ -10,11 +10,11 @@ from uuid import uuid4
 from aiofiles import open as aiopen
 from sortedcollections import ValueSortedDict
 
-from ...core.contents import EventContent
-from ...core.data import JSON, IndexableMap, JSONFile, Parent, Runtime
-from ...core.events import InvalidEvent
-from ...core.types import EventId
-from ...core.utils import log_errors, remove_none
+from ..core.contents import EventContent
+from ..core.data import JSON, IndexableMap, JSONFile, Parent, Runtime
+from ..core.events import InvalidEvent
+from ..core.types import EventId
+from ..core.utils import log_errors, remove_none
 from ..e2e.contents import Megolm
 from .contents.settings import Creation
 from .events import TimelineEvent

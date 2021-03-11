@@ -2,9 +2,9 @@ from dataclasses import dataclass
 from enum import auto
 from typing import Optional
 
-from ....core.contents import EventContent
-from ....core.data import AutoStrEnum
-from ....core.types import MxcUri
+from ...core.contents import EventContent
+from ...core.data import AutoStrEnum
+from ...core.types import MxcUri
 
 # TODO: m.room.third_party_invite
 

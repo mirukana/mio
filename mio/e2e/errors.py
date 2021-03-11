@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict
 
-from ...core.errors import MioError
+from ..core.errors import MioError
 from ..devices.device import Device
 
 if TYPE_CHECKING:

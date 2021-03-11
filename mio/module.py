@@ -1,10 +1,10 @@
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from ..core.data import JSONFile, Parent
+from .core.data import JSONFile, Parent
 
 if TYPE_CHECKING:
-    from ..client import Client
+    from .client import Client
 
 
 @dataclass

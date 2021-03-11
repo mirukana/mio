@@ -2,9 +2,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, Optional
 
-from ...core.contents import EventContent
-from ...core.data import JSONFile, Map, Parent
-from ...core.types import UserId
+from ..core.contents import EventContent
+from ..core.data import JSONFile, Map, Parent
+from ..core.types import UserId
 from .contents.settings import Encryption
 from .contents.users import Member
 from .events import InvitedRoomStateEvent, StateBase, StateEvent

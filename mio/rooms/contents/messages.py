@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Any, ClassVar, Dict, Optional
 
-from ....core.contents import EventContent
+from ...core.contents import EventContent
 
 
 @dataclass

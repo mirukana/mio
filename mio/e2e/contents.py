@@ -2,8 +2,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, ClassVar, Dict
 
-from ...core.contents import EventContent
-from ...core.types import RoomId
+from ..core.contents import EventContent
+from ..core.types import RoomId
 from . import Algorithm
 
 
