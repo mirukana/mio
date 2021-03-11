@@ -33,7 +33,7 @@ class Synchronization(JSONClientModule):
         return parent.path.parent / "sync.json"
 
 
-    async def sync(
+    async def once(
         self,
         timeout:      float          = 0,
         sync_filter:  FilterType     = None,
@@ -73,10 +73,10 @@ class Synchronization(JSONClientModule):
         sleep_seconds_between_syncs: float          = 1,
     ) -> None:
 
-        await self.sync(0, first_sync_filter, since, full_state, set_presence)
+        await self.once(0, first_sync_filter, since, full_state, set_presence)
 
         while True:
-            await self.sync(timeout, sync_filter, None, None, set_presence)
+            await self.once(timeout, sync_filter, None, None, set_presence)
             await asyncio.sleep(sleep_seconds_between_syncs)
 
 
