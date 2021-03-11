@@ -75,7 +75,7 @@ class RoomState(JSONFile, Map[str, Dict[str, StateKind]]):
 
 
     @property
-    def dropouts(self) -> Dict[UserId, StateKind[Member]]:
+    def leavers(self) -> Dict[UserId, StateKind[Member]]:
         return self.users(invitees=False, joined=False, banned=False)
 
 
