@@ -14,7 +14,7 @@ from .e2e.contents import Megolm, Olm
 from .e2e.errors import DecryptionError
 from .module import JSONClientModule
 from .rooms.room import Room
-from .rooms.state import InvitedRoomStateEvent, StateEvent, StateKind
+from .rooms.state import InvitedRoomStateEvent, StateBase, StateEvent
 from .rooms.timeline import TimelineEvent
 
 if TYPE_CHECKING:
@@ -100,7 +100,7 @@ class Sync(JSONClientModule):
             data: dict, key: str, room: Room, invited: bool = False,
         ) -> None:
 
-            state: Type[StateKind] = \
+            state: Type[StateBase] = \
                 InvitedRoomStateEvent if invited else StateEvent
 
             for event in data.get(key, {}).get("events", ()):

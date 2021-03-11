@@ -7,17 +7,17 @@ from ...core.data import JSONFile, Map, Parent
 from ...core.types import UserId
 from .contents.settings import Encryption
 from .contents.users import Member
-from .events import InvitedRoomStateEvent, StateEvent, StateKind
+from .events import InvitedRoomStateEvent, StateBase, StateEvent
 
 if TYPE_CHECKING:
     from .room import Room
 
 
 @dataclass
-class RoomState(JSONFile, Map[str, Dict[str, StateKind]]):
+class RoomState(JSONFile, Map[str, Dict[str, StateBase]]):
     loaders = {
         **JSONFile.loaders,  # type: ignore
-        StateKind: lambda v, parent: (  # type: ignore
+        StateBase: lambda v, parent: (  # type: ignore
             StateEvent if "event_id" in v else InvitedRoomStateEvent
         ).from_dict(v, parent),
     }
@@ -25,11 +25,11 @@ class RoomState(JSONFile, Map[str, Dict[str, StateKind]]):
     room: Parent["Room"] = field(repr=False)
 
     # {event.type: {event.state_key: event}}
-    _data: Dict[str, Dict[str, StateKind]] = field(default_factory=dict)
+    _data: Dict[str, Dict[str, StateBase]] = field(default_factory=dict)
 
 
     @property
-    def encryption(self) -> Optional[StateKind[Encryption]]:
+    def encryption(self) -> Optional[StateBase[Encryption]]:
         return self.get(Encryption.type, {}).get("")
 
 
@@ -44,7 +44,7 @@ class RoomState(JSONFile, Map[str, Dict[str, StateKind]]):
         joined:   bool = True,
         left:     bool = True,
         banned:   bool = True,
-    ) -> Dict[UserId, StateKind[Member]]:
+    ) -> Dict[UserId, StateBase[Member]]:
 
         if invitees and joined and left and banned:
             return self.get(Member.type, {})  # type: ignore
@@ -64,27 +64,27 @@ class RoomState(JSONFile, Map[str, Dict[str, StateKind]]):
 
 
     @property
-    def invitees(self) -> Dict[UserId, StateKind[Member]]:
+    def invitees(self) -> Dict[UserId, StateBase[Member]]:
         return self.users(joined=False, left=False, banned=False)
 
 
     @property
-    def members(self) -> Dict[UserId, StateKind[Member]]:
+    def members(self) -> Dict[UserId, StateBase[Member]]:
         return self.users(invitees=False, left=False, banned=False)
 
 
     @property
-    def leavers(self) -> Dict[UserId, StateKind[Member]]:
+    def leavers(self) -> Dict[UserId, StateBase[Member]]:
         return self.users(invitees=False, joined=False, banned=False)
 
 
     @property
-    def banned(self) -> Dict[UserId, StateKind[Member]]:
+    def banned(self) -> Dict[UserId, StateBase[Member]]:
         return self.users(invitees=False, joined=False, left=False)
 
 
     @property
-    def us(self) -> Optional[StateKind[Member]]:
+    def us(self) -> Optional[StateBase[Member]]:
         return self.users().get(self.room.client.user_id)
 
 
@@ -95,7 +95,7 @@ class RoomState(JSONFile, Map[str, Dict[str, StateKind]]):
         return self.us.sender if self.us and invited else None
 
 
-    async def register(self, event: StateKind) -> None:
+    async def register(self, event: StateBase) -> None:
         assert event.type
         self._data.setdefault(event.type, {})[event.state_key] = event
         await self.save()

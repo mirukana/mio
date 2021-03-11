@@ -21,21 +21,21 @@ class Message(EventContent):
 
 
 @dataclass
-class TextKind(Message):
+class TextBase(Message):
     format:         Optional[str] = None
     formatted_body: Optional[str] = None
 
 
 @dataclass
-class Text(TextKind):
+class Text(TextBase):
     msgtype = "m.text"
 
 
 @dataclass
-class Emote(TextKind):
+class Emote(TextBase):
     msgtype = "m.emote"
 
 
 @dataclass
-class Notice(TextKind):
+class Notice(TextBase):
     msgtype = "m.notice"

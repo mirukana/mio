@@ -6,7 +6,7 @@ from ...core.data import JSONFile, Parent, Runtime
 from ...core.events import Event
 from ...core.types import RoomId, UserId
 from .contents.users import Member
-from .events import StateKind, TimelineEvent
+from .events import StateBase, TimelineEvent
 from .state import RoomState
 from .timeline import Timeline
 
@@ -53,7 +53,7 @@ class Room(JSONFile):
 
         if isinstance(event, TimelineEvent):
             await self.timeline.register_events(event)
-        elif isinstance(event, StateKind):
+        elif isinstance(event, StateBase):
             await self.state.register(event)
 
         content = event.content

@@ -58,7 +58,7 @@ class TimelineDecryptInfo:
 
 
 @dataclass
-class StateKind(Event[ContentT]):
+class StateBase(Event[ContentT]):
     room:      Parent["Room"] = field(repr=False)
     content:   ContentT
     state_key: str
@@ -66,12 +66,12 @@ class StateKind(Event[ContentT]):
 
 
 @dataclass
-class InvitedRoomStateEvent(StateKind[ContentT]):
+class InvitedRoomStateEvent(StateBase[ContentT]):
     content: ContentT
 
 
 @dataclass
-class StateEvent(StateKind[ContentT]):
+class StateEvent(StateBase[ContentT]):
     aliases = {
         "id": "event_id",
         "date": "origin_server_ts",
