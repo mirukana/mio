@@ -7,13 +7,12 @@ from functools import partial
 from pathlib import Path
 from typing import (
     TYPE_CHECKING, Any, Collection, Dict, List, Optional, Set, Tuple, Type,
-    Union,
 )
 from uuid import uuid4
 
 import olm
 
-from ...events import Content, Decryption, TimelineEvent, ToDeviceEvent
+from ...events import Content, TimelineEvent, ToDeviceEvent
 from ...typing import EventId, RoomId, UserId
 from ..client_module import JSONClientModule
 from . import errors as err
@@ -22,7 +21,6 @@ from .events import Algorithm, EncryptionSettings, Megolm, Olm, RoomKey
 
 if TYPE_CHECKING:
     from ...base_client import Client
-    from ...client_modules.rooms import Room
 
 # TODO: https://github.com/matrix-org/matrix-doc/pull/2732 (fallback OTK)
 # TODO: protect against concurrency and saving sessions before sharing
@@ -218,7 +216,9 @@ class Encryption(JSONClientModule):
             return
 
         assert event.decryption
-        sender_curve25519 = event.decryption.source["content"]["sender_key"]
+        assert isinstance(event.decryption.original.content, Olm)
+
+        sender_curve25519 = event.decryption.original.content.sender_curve25519
         sender_ed25519    = event.decryption.payload["keys"]["ed25519"]
         content           = event.content
 
@@ -231,33 +231,94 @@ class Encryption(JSONClientModule):
             await self.save()
 
 
-    async def decrypt_event(
-        self,
-        event:   Union[ToDeviceEvent[Olm], TimelineEvent[Megolm]],
-        room_id: Optional[RoomId] = None,
-    ) -> Union[ToDeviceEvent, TimelineEvent]:
+    async def decrypt_olm_payload(
+        self, event: ToDeviceEvent[Olm],
+    ) -> Tuple[Payload, Optional[err.OlmVerificationError]]:
+        # TODO: remove old sessions, unwedging, error handling?
 
-        parent: Union["Client", "Room"]
-        verror: Optional[err.VerificationError]
+        content      = event.content
+        sender_curve = content.sender_curve25519
+        our_curve    = self.own_device.curve25519
+        cipher       = content.ciphertext.get(our_curve)
 
-        if isinstance(event.content, Olm):
-            parent          = self.client
-            payload, verror = await self._decrypt_olm_cipher(event)
-        else:
-            if not room_id:
-                raise TypeError("room_id argument required for Megolm event")
+        if not cipher:
+            raise err.NoCipherForUs(our_curve, content.ciphertext)
 
-            parent          = self.client.rooms[room_id]
-            payload, verror = await self._decrypt_megolm_cipher(room_id, event)
+        is_prekey = cipher.type == Olm.Cipher.Type.prekey
+        msg_class = olm.OlmPreKeyMessage if is_prekey else olm.OlmMessage
+        message   = msg_class(cipher.body)
+
+        for session in self.in_sessions.get(sender_curve, []):
+            if is_prekey and not session.matches(message, sender_curve):
+                continue
+
+            try:
+                payload = json.loads(session.decrypt(message))
+            except olm.OlmSessionError as e:
+                raise err.OlmSessionError(code=e.args[0])
+
+            await self.save()
+            try:
+                return (self._verify_olm_payload(event, payload), None)
+            except err.OlmVerificationError as e:
+                return (payload, e)
+
+        if not is_prekey:
+            raise err.OlmDecryptionError()  # TODO: unwedge
+
+        session = olm.InboundSession(self.account, message, sender_curve)
+        self.account.remove_one_time_keys(session)
+        await self.save()
+
+        payload = json.loads(session.decrypt(message))
+        self.in_sessions.setdefault(sender_curve, []).append(session)
+        await self.save()
+
+        try:
+            return (self._verify_olm_payload(event, payload), None)
+        except err.OlmVerificationError as e:
+            return (payload, e)
 
 
-        clear = type(event).from_dict({**event.source, **payload}, parent)
-        clear.decryption = Decryption(event.source, payload, verror)
+    async def decrypt_megolm_payload(
+        self, room_id: RoomId, event: TimelineEvent[Megolm],
+    ) -> Tuple[Payload, Optional[err.MegolmVerificationError]]:
 
-        if verror:
-            log.warning("Error verifying decrypted event %r\n", clear)
+        content = event.content
+        key     = (room_id, content.sender_curve25519, content.session_id)
 
-        return clear
+        try:
+            session, starter_ed25519, decrypted_indice = \
+                self.in_group_sessions[key]
+        except KeyError:
+            # TODO: unwedge, request keys?
+            raise err.NoInboundGroupSessionToDecrypt(*key)
+
+        verif_error: Optional[err.MegolmVerificationError]
+        verif_error = err.MegolmPayloadWrongSender(
+            starter_ed25519, content.sender_curve25519,
+        )
+
+        for device in self.devices[event.sender].values():
+            if device.curve25519 == content.sender_curve25519:
+                if device.ed25519 == starter_ed25519:
+                    verif_error = None  # TODO: device trust state
+
+        try:
+            json_payload, message_index = session.decrypt(content.ciphertext)
+        except olm.OlmGroupSessionError as e:
+            raise err.MegolmSessionError(code=e.args[0])
+
+        known = message_index in decrypted_indice
+
+        if known and decrypted_indice[message_index] != (event.id, event.date):
+            raise err.PossibleReplayAttack()
+
+        if not known:
+            decrypted_indice[message_index] = (event.id, event.date)
+            await self.save()
+
+        return (json.loads(json_payload), verif_error)
 
 
     async def encrypt_room_event(
@@ -464,55 +525,6 @@ class Encryption(JSONClientModule):
         return dct
 
 
-    async def _decrypt_olm_cipher(
-        self, event: ToDeviceEvent[Olm],
-    ) -> Tuple[Payload, Optional[err.OlmVerificationError]]:
-        # TODO: remove old sessions, unwedging, error handling?
-
-        content      = event.content
-        sender_curve = content.sender_curve25519
-        our_curve    = self.own_device.curve25519
-        cipher       = content.ciphertext.get(our_curve)
-
-        if not cipher:
-            raise err.NoCipherForUs(our_curve, content.ciphertext)
-
-        is_prekey = cipher.type == Olm.Cipher.Type.prekey
-        msg_class = olm.OlmPreKeyMessage if is_prekey else olm.OlmMessage
-        message   = msg_class(cipher.body)
-
-        for session in self.in_sessions.get(sender_curve, []):
-            if is_prekey and not session.matches(message, sender_curve):
-                continue
-
-            try:
-                payload = json.loads(session.decrypt(message))
-            except olm.OlmSessionError as e:
-                raise err.OlmSessionError(code=e.args[0])
-
-            await self.save()
-            try:
-                return (self._verify_olm_payload(event, payload), None)
-            except err.OlmVerificationError as e:
-                return (payload, e)
-
-        if not is_prekey:
-            raise err.OlmDecryptionError()  # TODO: unwedge
-
-        session = olm.InboundSession(self.account, message, sender_curve)
-        self.account.remove_one_time_keys(session)
-        await self.save()
-
-        payload = json.loads(session.decrypt(message))
-        self.in_sessions.setdefault(sender_curve, []).append(session)
-        await self.save()
-
-        try:
-            return (self._verify_olm_payload(event, payload), None)
-        except err.OlmVerificationError as e:
-            return (payload, e)
-
-
     def _verify_olm_payload(
         self, event: ToDeviceEvent[Olm], payload: Payload,
     ) -> Payload:
@@ -575,47 +587,6 @@ class Encryption(JSONClientModule):
             raise err.SignedDictVerificationError(e.args[0])
 
         return dct
-
-
-    async def _decrypt_megolm_cipher(
-        self, room_id: RoomId, event: TimelineEvent[Megolm],
-    ) -> Tuple[Payload, Optional[err.MegolmVerificationError]]:
-
-        content = event.content
-        key     = (room_id, content.sender_curve25519, content.session_id)
-
-        try:
-            session, starter_ed25519, decrypted_indice = \
-                self.in_group_sessions[key]
-        except KeyError:
-            # TODO: unwedge, request keys?
-            raise err.NoInboundGroupSessionToDecrypt(*key)
-
-        verif_error: Optional[err.MegolmVerificationError]
-        verif_error = err.MegolmPayloadWrongSender(
-            starter_ed25519, content.sender_curve25519,
-        )
-
-        for device in self.devices[event.sender].values():
-            if device.curve25519 == content.sender_curve25519:
-                if device.ed25519 == starter_ed25519:
-                    verif_error = None  # TODO: device trust state
-
-        try:
-            json_payload, message_index = session.decrypt(content.ciphertext)
-        except olm.OlmGroupSessionError as e:
-            raise err.MegolmSessionError(code=e.args[0])
-
-        known = message_index in decrypted_indice
-
-        if known and decrypted_indice[message_index] != (event.id, event.date):
-            raise err.PossibleReplayAttack()
-
-        if not known:
-            decrypted_indice[message_index] = (event.id, event.date)
-            await self.save()
-
-        return (json.loads(json_payload), verif_error)
 
 
     async def _encrypt_to_devices(

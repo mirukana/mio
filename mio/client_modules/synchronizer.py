@@ -1,5 +1,4 @@
 import asyncio
-import logging as log
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
@@ -84,27 +83,18 @@ class Synchronization(JSONClientModule):
     async def handle_sync(self, sync: Dict[str, Any]) -> None:
         # TODO: device_lists, partial syncs
 
-        async def decrypt(event: Event, room_id: Optional[RoomId] = None):
-            if not isinstance(event, (ToDeviceEvent, TimelineEvent)):
-                return event
-
-            if not isinstance(event.content, (Olm, Megolm)):
-                return event
-
-            try:
-                return await self.client.e2e.decrypt_event(event, room_id)
-            except DecryptionError as e:
-                log.warn("Failed decrypting %r: %r\n", event, e)
-                return event
-
         async def events_call(
             data: dict, key: str, evtype: Type[Event], coro: Callable,
         ) -> None:
             for event in data.get(key, {}).get("events", ()):
                 with log_errors(InvalidEvent):
-                    await coro(await decrypt(
-                        evtype.from_dict(event, self.client),
-                    ))
+                    ev = evtype.from_dict(event, self.client)
+
+                    with log_errors(DecryptionError):
+                        if isinstance(ev, ToDeviceEvent):
+                            ev = await ev.decrypted()
+
+                    await coro(ev)
 
         async def room_events_call(
             data: dict, key: str, room: Room, invited: bool = False,
@@ -116,16 +106,17 @@ class Synchronization(JSONClientModule):
             for event in data.get(key, {}).get("events", ()):
                 with log_errors(InvalidEvent):
                     if "state_key" in event:
-                        await room.handle_event(await decrypt(
-                            state.from_dict(event, room), room.id,
-                        ))
+                        await room.handle_event(state.from_dict(event, room))
 
                     if key != "timeline":
                         continue
 
-                    await room.handle_event(await decrypt(
-                        TimelineEvent.from_dict(event, room), room.id,
-                    ))
+                    ev: TimelineEvent = TimelineEvent.from_dict(event, room)
+
+                    with log_errors(DecryptionError):
+                        ev = await ev.decrypted()
+
+                    await room.handle_event(ev)
 
         users: Set[UserId] = set()
 
@@ -197,9 +188,9 @@ class Synchronization(JSONClientModule):
 
             for event in timeline.get("events", []):
                 with suppress(InvalidEvent):
-                    after = await decrypt(
-                        TimelineEvent.from_dict(event, room), room.id,
-                    )
+                    after = TimelineEvent.from_dict(event, room)
+                    with suppress(DecryptionError):
+                        after = await after.decrypted()
                     break
 
             if limited and prev_batch and after:

@@ -20,7 +20,7 @@ StateEvT = TypeVar("StateEvT", bound="StateEvent")
 
 @dataclass
 class Decryption:
-    source:             DictS
+    original:           "Event"
     payload:            DictS
     verification_error: Optional[Exception] = None
 
@@ -104,11 +104,27 @@ class TimelineEvent(Event[ContentT]):
     date:       datetime
     redacts:    Optional[EventId]             = None
     room_id:    Optional[RoomId]              = None
-    decryption: Runtime[Optional[Decryption]] = None
+    decryption: Runtime[Optional[Decryption]] = field(default=None, repr=False)
     # TODO: unsigned
 
     def __lt__(self, other: "TimelineEvent") -> bool:
         return self.date < other.date
+
+    async def decrypted(self) -> "TimelineEvent":
+        from ..client_modules.encryption.events import Megolm
+        if not isinstance(self.content, Megolm):
+            return self
+
+        decrypt            = self.room.client.e2e.decrypt_megolm_payload
+        payload, verif_err = await decrypt(self.room.id, self)  # type: ignore
+
+        clear = type(self).from_dict({**self.source, **payload}, self.room)
+        clear.decryption = Decryption(self, payload, verif_err)
+
+        if verif_err:
+            log.warning("Error verifying decrypted event %r\n", clear)
+
+        return clear
 
 
 @dataclass
@@ -157,7 +173,23 @@ class ToDeviceEvent(Event[ContentT]):
     client:     Parent["Client"] = field(repr=False)
     content:    ContentT
     sender:     UserId
-    decryption: Runtime[Optional[Decryption]] = None
+    decryption: Runtime[Optional[Decryption]] = field(default=None, repr=False)
+
+    async def decrypted(self) -> "ToDeviceEvent":
+        from ..client_modules.encryption.events import Olm
+        if not isinstance(self.content, Olm):
+            return self
+
+        decrypt            = self.client.e2e.decrypt_olm_payload
+        payload, verif_err = await decrypt(self)  # type: ignore
+
+        clear = type(self).from_dict({**self.source, **payload}, self.client)
+        clear.decryption = Decryption(self, payload, verif_err)
+
+        if verif_err:
+            log.warning("Error verifying decrypted event %r\n", clear)
+
+        return clear
 
 
 @dataclass
