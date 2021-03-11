@@ -38,6 +38,10 @@ class Event(JSON, Generic[ContentT]):
 
     @classmethod
     def _get_content(cls, event: DictS, content: DictS) -> EventContent:
+        # Make sure python knows about all the existing EventContent subclasses
+        from ..core import contents  # noqa
+        from ..rooms.contents import actions, messages, settings, users  # noqa
+
         content_subs = deep_find_subclasses(EventContent)
 
         try:
