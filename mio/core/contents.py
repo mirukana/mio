@@ -1,8 +1,9 @@
 import logging as log
 from dataclasses import dataclass
-from typing import ClassVar, Optional, Type, TypeVar
+from typing import ClassVar, Optional, Type, TypeVar, Union
 
 from .data import JSON, JSONLoadError, Runtime
+from .errors import MioError
 from .types import DictS
 
 ContentT = TypeVar("ContentT", bound="EventContent")
@@ -27,10 +28,14 @@ class EventContent(JSON):
         return bool(cls.type) and cls.type == event.get("type")
 
 
+class NoMatchingType(MioError):
+    pass
+
+
 @dataclass
 class InvalidContent(Exception, EventContent):
     source: Runtime[DictS]
-    error:  Runtime[JSONLoadError]
+    error:  Runtime[Union[JSONLoadError, NoMatchingType]]
 
     @property
     def dict(self) -> DictS:
