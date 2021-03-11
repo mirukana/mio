@@ -46,6 +46,7 @@ class Room(JSONFile):
     async def __ainit__(self) -> None:
         self.timeline = await Timeline.load(self)
         self.state    = await RoomState.load(self)
+        await self.save()
 
 
     async def handle_event(self, event: Event) -> None:
