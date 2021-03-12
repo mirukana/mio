@@ -169,7 +169,7 @@ class Client(JSONFileBase):
         read = await response.read()
 
         LOG.debug(
-            "Sent %s %s %r %r\n\nReceived %r\n",
+            "Sent %s %r params=%r data=%r\n\nGot %r\n",
             method, joined_path, parameters, data, read,
         )
 
