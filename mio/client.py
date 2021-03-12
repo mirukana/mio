@@ -145,9 +145,9 @@ class Client(JSONFileBase):
         headers:    Optional[Dict[str, Any]] = None,
     ) -> bytes:
 
-        headers     = headers or {}
-        parameters  = parameters or {}
-        joined_path = "/".join(quote(p, safe="") for p in path[1:])
+        headers    = headers or {}
+        parameters = parameters or {}
+        url_path   = "/".join(quote(p, safe="") for p in path[1:])
 
         if hasattr(obj, "access_token"):
             headers["Authorization"] = f"Bearer {obj.access_token}"
@@ -160,7 +160,7 @@ class Client(JSONFileBase):
 
         response = await obj._session.request(
             method  = method,
-            url     = f"{path[0]}/{joined_path}",
+            url     = f"{path[0]}/{url_path}",
             params  = parameters,
             data    = data,
             headers = headers,
@@ -170,13 +170,21 @@ class Client(JSONFileBase):
 
         LOG.debug(
             "Sent %s %r params=%r data=%r\n\nGot %r\n",
-            method, joined_path, parameters, data, read,
+            method, url_path, parameters, data, read,
         )
 
         try:
             response.raise_for_status()
         except aiohttp.ClientResponseError as e:
-            raise ServerError.from_response(e.status, e.message, read)  # noqa
+            raise ServerError.from_response(
+                reply      = read,
+                http_code  = e.status,
+                message    = e.message,  # noqa
+                method     = method,
+                path       = url_path,
+                parameters = parameters,
+                data       = data,
+            )
 
         return read
 

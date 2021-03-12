@@ -1,6 +1,8 @@
 import json
 from dataclasses import dataclass
 
+from .types import DictS
+
 
 class MioError(Exception):
     pass
@@ -8,23 +10,32 @@ class MioError(Exception):
 
 @dataclass
 class ServerError(MioError):
-    http_code: int
-    message:   str
+    http_code:  int
+    message:    str
+    method:     str
+    path:       str
+    parameters: DictS
+    data:       bytes
+    reply:      bytes
 
     @classmethod
-    def from_response(
-        cls, http_code: int, message: str, content: bytes,
-    ) -> "ServerError":
+    def from_response(cls, reply: bytes, **kwargs) -> "ServerError":
         try:
-            data = json.loads(content)
+            parsed = json.loads(reply)
         except json.JSONDecodeError:
-            return cls(http_code, message)
+            parsed = None
 
-        if isinstance(data, dict) and "errcode" in data:
-            message = data.get("error") or message
-            return MatrixError(http_code, message, data["errcode"])
+        kwargs["reply"] = reply
 
-        return cls(http_code, message)
+        if isinstance(parsed, dict) and "errcode" in parsed:
+            kwargs["m_code"]  = parsed["errcode"]
+            kwargs["message"] = parsed.get("error") or kwargs.get("message")
+            return MatrixError(**kwargs)
+
+        return cls(**kwargs)
+
+    def __str__(self) -> str:
+        return repr(self)
 
 
 @dataclass
