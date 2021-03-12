@@ -9,22 +9,22 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class EncryptionModuleError(MioError):
+class E2EModuleError(MioError):
     pass
 
 
 @dataclass
-class VerificationError(EncryptionModuleError):
+class VerificationError(E2EModuleError):
     pass
 
 
 @dataclass
-class DecryptionError(EncryptionModuleError):
+class DecryptionError(E2EModuleError):
     pass
 
 
 @dataclass
-class QueriedDeviceError(EncryptionModuleError):
+class QueriedDeviceError(E2EModuleError):
     pass
 
 
@@ -126,7 +126,7 @@ class MegolmPayloadWrongSender(MegolmVerificationError):
 
 
 @dataclass
-class InvalidSignedDict(EncryptionModuleError):
+class InvalidSignedDict(E2EModuleError):
     pass
 
 
