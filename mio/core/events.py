@@ -1,11 +1,12 @@
-import logging as log
 from dataclasses import dataclass, field
 from typing import Generic, Optional, Type, TypeVar
 
 from .contents import ContentT, EventContent, InvalidContent, NoMatchingType
 from .data import JSON, JSONLoadError, Runtime
 from .types import DictS
-from .utils import deep_find_subclasses, deep_merge_dict
+from .utils import deep_find_subclasses, deep_merge_dict, get_logger
+
+LOG = get_logger()
 
 EventT = TypeVar("EventT", bound="Event")
 
@@ -33,7 +34,7 @@ class Event(JSON, Generic[ContentT]):
             data = {**data, "source": data, "content": content}
             return super().from_dict(data, parent)
         except JSONLoadError as e:
-            log.error("Failed parsing %s from %r: %r", cls.__name__, data, e)
+            LOG.error("Failed parsing %s from %r: %r", cls.__name__, data, e)
             raise InvalidEvent(data, content, e)
 
     @classmethod

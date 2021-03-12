@@ -1,4 +1,3 @@
-import logging as log
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional, Type, TypeVar
@@ -7,11 +6,14 @@ from ..core.contents import ContentT
 from ..core.data import Parent, Runtime
 from ..core.events import Event
 from ..core.types import DictS, EventId, RoomId, UserId
+from ..core.utils import get_logger
 from ..e2e.contents import Megolm
 from ..e2e.errors import MegolmVerificationError
 
 if TYPE_CHECKING:
     from .room import Room
+
+LOG = get_logger()
 
 StateEvT    = TypeVar("StateEvT", bound="StateEvent")
 DecryptInfo = Optional["TimelineDecryptInfo"]
@@ -45,7 +47,7 @@ class TimelineEvent(Event[ContentT]):
         clear.decryption = TimelineDecryptInfo(self, payload, verif_err)
 
         if verif_err:
-            log.warning("Error verifying decrypted event %r\n", clear)
+            LOG.warning("Error verifying decrypted event %r\n", clear)
 
         return clear
 

@@ -1,5 +1,4 @@
 import json
-import logging as log
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -14,6 +13,7 @@ import olm
 
 from ..core.contents import EventContent
 from ..core.types import EventId, RoomId, UserId
+from ..core.utils import get_logger
 from ..devices.device import Device
 from ..devices.events import ToDeviceEvent
 from ..module import JSONClientModule
@@ -28,6 +28,8 @@ if TYPE_CHECKING:
 
 # TODO: https://github.com/matrix-org/matrix-doc/pull/2732 (fallback OTK)
 # TODO: protect against concurrency and saving sessions before sharing
+
+LOG = get_logger()
 
 Payload = Dict[str, Any]
 
@@ -126,7 +128,7 @@ class E2E(JSONClientModule):
         if not devices:
             return
 
-        log.info("Querying devices: %r", devices)
+        LOG.info("Querying devices: %r", devices)
 
         result = await self.client.send_json(
             method = "POST",
@@ -139,14 +141,14 @@ class E2E(JSONClientModule):
         )
 
         if result["failures"]:
-            log.warning("Failed querying some devices: %s", result["failures"])
+            LOG.warning("Failed querying some devices: %s", result["failures"])
 
         for user_id, devs in result["device_keys"].items():
             for device_id, info in devs.items():
                 try:
                     self._handle_queried_device(user_id, device_id, info)
                 except (err.QueriedDeviceError, err.InvalidSignedDict) as e:
-                    log.warning("Rejected queried device %r: %r", info, e)
+                    LOG.warning("Rejected queried device %r: %r", info, e)
 
         await self.save()
 
@@ -214,7 +216,7 @@ class E2E(JSONClientModule):
 
 
     async def handle_to_device_event(self, event: ToDeviceEvent) -> None:
-        log.debug("%s got to-device event: %r", self.client.user_id, event)
+        LOG.debug("%s got to-device event: %r", self.client.user_id, event)
 
         if not isinstance(event.content, RoomKey):
             return
@@ -368,7 +370,7 @@ class E2E(JSONClientModule):
             )
 
             if no_otks:
-                log.warning(
+                LOG.warning(
                     "Didn't get one-time keys for %r, they will not receive"
                     "the megolm keys to decrypt %r",
                     no_otks, room_key,
@@ -432,7 +434,7 @@ class E2E(JSONClientModule):
         if not devices:
             return {}
 
-        log.info("Claiming keys for devices %r", devices)
+        LOG.info("Claiming keys for devices %r", devices)
 
         otk: Dict[str, Dict[str, str]] = {}
         for d in devices:
@@ -445,7 +447,7 @@ class E2E(JSONClientModule):
         )
 
         if result["failures"]:
-            log.warning("Failed claiming some keys: %s", result["failures"])
+            LOG.warning("Failed claiming some keys: %s", result["failures"])
 
         valided: Dict[Device, str] = {}
 
@@ -455,7 +457,7 @@ class E2E(JSONClientModule):
                     dev = self.devices[user_id][device_id]
 
                     if "key" not in key_dict:
-                        log.warning("No key for %r claim: %r", dev, key_dict)
+                        LOG.warning("No key for %r claim: %r", dev, key_dict)
                         continue
 
                     try:
@@ -463,7 +465,7 @@ class E2E(JSONClientModule):
                             key_dict, user_id, device_id, dev.ed25519,
                         )
                     except err.InvalidSignedDict as e:
-                        log.warning(
+                        LOG.warning(
                             "Rejected %r claimed key %r: %r", dev, key_dict, e,
                         )
                     else:

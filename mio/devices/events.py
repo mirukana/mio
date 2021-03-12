@@ -1,4 +1,3 @@
-import logging as log
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Optional
 
@@ -6,11 +5,14 @@ from ..core.contents import ContentT
 from ..core.data import Parent, Runtime
 from ..core.events import Event
 from ..core.types import DictS, UserId
+from ..core.utils import get_logger
 from ..e2e.contents import Olm
 from ..e2e.errors import OlmVerificationError
 
 if TYPE_CHECKING:
     from ..client import Client
+
+LOG = get_logger()
 
 DecryptInfo = Optional["ToDeviceDecryptInfo"]
 
@@ -33,7 +35,7 @@ class ToDeviceEvent(Event[ContentT]):
         clear.decryption = ToDeviceDecryptInfo(self, payload, verif_err)
 
         if verif_err:
-            log.warning("Error verifying decrypted event %r\n", clear)
+            LOG.warning("Error verifying decrypted event %r\n", clear)
 
         return clear
 

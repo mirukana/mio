@@ -1,5 +1,4 @@
 import json
-import logging as log
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Optional, Type, Union
@@ -11,10 +10,12 @@ from .auth import Auth
 from .core.data import JSONFileBase, Runtime
 from .core.errors import ServerError
 from .core.types import HttpUrl, UserId
-from .core.utils import remove_none
+from .core.utils import get_logger, remove_none
 from .e2e.e2e import E2E
 from .rooms.rooms import Rooms
 from .sync import Sync
+
+LOG = get_logger()
 
 
 @dataclass
@@ -167,7 +168,7 @@ class Client(JSONFileBase):
 
         read = await response.read()
 
-        log.debug(
+        LOG.debug(
             "Sent %s %s %r %r\n\nReceived %r\n",
             method, joined_path, parameters, data, read,
         )

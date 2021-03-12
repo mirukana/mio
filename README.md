@@ -31,7 +31,7 @@ mypy mio & flake8 mio
 from mio.client import Client
 from mio.rooms.contents.messages import Text
 from mio.rooms.contents.settings import Encryption
-from devtools import debug
+from rich import print  # pretty printing, installed as a dependency
 
 # Create a new client that saves its state to */tmp/@alice:matrix.org.mio1*:
 client = await Client.login_password(
@@ -46,9 +46,9 @@ client = await Client.login_password(
 await client.sync.once()
 
 # See what rooms we have available, explore a room's state and timeline:
-debug(client.rooms)
-debug(client.rooms["!ex:ample.org"].state)
-debug(client.rooms["!ex:ample.org"].timeline)
+print(client.rooms)
+print(client.rooms["!ex:ample.org"].state)
+print(client.rooms["!ex:ample.org"].timeline)
 
 # Enable encryption in said room, then send a text message:
 await client.rooms["!ex:ample.org"].state.send(Encryption())
@@ -64,5 +64,5 @@ client = await Client.load("/tmp/@alice:matrix.org.mio1")
 # Load at least 20 messages that we received previously in this room.
 # If we get to the end of what we saved locally, ask the server for more:
 await client.rooms["!ex:ample.org"].timeline.load_history(20)
-debug(client.rooms["!ex:ample.org"].timeline)
+print(client.rooms["!ex:ample.org"].timeline)
 ```

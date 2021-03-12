@@ -20,7 +20,7 @@ class Room(JSONFile):
     client:  Parent["Client"] = field(repr=False)
     id:      RoomId
 
-    # Set by Synchronizer.handle_sync
+    # Set by Sync.handle_sync
     invited:              bool               = False
     left:                 bool               = False
     summary_heroes:       Tuple[UserId, ...] = ()

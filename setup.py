@@ -24,20 +24,19 @@ setup(
 
     python_requires  = ">=3.6, <4",
     install_requires = requires("""
-        aiofiles          >= 0.6.0, < 0.7
-        aiohttp           >= 3.7.3, < 4
-        phantom-types     >= 0.7.0, < 0.8
-        python-olm        >= 3.1.3, < 4
-        sortedcollections >= 1.2.1, < 2
-        typingplus        >= 2.2.3, < 3
+        aiofiles          >= 0.6.0,  < 0.7
+        aiohttp           >= 3.7.3,  < 4
+        phantom-types     >= 0.7.0,  < 0.8
+        python-olm        >= 3.1.3,  < 4
+        rich              >= 9.13.0, <10
+        sortedcollections >= 1.2.1,  < 2
+        typingplus        >= 2.2.3,  < 3
 
         dataclasses       >= 0.6,     < 0.7; python_version<'3.7'
         typing-extensions >= 3.7.4.3, < 4;   python_version<'3.9'
     """),
     extras_require = {
         "dev": requires("""
-            devtools >= 0.4.0, < 0.5
-
             mypy                  >= 0.812,  < 0.900
             flake8                >= 3.8.4,  < 4
             flake8-isort          >= 4.0.0,  < 5

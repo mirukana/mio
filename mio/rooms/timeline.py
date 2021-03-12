@@ -1,5 +1,4 @@
 import json
-import logging as log
 from dataclasses import dataclass, field
 from datetime import datetime
 from itertools import groupby
@@ -14,13 +13,15 @@ from ..core.contents import EventContent
 from ..core.data import JSON, IndexableMap, JSONFile, Parent, Runtime
 from ..core.events import InvalidEvent
 from ..core.types import EventId
-from ..core.utils import log_errors, remove_none
+from ..core.utils import get_logger, log_errors, remove_none
 from ..e2e.contents import Megolm
 from .contents.settings import Creation
 from .events import TimelineEvent
 
 if TYPE_CHECKING:
     from .room import Room
+
+LOG = get_logger()
 
 
 @dataclass
@@ -107,7 +108,7 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
                     continue
 
                 async with aiopen(hour_file) as file:
-                    log.debug("Loading events from %s", hour_file)
+                    LOG.debug("Loading events from %s", hour_file)
                     events = json.loads(await file.read())
 
                 self._loaded_files.add(hour_file)

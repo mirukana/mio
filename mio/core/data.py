@@ -63,7 +63,17 @@ class AsyncInit:
 
 
 @dataclass
-class Map(Mapping[KT, VT]):
+class RichFix:
+    """Fix rendering for fields of non-dict Mapping type for rich.print"""
+    def __rich__(self):
+        return replace(self, **{
+            f.name: dict(getattr(self, f.name)) for f in get_fields(self)
+            if isinstance(getattr(self, f.name), Mapping)
+        })
+
+
+@dataclass
+class Map(Mapping[KT, VT], RichFix):
     # _data field must be defined by subclasses
     def __getitem__(self, key: KT) -> VT:
         return self._data[key]  # type: ignore
@@ -89,7 +99,7 @@ class JSONLoadError(MioError):
 
 
 @dataclass
-class JSON:
+class JSON(RichFix):
     aliases: ClassVar[Dict[str, Union[str, Sequence[str]]]] = {}
 
     loaders: ClassVar[Loaders] = {

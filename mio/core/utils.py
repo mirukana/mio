@@ -1,17 +1,26 @@
-import logging as log
-import traceback
+import logging
 from contextlib import contextmanager
 from typing import (
     Generator, Iterator, Mapping, MutableMapping, Tuple, Type, Union,
 )
 
-try:
-    from devtools import debug
-except ModuleNotFoundError:
-    def debug(*args) -> None:
-        log.error("\n".join((repr(a) for a in args)))
+from rich.logging import RichHandler
 
 ErrorCatcher = Union[Type[Exception], Tuple[Type[Exception], ...]]
+
+logging.basicConfig(
+    level    = logging.INFO,
+    format   = "%(message)s",
+    datefmt  = "%T",
+    handlers = [RichHandler(rich_tracebacks=True, log_time_format="%F %T")],
+)
+
+
+def get_logger(name: str = __name__) -> logging.Logger:
+    return logging.getLogger(name)
+
+
+LOG = get_logger()
 
 
 def remove_none(from_dict: dict) -> dict:
@@ -47,12 +56,14 @@ def deep_merge_dict(dict1: MutableMapping, dict2: Mapping) -> None:
 
 @contextmanager
 def log_errors(
-    types: ErrorCatcher = Exception, trace: bool = False,
+    types: ErrorCatcher = Exception,
+    level: int          = logging.WARNING,
+    trace: bool         = False,
 ) -> Iterator[None]:
     try:
         yield None
     except types as e:
         if trace:
-            debug("%s\n" % traceback.format_exc().rstrip())
+            LOG.exception("Caught exception", stacklevel=3)
         else:
-            debug(e)
+            LOG.log(level, repr(e), stacklevel=3)
