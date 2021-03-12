@@ -50,8 +50,8 @@ async def main():
     await client.sync.once()
 
     # See what rooms we have available, explore a room's state and timeline:
-    print(client.rooms)
-    print(client.rooms["!ex:ample.org"].state)
+    print(client.rooms, end="\n\n")
+    print(client.rooms["!ex:ample.org"].state, end="\n\n")
     print(client.rooms["!ex:ample.org"].timeline)
 
     # Enable encryption in said room, then send a text message:
