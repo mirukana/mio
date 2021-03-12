@@ -102,19 +102,20 @@ class JSONLoadError(MioError):
 class JSON(RichFix):
     aliases: ClassVar[Dict[str, Union[str, Sequence[str]]]] = {}
 
-    loaders: ClassVar[Loaders] = {
-        bytes: lambda v, p: v.encode(),
-        datetime: lambda v, p: datetime.fromtimestamp(v / 1000),
-        timedelta: lambda v, p: timedelta(seconds=v / 1000),
-    }
-
+    # Matrix API doesn't like getting floats for time-related stuff
     dumpers: ClassVar[Dumpers] = {
         UUID: lambda self, v: str(v),
         Path: lambda self, v: str(v),
         Enum: lambda self, v: v.value,
         bytes: lambda self, v: v.decode(),
-        datetime: lambda self, v: v.timestamp() * 1000,
-        timedelta: lambda self, v: v.total_seconds() * 1000,
+        datetime: lambda self, v: int(v.timestamp() * 1000),
+        timedelta: lambda self, v: int(v.total_seconds() * 1000),
+    }
+
+    loaders: ClassVar[Loaders] = {
+        bytes: lambda v, p: v.encode(),
+        datetime: lambda v, p: datetime.fromtimestamp(v / 1000),
+        timedelta: lambda v, p: timedelta(seconds=v / 1000),
     }
 
 
