@@ -46,17 +46,21 @@ async def main():
         device_id = "mio1",
     )
 
-    # Do one initial sync with the server:
+    # Do one initial sync with the homeserver and see what rooms we have:
+    await client.sync.once()
+    print(client.rooms, end="\n\n")
+
+    # Create a room, syncing will register it from details given by the server
+    room_id = await client.rooms.create("mio example room")
     await client.sync.once()
 
-    # See what rooms we have available, explore a room's state and timeline:
-    print(client.rooms, end="\n\n")
-    print(client.rooms["!ex:ample.org"].state, end="\n\n")
-    print(client.rooms["!ex:ample.org"].timeline)
+    # Enable encryption in the room and send a text message:
+    await client.rooms[room_id].state.send(Encryption())
+    await client.rooms[room_id].timeline.send(Text("Hello world"))
 
-    # Enable encryption in said room, then send a text message:
-    await client.rooms["!ex:ample.org"].state.send(Encryption())
-    await client.rooms["!ex:ample.org"].timeline.send(Text("Hello world"))
+    # Explore our new room's state and timeline:
+    print(client.rooms[room_id].state, end="\n\n")
+    print(client.rooms[room_id].timeline)
 
 
 asyncio.get_event_loop().run_until_complete(main())
@@ -74,10 +78,11 @@ from rich import print
 async def main():
     client = await Client.load("/tmp/@alice:matrix.org.mio1")
 
-    # Load at least 20 messages that we received previously in this room.
-    # If we get to the end of what we saved locally, ask the server for more:
-    await client.rooms["!ex:ample.org"].timeline.load_history(20)
-    print(client.rooms["!ex:ample.org"].timeline)
+    # For whatever room was loaded first, load at least 20 messages that we 
+    # received previously. If we get to the end of what we saved locally, 
+    # we ask the server for more.
+    await client.rooms[0].timeline.load_history(20)
+    print(client.rooms[0].timeline)
 
 
 asyncio.get_event_loop().run_until_complete(main())

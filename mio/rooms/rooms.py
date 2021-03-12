@@ -1,8 +1,11 @@
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Dict
+from enum import Enum
+from typing import TYPE_CHECKING, Dict, Optional, Sequence, Tuple
 
+from ..core.contents import EventContent
 from ..core.data import IndexableMap, Parent
-from ..core.types import RoomId
+from ..core.types import RoomAlias, RoomId
+from ..core.utils import remove_none
 from ..module import ClientModule
 from .room import Room
 
@@ -40,3 +43,56 @@ class Rooms(ClientModule, IndexableMap[RoomId, Room]):
     @property
     def left(self) -> Dict[RoomId, Room]:
         return {k: v for k, v in self.items() if v.left}
+
+
+    async def create(
+        self,
+        name:              Optional[str]                      = None,
+        topic:             Optional[str]                      = None,
+        alias:             Optional[str]                      = None,
+        invitees:          Sequence[str]                      = (),
+        public:            bool                               = False,
+        direct_chat:       bool                               = False,
+        federate:          bool                               = True,
+        version:           Optional[str]                      = None,
+        preset:            Optional["CreationPreset"]         = None,
+        additional_states: Sequence[Tuple[str, EventContent]] = (),
+    ) -> RoomId:
+
+        if alias and isinstance(alias, RoomAlias):
+            alias = alias.split(":")[0][0:]
+
+        body = {
+            "visibility": "public" if public else "private",
+            "creation_content": {"m.federate": federate},
+            "is_direct": direct_chat,
+            "room_alias_name": alias,
+            "name": name,
+            "topic": topic,
+            "room_version": version,
+            "preset": preset.value if preset else None,
+            "invite": invitees,
+            "initial_state": [
+                {"type": cnt.type, "state_key": state_key, "content": cnt.dict}
+                for state_key, cnt in additional_states
+            ],
+        }
+
+        result = await self.client.send_json(
+            "POST", [*self.client.api, "createRoom"], body=remove_none(body),
+        )
+
+        return result["room_id"]
+
+
+class CreationPreset(Enum):
+    """Room creation presets set default state events when creating a room.
+
+    - `public`: anyone can join the room, except guests (unregistered users)
+    - `private`: make the room invite-only and allow inviting guests
+    - `private_trusted`: gives all members the same power level as the creator
+    """
+
+    public          = "public_chat"
+    private         = "private_chat"
+    private_trusted = "trusted_private_chat"
