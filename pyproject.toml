@@ -1,0 +1,11 @@
+[tool.pytest.ini_options]
+testpaths        = "tests"
+minversion       = "6.2.1"
+required_plugins = ["pytest-asyncio", "pytest-benchmark"]
+addopts          = [
+    "--strict-config",
+    "--strict-markers",
+    "--failed-first",
+    "--new-first",
+    "--benchmark-disable",
+]

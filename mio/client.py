@@ -1,7 +1,7 @@
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Optional, Type, Union
+from typing import Any, Dict, List, Optional, Type, Union
 from urllib.parse import quote
 
 from aiohttp import ClientResponseError, ClientSession
@@ -180,6 +180,9 @@ class Client(JSONFileBase):
         try:
             response.raise_for_status()
         except ClientResponseError as e:
+            if not isinstance(obj, Client):
+                await session.close()
+
             raise ServerError.from_response(
                 reply      = read,
                 http_code  = e.status,
@@ -189,6 +192,9 @@ class Client(JSONFileBase):
                 parameters = parameters,
                 data       = data,
             )
+
+        if not isinstance(obj, Client):
+            await session.close()
 
         return read
 

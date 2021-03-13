@@ -47,8 +47,14 @@ setup(
             flake8-logging-format >= 0.6.0,  < 0.7
             flake8-pie            >= 0.6.1,  < 0.7
             flake8-quotes         >= 3.2.0,  < 4
-            pep8-naming           >= 0.11.1, <0.12
+            matrix-synapse        >= 1.29.0, < 2
             mypy                  >= 0.812,  < 0.900
+            pep8-naming           >= 0.11.1, <0.12
+            pytest                >= 6.2.1,  < 7
+            pytest-asyncio        >= 0.14.0, < 0.15
+            pytest-benchmark      >= 3.2.3,  < 4
+            pytest-clarity        >= 0.3.0,  < 0.4
+            ruamel.yaml           >= 0.16,   < 0.17
         """),
     },
 

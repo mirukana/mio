@@ -23,7 +23,11 @@ To run checks, from the project's root folder:
 
 ```sh
 mypy mio & flake8 mio
+python3 -m pytest
 ```
+
+A `--keep-servers` or `-K` option is available for pytest to keep Synapse
+running after the command exits, so that tests can start faster next time.
 
 ## Examples
 
