@@ -137,7 +137,7 @@ class Client(JSONFileBase):
 
 
     async def send(
-        obj:        Union[Type["Client"], "Client"],
+        obj:        Union[Type["Client"], "Client"],  # noqa
         method:     str,
         path:       List[str],
         parameters: Optional[Dict[str, Any]] = None,
@@ -190,7 +190,7 @@ class Client(JSONFileBase):
 
 
     async def send_json(
-        obj:        Union[Type["Client"], "Client"],
+        obj:        Union[Type["Client"], "Client"],  # noqa
         method:     str,
         path:       List[str],
         parameters: Optional[Dict[str, Any]] = None,

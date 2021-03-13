@@ -47,6 +47,7 @@ setup(
             flake8-logging-format >= 0.6.0,  < 0.7
             flake8-pie            >= 0.6.1,  < 0.7
             flake8-quotes         >= 3.2.0,  < 4
+            pep8-naming           >= 0.11.1, <0.12
             mypy                  >= 0.812,  < 0.900
         """),
     },

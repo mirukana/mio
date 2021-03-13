@@ -431,7 +431,7 @@ class JSONFile(JSONFileBase, AsyncInit):
 
 
     @classmethod
-    def get_path(self, parent, **kwargs) -> Path:
+    def get_path(cls, parent, **kwargs) -> Path:
         raise NotImplementedError()
 
 
