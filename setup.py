@@ -37,17 +37,17 @@ setup(
     """),
     extras_require = {
         "dev": requires("""
-            mypy                  >= 0.812,  < 0.900
             flake8                >= 3.8.4,  < 4
-            flake8-isort          >= 4.0.0,  < 5
             flake8-bugbear        >= 20.1.4, < 21
+            flake8-colors         >= 0.1.6,  < 0.2
             flake8-commas         >= 2.0.0,  < 3
             flake8-comprehensions >= 3.3.0,  < 4
             flake8-executable     >= 2.0.4,  < 3
+            flake8-isort          >= 4.0.0,  < 5
             flake8-logging-format >= 0.6.0,  < 0.7
             flake8-pie            >= 0.6.1,  < 0.7
             flake8-quotes         >= 3.2.0,  < 4
-            flake8-colors         >= 0.1.6,  < 0.2
+            mypy                  >= 0.812,  < 0.900
         """),
     },
 
