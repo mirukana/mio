@@ -56,7 +56,12 @@ class Client(JSONFileBase):
 
     @classmethod
     async def load(cls, base_dir: Union[Path, str]) -> "Client":
-        data = await cls._read_file(Path(base_dir) / "client.json")
+        file = Path(base_dir) / "client.json"
+
+        if not file.exists():
+            raise FileNotFoundError(f"{file} does not exist")
+
+        data = await cls._read_file(file)
         return await cls.from_dict({**data, "base_dir": base_dir}, None)
 
 
