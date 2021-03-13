@@ -2,6 +2,17 @@
 # https://flake8.pycqa.org/en/latest/user/configuration.html
 
 [flake8]
+# E, W, F, C9: https://flake8.pycqa.org/en/2.6.0/warnings.html
+# B0: https://github.com/PyCQA/flake8-bugbear#list-of-warnings
+# C8: https://github.com/PyCQA/flake8-commas#errors
+# C4: https://github.com/adamchainz/flake8-comprehensions#rules
+# EXE: https://github.com/xuhdev/flake8-executable#flake8-executable
+# I0: https://github.com/gforcada/flake8-isort#error-codes
+# G: https://github.com/globality-corp/flake8-logging-format#violations-detected
+# PIE: https://github.com/sbdchd/flake8-pie#flake8-pie--
+# Q0: https://github.com/zheller/flake8-quotes#warnings
+select = E, W, F, C9, B0, C8, C4, EXE, I0, G, PIE, Q0
+
 # E131: continuation line unaligned for hanging indent
 # E301: when method is after a commented line + one blank line
 # E302: expected 2 blank lines, found 1 when using @dataclass
@@ -9,7 +20,9 @@
 # W504: when line breaks occur after a binary operator
 # A003: when class attribute name is the same as a builtin
 # E402: when a module import isn't at the start of the file
-ignore = E131, E221, E241, E251, E301, E302, E303, W504, A003, E402
+# G200: using exceptions in logged string instead of logger.exception()
+ignore = E131, E221, E241, E251, E301, E302, E303, W504, A003, E402, G200
+
 
 max-complexity = 99
 inline-quotes  = "
