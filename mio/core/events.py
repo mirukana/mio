@@ -22,16 +22,17 @@ class Event(JSON, Generic[ContentT]):
 
     @property
     def dict(self) -> DictS:
-        dct = self.source
+        dct         = self.source
+        dct["type"] = self.type
         deep_merge_dict(dct, super().dict)
         return dct
 
     @classmethod
     def from_dict(cls: Type[EventT], data: DictS, parent) -> EventT:
         content = cls._get_content(data, data.get("content", {}))
+        data    = {**data, "source": data, "content": content}
 
         try:
-            data = {**data, "source": data, "content": content}
             return super().from_dict(data, parent)
         except JSONLoadError as e:
             LOG.error("Failed parsing %s from %r: %r", cls.__name__, data, e)

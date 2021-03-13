@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Optional, Type, Union
 from urllib.parse import quote
 
-import aiohttp
+from aiohttp import ClientResponseError, ClientSession
 
 from .auth import Auth
 from .core.data import JSONFileBase, Runtime
@@ -20,7 +20,7 @@ LOG = get_logger()
 
 @dataclass
 class Client(JSONFileBase):
-    _session: ClassVar[aiohttp.ClientSession] = aiohttp.ClientSession()
+    _session: ClassVar[Runtime[ClientSession]] = ClientSession()
 
     base_dir:     Runtime[Path]
     server:       HttpUrl
@@ -175,7 +175,7 @@ class Client(JSONFileBase):
 
         try:
             response.raise_for_status()
-        except aiohttp.ClientResponseError as e:
+        except ClientResponseError as e:
             raise ServerError.from_response(
                 reply      = read,
                 http_code  = e.status,

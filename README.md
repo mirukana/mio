@@ -57,8 +57,9 @@ async def main():
     # Enable encryption in the room and send a text message:
     await client.rooms[room_id].state.send(Encryption())
     await client.rooms[room_id].timeline.send(Text("Hello world"))
+    await client.sync.once()
 
-    # Explore our new room's state and timeline:
+    # Explore our room's state and timeline:
     print(client.rooms[room_id].state, end="\n\n")
     print(client.rooms[room_id].timeline)
 

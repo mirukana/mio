@@ -1,6 +1,6 @@
 import json
 import sys
-from dataclasses import dataclass
+from dataclasses import Field, dataclass
 from dataclasses import fields as get_fields
 from dataclasses import is_dataclass, replace
 from datetime import datetime, timedelta
@@ -8,7 +8,7 @@ from enum import Enum
 from pathlib import Path
 from typing import (
     Any, Callable, ClassVar, Collection, Dict, ForwardRef, Iterator, Mapping,
-    Optional, Sequence, Type, TypeVar, Union,
+    Optional, Sequence, Tuple, Type, TypeVar, Union,
 )
 from uuid import UUID
 
@@ -100,10 +100,10 @@ class JSONLoadError(MioError):
 
 @dataclass
 class JSON(RichFix):
-    aliases: ClassVar[Dict[str, Union[str, Sequence[str]]]] = {}
+    aliases: ClassVar[Runtime[Dict[str, Union[str, Sequence[str]]]]] = {}
 
     # Matrix API doesn't like getting floats for time-related stuff
-    dumpers: ClassVar[Dumpers] = {
+    dumpers: ClassVar[Runtime[Dumpers]] = {
         UUID: lambda self, v: str(v),
         Path: lambda self, v: str(v),
         Enum: lambda self, v: v.value,
@@ -112,7 +112,7 @@ class JSON(RichFix):
         timedelta: lambda self, v: int(v.total_seconds() * 1000),
     }
 
-    loaders: ClassVar[Loaders] = {
+    loaders: ClassVar[Runtime[Loaders]] = {
         bytes: lambda v, p: v.encode(),
         datetime: lambda v, p: datetime.fromtimestamp(v / 1000),
         timedelta: lambda v, p: timedelta(seconds=v / 1000),
@@ -121,7 +121,7 @@ class JSON(RichFix):
 
     @property
     def parent(self) -> Optional["JSON"]:
-        for f in get_fields(self):
+        for f in fields_and_classvars(self):
             if annotation_is_parent(f.type):
                 return getattr(self, f.name)
 
@@ -132,12 +132,11 @@ class JSON(RichFix):
     def dict(self) -> DictS:
         data: DictS = {}
 
-        for f in get_fields(self):
+        for f in fields_and_classvars(self):
             value          = getattr(self, f.name)
             unset_optional = f.default is None and value is None
-            is_classvar    = getattr(f.type, "__origin__", None) is ClassVar
 
-            if is_classvar or annotation_is_runtime(f.type) or unset_optional:
+            if annotation_is_runtime(f.type) or unset_optional:
                 continue
 
             path = self.aliases.get(f.name, f.name)
@@ -166,9 +165,6 @@ class JSON(RichFix):
         fields = {}
 
         for f in get_fields(cls):
-            if getattr(f.type, "__origin__", None) is ClassVar:
-                continue
-
             if parent and annotation_is_parent(f.type):
                 fields[f.name] = parent
                 continue
@@ -221,9 +217,8 @@ class JSON(RichFix):
         if is_dataclass(value):
             return {
                 f.name: self._dump(getattr(value, f.name), f.name)
-                for f in get_fields(value)
-                if not getattr(f.type, "__origin__", None) is ClassVar and
-                not annotation_is_runtime(f.type) and
+                for f in fields_and_classvars(value)
+                if not annotation_is_runtime(f.type) and
                 not (f.default is None and getattr(value, f.name) is None)
             }
 
@@ -275,9 +270,7 @@ class JSON(RichFix):
                     parent if parent and annotation_is_parent(f.type) else
                     cls._load(f.type, value[f.name], field_name=f.name)
 
-                for f in get_fields(typ)
-                if getattr(f.type, "__origin__", None) is not ClassVar and
-                f.name in value
+                for f in get_fields(typ) if f.name in value
             })
 
         value = cls._auto_cast(typ, value)
@@ -451,6 +444,8 @@ class JSONFile(JSONFileBase, AsyncInit):
 
 
 def annotation_is_runtime(ann: Any) -> bool:
+    if get_origin(ann) is ClassVar and ann.__args__:
+        ann = ann.__args__[0]
     return get_origin(ann) is Annotated and _Runtime in ann.__metadata__
 
 
@@ -460,6 +455,10 @@ def annotation_is_parent(ann: Any) -> bool:
 
 def unwrap_annotated(ann: Any) -> Any:
     return ann.__origin__ if get_origin(ann) is Annotated else ann
+
+
+def fields_and_classvars(datacls) -> Tuple[Field, ...]:
+    return tuple(datacls.__dataclass_fields__.values())
 
 
 def is_subclass(value: Any, typ: Any) -> bool:

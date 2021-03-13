@@ -13,7 +13,7 @@ ContentT = TypeVar("ContentT", bound="EventContent")
 
 @dataclass
 class EventContent(JSON):
-    type: ClassVar[Optional[str]] = None
+    type: ClassVar[Runtime[Optional[str]]] = None
 
     @classmethod
     def from_dict(

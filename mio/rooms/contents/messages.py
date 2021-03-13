@@ -6,7 +6,8 @@ from ...core.contents import EventContent
 
 @dataclass
 class Message(EventContent):
-    type:    ClassVar[Optional[str]] = "m.room.message"
+    type = "m.room.message"
+
     msgtype: ClassVar[Optional[str]] = None
 
     body: str
