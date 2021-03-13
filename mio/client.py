@@ -20,8 +20,6 @@ LOG = get_logger()
 
 @dataclass
 class Client(JSONFileBase):
-    _session: ClassVar[Runtime[ClientSession]] = ClientSession()
-
     base_dir:     Runtime[Path]
     server:       HttpUrl
     user_id:      UserId
@@ -32,6 +30,10 @@ class Client(JSONFileBase):
     rooms: Runtime[Rooms] = field(init=False, repr=False)
     sync:  Runtime[Sync]  = field(init=False, repr=False)
     e2e:   Runtime[E2E]   = field(init=False, repr=False)
+
+    _session: Runtime[ClientSession] = field(
+        init=False, repr=False, default_factory=ClientSession,
+    )
 
 
     async def __ainit__(self) -> None:
@@ -158,7 +160,9 @@ class Client(JSONFileBase):
                     value, ensure_ascii=False, separators=(",", ":"),
                 )
 
-        response = await obj._session.request(
+        session = obj._session if isinstance(obj, Client) else ClientSession()
+
+        response = await session.request(
             method  = method,
             url     = f"{path[0]}/{url_path}",
             params  = parameters,
