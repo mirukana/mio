@@ -55,6 +55,30 @@ class SynapseHandle:
             config["listeners"][0]["bind_addresses"] = [self.host]
             config["listeners"][0]["port"]           = self.port
 
+            # Disable rate limits which lead to 429 errors
+            no_limits = {"per_second": 9_999_999, "burst_count": 9_999_999}
+
+            config.update({
+                "rc_message": no_limits,
+                "rc_registration": no_limits,
+                "rc_login": {
+                    "address": no_limits,
+                    "account": no_limits,
+                    "failed_attempts": no_limits,
+                },
+                "rc_admin_redaction": no_limits,
+                "rc_joins": {
+                    "local": no_limits,
+                    "remote": no_limits,
+                },
+                "rc_3pid_validation": no_limits,
+                "rc_invites": {
+                    "per_room": no_limits,
+                    "per_user": no_limits,
+                },
+            })
+
+            # Set log file path
             with edit_yaml(config["log_config"]) as log_config:
                 log_config["handlers"]["file"]["filename"] = str(self.log)
 
