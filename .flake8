@@ -20,8 +20,11 @@ select = E, W, F, C9, B0, C8, C4, EXE, I0, G, PIE, Q0
 # W504: when line breaks occur after a binary operator
 # A003: when class attribute name is the same as a builtin
 # E402: when a module import isn't at the start of the file
+# PIE786: catching (Base)Exception in try/except
 # G200: using exceptions in logged string instead of logger.exception()
-ignore = E131, E221, E241, E251, E301, E302, E303, W504, A003, E402, G200
+ignore =
+    E131, E221, E241, E251, E301, E302, E303, W504, A003, E402, PIE786,
+    G200
 
 
 max-complexity = 99

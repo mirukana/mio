@@ -360,7 +360,7 @@ class JSON(RichFix):
         if field_name and field_name in cls.loaders:
             try:
                 return cls.loaders[field_name](value, parent)
-            except Exception as e:  # noqa
+            except Exception as e:
                 raise JSONLoadError(cls, field_name, annotation, value, e)
 
         typ = cls._get_loadable_type(annotation, value)
@@ -370,7 +370,7 @@ class JSON(RichFix):
         if typ in cls.loaders:
             try:
                 return cls.loaders[typ](value, parent)
-            except Exception as e:  # noqa
+            except Exception as e:
                 raise JSONLoadError(cls, typ, value, e)
 
         # This won't work for types like List, Dict, etc
@@ -378,7 +378,7 @@ class JSON(RichFix):
             if parent_cls in cls.loaders:
                 try:
                     return cls.loaders[parent_cls](value, parent)
-                except Exception as e:  # noqa
+                except Exception as e:
                     raise JSONLoadError(cls, parent, value, e)
 
         return value
@@ -391,7 +391,7 @@ class JSON(RichFix):
         if typ:
             try:
                 return typingplus.cast(typ, value)
-            except Exception as e:  # noqa:
+            except Exception as e:
                 raise JSONLoadError(cls, annotation, value, e)
 
         return value
