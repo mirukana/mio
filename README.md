@@ -40,6 +40,10 @@ from mio.rooms.contents.settings import Encryption
 from rich import print  # pretty printing, installed as a dependency
 
 
+def on_text_message(room, event):
+    print(f"{room.id}: {event.sender}: {event.content.body}")
+
+
 async def main():
     # Create a new client that saves its state to /tmp/@alice:matrix.org.mio1:
     client = await Client.login_password(
@@ -56,6 +60,9 @@ async def main():
     # Create a room, syncing will register it from details given by the server
     room_id = await client.rooms.create("mio example room")
     await client.sync.once()
+
+    # Register a function that will be called when we receive Text events:
+    client.rooms.callbacks[Text].add(on_text_message)
 
     # Enable encryption in the room and send a text message:
     await client.rooms[room_id].state.send(Encryption())
