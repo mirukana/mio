@@ -1,10 +1,11 @@
 [tool.pytest.ini_options]
 testpaths        = "tests"
 minversion       = "6.2.1"
-required_plugins = ["pytest-asyncio"]
+required_plugins = ["pytest-asyncio", "pytest-xdist"]
 addopts          = [
     "--strict-config",
     "--strict-markers",
     "--failed-first",
     "--new-first",
+    "--numprocesses=auto",
 ]

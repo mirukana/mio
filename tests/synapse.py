@@ -28,6 +28,11 @@ class SynapseHandle:
 
 
     @property
+    def mio_save_file(self) -> Path:
+        return self.dir / "mio.host.port"
+
+
+    @property
     def running(self) -> bool:
         return (self.dir / "homeserver.pid").exists()
 
@@ -35,6 +40,17 @@ class SynapseHandle:
     @property
     def url(self) -> HttpUrl:
         return f"http://{self.host}:{self.port}"  # type: ignore
+
+
+    def __post_init__(self) -> None:
+        if self.mio_save_file.exists():
+            self.host, port = self.mio_save_file.read_text().splitlines()
+            self.port       = int(port)
+        else:
+            self.create()
+
+        if not self.running:
+            run_command(["synctl", "start", str(self.config)])
 
 
     def create(self) -> None:
@@ -49,6 +65,8 @@ class SynapseHandle:
         ])
 
         self.port = find_free_port() if self.port == 0 else self.port
+
+        self.mio_save_file.write_text(f"{self.host}\n{self.port}")
 
         with edit_yaml(self.config) as config:
             # Remove ::1, it causes problems on systems with IPv6 disabled
@@ -81,18 +99,6 @@ class SynapseHandle:
             # Set log file path
             with edit_yaml(config["log_config"]) as log_config:
                 log_config["handlers"]["file"]["filename"] = str(self.log)
-
-
-    def start(self) -> None:
-        if self.config.exists():
-            with edit_yaml(self.config) as config:
-                self.host = config["listeners"][0]["bind_addresses"][0]
-                self.port = config["listeners"][0]["port"]
-        else:
-            self.create()
-
-        if not self.running:
-            run_command(["synctl", "start", str(self.config)])
 
 
     def stop(self) -> None:

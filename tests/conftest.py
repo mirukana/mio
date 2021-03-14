@@ -8,16 +8,8 @@ from pytest import fixture
 from synapse import SynapseHandle
 
 
-def pytest_addoption(parser):
-    parser.addoption(
-        "-S",
-        "--keep-servers",
-        action = "store_true",
-        help   = (
-            "Keep Synapse running after tests end to reduce the startup time "
-            "of next tests"
-        ),
-    )
+def pytest_configure(config):
+    SynapseHandle()
 
 
 async def get_client(synapse: SynapseHandle, path: Path, name: str) -> Client:
@@ -31,14 +23,9 @@ def read_json(path: Union[Path, str]) -> dict:
     return json.loads(Path(path).read_text())
 
 
-@fixture(scope="session")
-def synapse(request):
-    server = SynapseHandle()
-    server.start()
-    yield server
-
-    if not request.config.getoption("--keep-servers"):
-        server.destroy()
+@fixture
+def synapse():
+    return SynapseHandle()
 
 
 @fixture
@@ -53,6 +40,7 @@ async def bob(synapse, tmp_path):
     client = await get_client(synapse, tmp_path, "bob")
     yield client
     await client._session.close()
+
 
 @fixture
 async def room(alice):

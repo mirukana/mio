@@ -26,8 +26,8 @@ mypy mio & flake8 mio
 python3 -m pytest
 ```
 
-A `--keep-servers` or `-K` option is available for pytest to keep Synapse
-running after the command exits, so that tests can start faster next time.
+Tests leave a Synapse server (which has a long startup time) running,
+use `synctl stop tests/synapse/homeserver.yaml` to stop it.
 
 ## Examples
 
