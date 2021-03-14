@@ -2,9 +2,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Tuple
 
+from ..core.contents import EventContent
 from ..core.data import JSONFile, Parent, Runtime
 from ..core.events import Event
 from ..core.types import RoomId, UserId
+from ..core.utils import make_awaitable
 from .contents.users import Member
 from .events import StateBase, TimelineEvent
 from .state import RoomState
@@ -62,3 +64,21 @@ class Room(JSONFile):
         if isinstance(content, Member) and content.left:
             await self.client.e2e.drop_outbound_group_sessions(self.id)
             await self.save()
+
+        for annotation, callbacks in self.client.rooms.callbacks.items():
+            ann_type = getattr(annotation, "__origin__", annotation)
+
+            if issubclass(ann_type, EventContent):
+                event_type   = Event
+                content_type = ann_type
+            else:
+                event_type   = ann_type
+                default      = (EventContent,)
+                content_type = getattr(annotation, "__args__", default)[0]
+
+            event_matches   = isinstance(event, event_type)
+            content_matches = isinstance(event.content, content_type)
+
+            if event_matches and content_matches:
+                for cb in callbacks:
+                    await make_awaitable(cb(self, event))
