@@ -19,7 +19,7 @@ from .errors import MioError
 from .types import DictS, NoneType, T
 from .utils import deep_find_parent_classes
 
-if sys.version_info >= (3, 9):
+if sys.version_info <= (3, 9):
     from typing_extensions import Annotated, get_origin
 else:
     from typing import Annotated, get_origin
