@@ -94,6 +94,13 @@ class SynapseHandle:
                     "per_room": no_limits,
                     "per_user": no_limits,
                 },
+
+                # SQLite sucks! Reduce HDD trashing and speed up tests by 2.5x
+                # by using an in-memory DB
+                "database": {
+                    "name": "sqlite3",
+                    "args": {"database": ":memory:"},
+                },
             })
 
             # Set log file path
