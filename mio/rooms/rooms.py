@@ -1,9 +1,13 @@
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Dict, Optional, Sequence, Tuple
+from typing import (
+    TYPE_CHECKING, Callable, DefaultDict, Dict, Optional, Sequence, Set, Tuple,
+    Type,
+)
 
-from ..core.contents import EventContent
+from ..core.contents import ContentT, EventContent
 from ..core.data import IndexableMap, Parent
+from ..core.events import Event
 from ..core.types import RoomAlias, RoomId
 from ..core.utils import remove_none
 from ..module import ClientModule
@@ -12,11 +16,17 @@ from .room import Room
 if TYPE_CHECKING:
     from ..client import Client
 
+EventT      = Type[Event[ContentT]]
+CallbackSet = Set[Callable[[Room, Event], None]]
+
 
 @dataclass
 class Rooms(ClientModule, IndexableMap[RoomId, Room]):
-    client: Parent["Client"]   = field(repr=False)
-    _data:  Dict[RoomId, Room] = field(default_factory=dict)
+    client:    Parent["Client"]          = field(repr=False)
+    _data:     Dict[RoomId, Room]        = field(default_factory=dict)
+    callbacks: Dict[EventT, CallbackSet] = field(
+        default_factory = lambda: DefaultDict(set),
+    )
 
 
     @classmethod

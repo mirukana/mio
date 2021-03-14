@@ -53,3 +53,9 @@ async def bob(synapse, tmp_path):
     client = await get_client(synapse, tmp_path, "bob")
     yield client
     await client._session.close()
+
+@fixture
+async def room(alice):
+    room_id = await alice.rooms.create("Room")
+    await alice.sync.once()
+    return alice.rooms[room_id]
