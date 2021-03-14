@@ -54,7 +54,7 @@ def deep_merge_dict(dict1: MutableMapping, dict2: Mapping) -> None:
         else:
             dict1[k] = dict2[k]
 
-async def sync_run(result):
+async def make_awaitable(result):
     return await result if iscoroutine(result) else result
 
 

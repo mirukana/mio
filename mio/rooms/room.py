@@ -6,7 +6,7 @@ from ..core.contents import EventContent
 from ..core.data import JSONFile, Parent, Runtime
 from ..core.events import Event
 from ..core.types import RoomId, UserId
-from ..core.utils import sync_run
+from ..core.utils import make_awaitable
 from .contents.users import Member
 from .events import StateBase, TimelineEvent
 from .state import RoomState
@@ -65,21 +65,20 @@ class Room(JSONFile):
             await self.client.e2e.drop_outbound_group_sessions(self.id)
             await self.save()
 
-        callbacks = self.client.rooms.callbacks
+        for annotation, callbacks in self.client.rooms.callbacks.items():
+            ann_type = getattr(annotation, "__origin__", annotation)
 
-        for annotation, cb_set in callbacks.items():
-            event_type   = Event
-            content_type = getattr(annotation, "__args__", (EventContent, ))[0]
-            annotation   = getattr(annotation, "__origin__", annotation)
-
-            if issubclass(annotation, EventContent):
-                content_type = annotation
+            if issubclass(ann_type, EventContent):
+                event_type   = Event
+                content_type = ann_type
             else:
-                event_type = annotation
+                event_type   = ann_type
+                default      = (EventContent,)
+                content_type = getattr(annotation, "__args__", default)[0]
 
-            event_match   = isinstance(event, event_type)
-            content_match = isinstance(event.content, content_type)
+            event_matches   = isinstance(event, event_type)
+            content_matches = isinstance(event.content, content_type)
 
-            if event_match and content_match:
-                for cb in cb_set:
-                    await sync_run(cb(self, event))
+            if event_matches and content_matches:
+                for cb in callbacks:
+                    await make_awaitable(cb(self, event))
