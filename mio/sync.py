@@ -146,9 +146,9 @@ class Sync(JSONClientModule):
                         with suppress(InvalidEvent):
                             users.add(event["sender"])
 
-        await self.client.e2e.query_devices({u: [] for u in users})
+        await self.client.devices.query({u: [] for u in users})
 
-        coro = self.client.e2e.handle_to_device_event
+        coro = self.client.devices.handle_event
         await events_call(sync, "to_device", ToDeviceEvent, coro)
 
         # events_call(sync, "account_data", noop)  # TODO

@@ -11,6 +11,7 @@ from .core.data import JSONFileBase, Runtime
 from .core.errors import ServerError
 from .core.types import HttpUrl, UserId
 from .core.utils import get_logger, remove_none
+from .devices.devices import Devices
 from .e2e.e2e import E2E
 from .rooms.rooms import Rooms
 from .sync import Sync
@@ -26,10 +27,11 @@ class Client(JSONFileBase):
     access_token: str
     device_id:    str
 
-    auth:  Runtime[Auth]  = field(init=False, repr=False)
-    rooms: Runtime[Rooms] = field(init=False, repr=False)
-    sync:  Runtime[Sync]  = field(init=False, repr=False)
-    e2e:   Runtime[E2E]   = field(init=False, repr=False)
+    auth:    Runtime[Auth]    = field(init=False, repr=False)
+    rooms:   Runtime[Rooms]   = field(init=False, repr=False)
+    sync:    Runtime[Sync]    = field(init=False, repr=False)
+    e2e:     Runtime[E2E]     = field(init=False, repr=False)
+    devices: Runtime[Devices] = field(init=False, repr=False)
 
     _session: Runtime[ClientSession] = field(
         init=False, repr=False, default_factory=ClientSession,
@@ -37,10 +39,11 @@ class Client(JSONFileBase):
 
 
     async def __ainit__(self) -> None:
-        self.auth  = await Auth.load(self)
-        self.rooms = await Rooms.load(self)
-        self.sync  = await Sync.load(self)
-        self.e2e   = await E2E.load(self)
+        self.auth    = await Auth.load(self)
+        self.rooms   = await Rooms.load(self)
+        self.sync    = await Sync.load(self)
+        self.e2e     = await E2E.load(self)
+        self.devices = await Devices.load(self)
         await self.save()
 
 

@@ -2,9 +2,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict
 
 from ..core.errors import MioError
-from ..devices.device import Device
 
 if TYPE_CHECKING:
+    from ..devices.device import Device
     from .contents import Olm
 
 
@@ -21,29 +21,6 @@ class VerificationError(E2EModuleError):
 @dataclass
 class DecryptionError(E2EModuleError):
     pass
-
-
-@dataclass
-class QueriedDeviceError(E2EModuleError):
-    pass
-
-
-@dataclass
-class QueriedDeviceUserIdMismatch(QueriedDeviceError):
-    top_level_user_id: str
-    info_user_id:      str
-
-
-@dataclass
-class QueriedDeviceIdMismatch(QueriedDeviceError):
-    top_level_device_id: str
-    info_device_id:      str
-
-
-@dataclass
-class QueriedDeviceEd25519Mismatch(QueriedDeviceError):
-    saved_ed25519: str
-    info_ed25519:  str
 
 
 @dataclass

@@ -20,7 +20,7 @@ async def test_logout_all(alice: Client, tmp_path: Path):
         tmp_path, alice.server, alice.user_id, "test", "d2",
     )
 
-    assert len(alice2.e2e.devices[alice.user_id]) == 2
+    assert len(alice2.devices[alice.user_id]) == 2
     await alice.auth.logout_all_devices()
 
     with raises(MatrixError):
