@@ -68,7 +68,7 @@ class RichFix:
     def __rich__(self):
         return replace(self, **{
             f.name: dict(getattr(self, f.name)) for f in get_fields(self)
-            if isinstance(getattr(self, f.name), Mapping)
+            if isinstance(getattr(self, f.name), Mapping) and f.init
         })
 
 
