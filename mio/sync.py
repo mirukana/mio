@@ -3,12 +3,12 @@ from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import (
-    TYPE_CHECKING, Any, Callable, Dict, Optional, Set, Type, Union,
+    TYPE_CHECKING, Any, Awaitable, Callable, Dict, Optional, Set, Type, Union,
 )
 
 from .core.events import Event, InvalidEvent
 from .core.types import RoomId, UserId
-from .core.utils import log_errors, remove_none
+from .core.utils import get_logger, log_errors, make_awaitable, remove_none
 from .devices.events import ToDeviceEvent
 from .e2e.contents import Megolm, Olm
 from .e2e.errors import DecryptionError
@@ -20,7 +20,10 @@ from .rooms.timeline import TimelineEvent
 if TYPE_CHECKING:
     from .client import Client
 
-FilterType = Union[None, str, Dict[str, Any]]
+LOG = get_logger()
+
+FilterType       = Union[None, str, Dict[str, Any]]
+ExceptionHandler = Callable[[Exception], Optional[Awaitable[None]]]
 
 
 @dataclass
@@ -64,20 +67,31 @@ class Sync(JSONClientModule):
 
     async def loop(
         self,
-        timeout:                     float          = 10,
-        sync_filter:                 FilterType     = None,
-        first_sync_filter:           FilterType     = None,
-        since:                       Optional[str]  = None,
-        full_state:                  Optional[bool] = None,
-        set_presence:                Optional[str]  = None,
-        sleep_seconds_between_syncs: float          = 1,
+        timeout:             float                      = 10,
+        sync_filter:         FilterType                 = None,
+        first_sync_filter:   FilterType                 = None,
+        since:               Optional[str]              = None,
+        full_state:          Optional[bool]             = None,
+        set_presence:        Optional[str]              = None,
+        sleep_between_syncs: float                      = 1,
+        exception_handler:   Optional[ExceptionHandler] = None,
     ) -> None:
 
-        await self.once(0, first_sync_filter, since, full_state, set_presence)
+        first_run         = True
+        exception_handler = exception_handler or (lambda _: None)
 
         while True:
-            await self.once(timeout, sync_filter, None, None, set_presence)
-            await asyncio.sleep(sleep_seconds_between_syncs)
+            use_filter = first_sync_filter if first_run else sync_filter
+
+            try:
+                await self.once(timeout, use_filter, None, None, set_presence)
+            except Exception as e:
+                LOG.exception("Error in server sync loop")
+                await make_awaitable(exception_handler(e))
+            else:
+                first_run = False
+
+            await asyncio.sleep(sleep_between_syncs)
 
 
     async def handle_sync(self, sync: Dict[str, Any]) -> None:
