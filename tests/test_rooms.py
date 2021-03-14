@@ -1,43 +1,48 @@
 from pytest import mark
 
 from mio.client import Client
-from mio.rooms.contents.messages import Text
-from mio.rooms.contents.settings import Encryption, Name
+from mio.rooms.contents.messages import Emote, Text
+from mio.rooms.contents.settings import CanonicalAlias, Name, Topic
+from mio.rooms.events import StateEvent, TimelineEvent
 from mio.rooms.room import Room
-from mio.rooms.state import StateEvent
 
 pytestmark = mark.asyncio
 
 
-async def test_text_callback(alice: Client, room: Room):
+async def test_timeline_event_callback(alice: Client, room: Room):
     got = []
-
-    async def callback(*args):
-        got.extend(args)
-
-    alice.rooms.callbacks[Text].add(lambda *args: got.extend(args))
-    alice.rooms.callbacks[Text].add(callback)
+    cb  = lambda r, e: got.extend([r, type(e.content)])  # noqa
+    alice.rooms.callbacks[TimelineEvent].add(cb)
 
     await room.timeline.send(Text("This is a test"))
+    await room.timeline.send(Emote("tests"))
+    # We parse a corresponding timeline event on sync for new states
+    await room.state.send(CanonicalAlias())
     await alice.sync.once()
-
-    assert all(r == room for r in got[0::2])
-    assert all(isinstance(e.content, Text) for e in got[1::2])
+    assert got == [room, Text, room, Emote, room, CanonicalAlias]
 
 
-async def test_state_event_callback(alice: Client, room: Room):
+async def test_async_and_content_callback(alice: Client, room: Room):
     got = []
 
-    def extend_got(*args):
-        got.extend(args)
+    async def cb(room, event):
+        got.extend([room, type(event.content)])
 
-    alice.rooms.callbacks[StateEvent].add(extend_got)
-    alice.rooms.callbacks[StateEvent[Name]].add(extend_got)
+    alice.rooms.callbacks[Name].add(cb)
 
-    await room.state.send(Encryption())
-    await room.state.send(Name("This is a test name"))
+    # We will parse a timeline and state version of this event on sync
+    await room.state.send(Name("Test room"))
     await alice.sync.once()
+    assert got == [room, Name, room, Name]
 
-    assert all(r == room for r in got[0::2])
-    assert all(type(e) == StateEvent for e in got[1::2])
-    assert isinstance(got[-1].content, Name)
+
+async def test_state_event_content_callback(alice: Client, room: Room):
+    got = []
+    cb  = lambda room, event: got.extend([room, type(event.content)])  # noqa
+    alice.rooms.callbacks[StateEvent[Name]].add(cb)
+
+    await room.state.send(Name("Test room"))
+    await room.state.send(Topic("Not the right content type"))
+    await room.timeline.send(CanonicalAlias())
+    await alice.sync.once()
+    assert got == [room, Name]
