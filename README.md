@@ -47,7 +47,6 @@ async def main():
         server    = "https://matrix.org",
         user      = "alice",
         password  = "1234",
-        device_id = "mio1",
     )
 
     # Do one initial sync with the homeserver and see what rooms we have:
