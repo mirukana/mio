@@ -90,3 +90,8 @@ class Room(JSONFile):
             if event_matches and content_matches:
                 for cb in callbacks:
                     await make_awaitable(cb(self, event))
+
+
+    async def leave(self) -> None:
+        path = [*self.client.api, "rooms", self.id, "leave"]
+        await self.client.send_json("POST", path)

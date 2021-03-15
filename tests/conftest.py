@@ -53,4 +53,5 @@ async def room(alice):
 @fixture
 async def e2e_room(room):
     await room.state.send(Encryption())
+    await room.client.sync.once()
     return room
