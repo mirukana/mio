@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Tuple
 from ..core.contents import EventContent
 from ..core.data import JSONFile, Parent, Runtime
 from ..core.events import Event
-from ..core.types import RoomId, UserId
+from ..core.types import RoomAlias, RoomId, UserId
 from ..core.utils import make_awaitable
 from .contents.users import Member
 from .events import StateBase, TimelineEvent
@@ -49,6 +49,14 @@ class Room(JSONFile):
         self.timeline = await Timeline.load(self)
         self.state    = await RoomState.load(self)
         await self.save()
+
+
+    async def create_alias(self, alias: RoomAlias) -> None:
+        await self.client.send_json(
+            method = "PUT",
+            path   = [*self.client.api, "directory", "room", alias],
+            body   = {"room_id": self.id},
+        )
 
 
     async def handle_event(self, event: Event) -> None:
