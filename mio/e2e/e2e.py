@@ -190,15 +190,18 @@ class E2E(JSONClientModule):
             # TODO: unwedge, request keys?
             raise err.NoInboundGroupSessionToDecrypt(*key)
 
-        verif_error: Optional[err.MegolmVerificationError]
-        verif_error = err.MegolmPayloadWrongSender(
+        verif_err: Optional[err.MegolmVerificationError]
+        verif_err = err.MegolmPayloadWrongSender(
             starter_ed25519, content.sender_curve25519,
         )
 
         for device in self.client.devices[event.sender].values():
             if device.curve25519 == content.sender_curve25519:
                 if device.ed25519 == starter_ed25519:
-                    verif_error = None  # TODO: device trust state
+                    if device.trusted is False:
+                        verif_err = err.MegolmPayloadFromBlockedDevice(device)
+                    else:
+                        verif_err = None
 
         try:
             json_payload, message_index = session.decrypt(content.ciphertext)
@@ -214,7 +217,7 @@ class E2E(JSONClientModule):
             decrypted_indice[message_index] = (event.id, event.date)
             await self.save()
 
-        return (json.loads(json_payload), verif_error)
+        return (json.loads(json_payload), verif_err)
 
 
     async def encrypt_room_event(
@@ -252,12 +255,13 @@ class E2E(JSONClientModule):
             {uid for uid in for_users if uid not in self.client.devices},
         )
 
-        # TODO: device trust, e2e_algorithms
         in_need = {
             device
             for user_id in for_users
             for device in self.client.devices[user_id].values()
-            if device.device_id not in shared_to.get(user_id, set())
+
+            if device.trusted is not False and
+            device.device_id not in shared_to.get(user_id, set())
         }
 
         await self._share_out_group_session(room_id, session, in_need)
@@ -287,7 +291,7 @@ class E2E(JSONClientModule):
         return encrypted
 
 
-    async def drop_outbound_group_sessions(self, room_id: RoomId) -> None:
+    def drop_outbound_group_session(self, room_id: RoomId) -> None:
         self.out_group_sessions.pop(room_id, None)
 
 
@@ -448,10 +452,11 @@ class E2E(JSONClientModule):
         ):
             return payload
 
-        # TODO: verify device trust
         for device in self.client.devices[event.sender].values():
             if device.curve25519 == event.content.sender_curve25519:
                 if device.ed25519 == payload_from_ed:
+                    if device.trusted is False:
+                        raise err.OlmPayloadFromBlockedDevice(device)
                     return payload
 
         raise err.OlmPayloadFromUnknownDevice(

@@ -63,6 +63,11 @@ class OlmPayloadWrongReceiverEd25519(OlmVerificationError):
 
 
 @dataclass
+class OlmPayloadFromBlockedDevice(OlmVerificationError):
+    device: "Device"
+
+
+@dataclass
 class OlmPayloadFromUnknownDevice(OlmVerificationError):
     known_sender_devices: Dict[str, "Device"]
     sender_ed25519:       str
@@ -100,6 +105,11 @@ class MegolmVerificationError(VerificationError):
 class MegolmPayloadWrongSender(MegolmVerificationError):
     starter_device_ed25519: str
     sender_curve25519:      str
+
+
+@dataclass
+class MegolmPayloadFromBlockedDevice(MegolmVerificationError):
+    device: "Device"
 
 
 @dataclass

@@ -189,12 +189,16 @@ class Devices(JSONClientModule, IndexableMap[UserId, Dict[str, Device]]):
             if ed25519 != signer_ed25519:
                 raise errors.DeviceEd25519Mismatch(ed25519, signer_ed25519)
 
+        present = self._data.get(user_id, {}).get(device_id)
+
         self._data.setdefault(user_id, {})[device_id] = Device(
+            devices        = self,
             user_id        = user_id,
             device_id      = device_id,
             ed25519        = signer_ed25519,
             curve25519     = info["keys"][f"curve25519:{device_id}"],
             e2e_algorithms = info["algorithms"],
+            trusted        = present.trusted if present else None,
             display_name   =
                 info.get("unsigned", {}).get("device_display_name"),
         )

@@ -70,7 +70,7 @@ class Room(JSONFile):
         content = event.content
 
         if isinstance(content, Member) and content.left:
-            await self.client.e2e.drop_outbound_group_sessions(self.id)
+            self.client.e2e.drop_outbound_group_session(self.id)
             await self.save()
 
         for annotation, callbacks in self.client.rooms.callbacks.items():
