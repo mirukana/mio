@@ -19,7 +19,7 @@ from ..rooms.contents.settings import Encryption
 from ..rooms.timeline import TimelineEvent
 from . import Algorithm
 from . import errors as err
-from .contents import Megolm, Olm, RoomKey
+from .contents import GroupSessionInfo, Megolm, Olm
 
 if TYPE_CHECKING:
     from ..client import Client
@@ -379,20 +379,20 @@ class E2E(JSONClientModule):
         if not to:
             return
 
-        room_key = RoomKey(
+        info = GroupSessionInfo(
             algorithm   = Algorithm.megolm_v1,
             room_id     = room_id,
             session_id  = session.id,
             session_key = session.session_key,
         )
 
-        olms, no_otks = await self.client.devices._encrypt(room_key, *to)
+        olms, no_otks = await self.client.devices._encrypt(info, *to)
 
         if no_otks:
             LOG.warning(
                 "Didn't get any one-time keys for %r, they won't receive "
-                "the megolm keys to decrypt %r!",
-                no_otks, room_key,
+                "the group session keys to decrypt %r!",
+                no_otks, info,
             )
 
         await self.client.devices.send(olms)  # type: ignore

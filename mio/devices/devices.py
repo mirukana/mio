@@ -13,7 +13,7 @@ from ..core.contents import EventContent
 from ..core.data import IndexableMap, Runtime
 from ..core.types import UserId
 from ..core.utils import get_logger
-from ..e2e.contents import Olm, RoomKey
+from ..e2e.contents import GroupSessionInfo, Olm
 from ..e2e.errors import InvalidSignedDict
 from ..module import JSONClientModule
 from . import errors
@@ -151,7 +151,7 @@ class Devices(JSONClientModule, IndexableMap[UserId, Dict[str, Device]]):
     async def handle_event(self, event: ToDeviceEvent) -> None:
         LOG.debug("%s got to-device event: %r", self.client.user_id, event)
 
-        if not isinstance(event.content, RoomKey):
+        if not isinstance(event.content, GroupSessionInfo):
             return
 
         assert event.decryption

@@ -51,7 +51,7 @@ class Megolm(EventContent):
 
 
 @dataclass
-class RoomKey(EventContent):
+class GroupSessionInfo(EventContent):
     type = "m.room_key"
 
     algorithm:   Algorithm
