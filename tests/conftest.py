@@ -44,6 +44,6 @@ async def bob(synapse, tmp_path):
 
 @fixture
 async def room(alice):
-    room_id = await alice.rooms.create("Room")
+    room_id = await alice.rooms.create(public=True)
     await alice.sync.once()
     return alice.rooms[room_id]

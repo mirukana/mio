@@ -1,10 +1,12 @@
-from pytest import mark
+from uuid import uuid4
 
 from mio.client import Client
+from mio.core.types import RoomAlias
 from mio.rooms.contents.messages import Emote, Text
 from mio.rooms.contents.settings import CanonicalAlias, Name, Topic
 from mio.rooms.events import StateEvent, TimelineEvent
 from mio.rooms.room import Room
+from pytest import mark
 
 pytestmark = mark.asyncio
 
@@ -46,3 +48,26 @@ async def test_state_event_content_callback(alice: Client, room: Room):
     await room.timeline.send(CanonicalAlias())
     await alice.sync.once()
     assert got == [room, Name]
+
+
+async def test_join_room_id(room: Room, bob: Client):
+    await bob.sync.once()
+    assert room.id not in bob.rooms
+
+    await bob.rooms.join(room.id)
+    await bob.sync.once()
+    assert room.id in bob.rooms
+
+
+async def test_join_room_alias(room: Room, bob: Client):
+    assert room.client.user_id != bob.user_id
+    alias = RoomAlias(f"#{uuid4()}:localhost")
+    await room.create_alias(alias)
+    await room.state.send(CanonicalAlias(alias))
+
+    await bob.sync.once()
+    assert room.id not in bob.rooms
+
+    await bob.rooms.join(alias)
+    await bob.sync.once()
+    assert room.id in bob.rooms

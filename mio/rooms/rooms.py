@@ -96,6 +96,14 @@ class Rooms(ClientModule, IndexableMap[RoomId, Room]):
         return result["room_id"]
 
 
+    async def join(self, id_or_alias: Union[RoomId, RoomAlias]) -> RoomId:
+        result = await self.client.send_json(
+            "POST", [*self.client.api, "join", id_or_alias],
+        )
+
+        return result["room_id"]
+
+
 class CreationPreset(Enum):
     """Room creation presets set default state events when creating a room.
 
