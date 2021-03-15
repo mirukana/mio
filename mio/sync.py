@@ -137,7 +137,7 @@ class Sync(JSONClientModule):
                 with suppress(InvalidEvent):
                     users.append(event["sender"])
 
-        for kind in ("invite", "join", "leave"):
+        for kind in ("invite", "join"):
             for data in sync.get("rooms", {}).get(kind, {}).values():
                 for event in data.get("timeline", {}).get("events", ()):
                     if Megolm.matches(event):
@@ -225,6 +225,9 @@ class Sync(JSONClientModule):
             # await events_call(data, "account_data", room.handle_event)
             await room_events_call(data, "state", room)
             await room_events_call(data, "timeline", room)
+
+        no_more_shared_e2e_room = sync.get("device_lists", {}).get("left", [])
+        self.client.devices.drop(*no_more_shared_e2e_room)
 
         if "device_one_time_keys_count" in sync:
             up = sync["device_one_time_keys_count"].get("signed_curve25519", 0)

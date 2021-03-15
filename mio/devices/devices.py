@@ -107,6 +107,11 @@ class Devices(JSONClientModule, IndexableMap[UserId, Dict[str, Device]]):
             await self.save()
 
 
+    def drop(self, *users: UserId) -> None:
+        for user_id in users:
+            self._data.pop(user_id, None)
+
+
     async def send(self, contents: Dict[Device, EventContent]) -> None:
         m_type = next(iter(contents.values()), EventContent()).type
         assert m_type

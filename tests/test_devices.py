@@ -10,6 +10,8 @@ pytestmark = mark.asyncio
 
 
 async def test_tracking(alice: Client, e2e_room: Room, bob: Client, tmp_path):
+    # Get initial devices of users we share an encrypted room with:
+
     await bob.rooms.join(e2e_room.id)
     await bob.sync.once()
     await bob.rooms[e2e_room.id].timeline.send(Text("makes alice get my key"))
@@ -18,6 +20,8 @@ async def test_tracking(alice: Client, e2e_room: Room, bob: Client, tmp_path):
     await alice.sync.once()
     bob_dev1 = bob.devices.current
     assert alice.devices[bob.user_id] == {bob_dev1.device_id: bob_dev1}
+
+    # Notice an user's new devices at runtime and share session with it:
 
     args     = (tmp_path, bob.server, bob.user_id, "test")
     bob2     = await Client.login_password(*args)
@@ -36,4 +40,8 @@ async def test_tracking(alice: Client, e2e_room: Room, bob: Client, tmp_path):
     await bob2.sync.once()
     assert isinstance(bob2.rooms[e2e_room.id].timeline[-1].content, Text)
 
-    # TODO: left
+    # Stop tracking devices of users we no longer share an encrypted room with:
+
+    await bob.rooms[e2e_room.id].leave()
+    await alice.sync.once()
+    assert bob.user_id not in alice.devices
