@@ -4,6 +4,7 @@ from typing import Union
 from uuid import uuid4
 
 from mio.client import Client
+from mio.rooms.contents.settings import Encryption
 from pytest import fixture
 from synapse import SynapseHandle
 
@@ -47,3 +48,9 @@ async def room(alice):
     room_id = await alice.rooms.create(public=True)
     await alice.sync.once()
     return alice.rooms[room_id]
+
+
+@fixture
+async def e2e_room(room):
+    await room.state.send(Encryption())
+    return room

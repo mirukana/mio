@@ -1,13 +1,16 @@
+from asyncio import Lock
 from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
+from typing import (
+    TYPE_CHECKING, Any, Collection, Dict, List, Optional, Set, Tuple,
+)
 from uuid import uuid4
 
 import olm
 
 from ..core.contents import EventContent
-from ..core.data import IndexableMap
+from ..core.data import IndexableMap, Runtime
 from ..core.types import UserId
 from ..core.utils import get_logger
 from ..e2e.contents import Olm, RoomKey
@@ -22,16 +25,23 @@ if TYPE_CHECKING:
 
 LOG = get_logger()
 
+# {user_id: [device_id]} - empty list means to get all devices for that user
+UserDeviceIds = Dict[UserId, List[str]]
+
 
 @dataclass
 class Devices(JSONClientModule, IndexableMap[UserId, Dict[str, Device]]):
+    # {user_id: {device_id: Device}}
     _data: Dict[UserId, Dict[str, Device]] = field(default_factory=dict)
+
+    # {user_id: sync.next_batch of last change of None for full update}
+    outdated: Dict[UserId, Optional[str]] = field(default_factory=dict)
+
+    _query_lock: Runtime[Lock] = field(init=False, default_factory=Lock)
 
 
     async def __ainit__(self) -> None:
-        if self.client.user_id not in self:
-            await self.query({self.client.user_id: []})
-            await self.save()
+        await self.update([self.client.user_id])
 
 
     @property
@@ -49,46 +59,52 @@ class Devices(JSONClientModule, IndexableMap[UserId, Dict[str, Device]]):
         return parent.path.parent / "devices.json"
 
 
-    async def query(
+    async def update(
         self,
-        # {user_id: [device_id]} - empty list = all devices for that user
-        devices:      Dict[UserId, List[str]],
-        update_token: Optional[str] = None,
-        timeout:      float         = 10,
+        users:      Collection[UserId],
+        sync_token: Optional[str] = None,
+        timeout:    float         = 10,
     ) -> None:
 
-        if not update_token and any(d != [] for d in devices.values()):
-            raise ValueError("No update_token to do partial device queries")
+        self.outdated.update({u: sync_token for u in users})
 
-        if not update_token:
-            devices = {u: d for u, d in devices.items() if u not in self}
-
-        if not devices:
+        if not self.outdated:
             return
 
-        LOG.info("Querying devices: %r", devices)
-
-        result = await self.client.send_json(
-            method = "POST",
-            path   = [*self.client.api, "keys", "query"],
-            body   = {
-                "device_keys": devices,
-                "token":       update_token,
-                "timeout":     int(timeout * 1000),
-            },
-        )
-
-        if result["failures"]:
-            LOG.warning("Failed querying some devices: %s", result["failures"])
-
-        for user_id, devs in result["device_keys"].items():
-            for device_id, info in devs.items():
-                try:
-                    self._handle_queried_device(user_id, device_id, info)
-                except (errors.QueriedDeviceError, InvalidSignedDict) as e:
-                    LOG.warning("Rejected queried device %r: %r", info, e)
-
         await self.save()
+
+        async with self._query_lock:
+            LOG.info("Querying devices for %r", set(self.outdated))
+
+            result = await self.client.send_json(
+                method = "POST",
+                path   = [*self.client.api, "keys", "query"],
+                body   = {
+                    # [] means "get all devices of the user" to the server
+                    "device_keys": {user_id: [] for user_id in self.outdated},
+                    "token":       sync_token,
+                    "timeout":     int(timeout * 1000),
+                },
+            )
+
+            if result["failures"]:
+                LOG.warning(
+                    "Failed querying devices of some users for %r: %r",
+                    set(self.outdated),
+                    result["failures"],
+                )
+
+            for user_id, devs in result["device_keys"].items():
+                if self.outdated[user_id] == sync_token:
+                    del self.outdated[user_id]
+
+                for device_id, info in devs.items():
+                    try:
+                        self._handle_queried(user_id, device_id, info)
+                    except (errors.QueriedDeviceError, InvalidSignedDict) as e:
+                        LOG.warning("Rejected queried device %r: %r", info, e)
+
+            await self.save()
 
 
     async def send(self, contents: Dict[Device, EventContent]) -> None:
@@ -149,7 +165,7 @@ class Devices(JSONClientModule, IndexableMap[UserId, Dict[str, Device]]):
             await self.save()
 
 
-    def _handle_queried_device(
+    def _handle_queried(
         self, user_id: UserId, device_id: str, info: Dict[str, Any],
     ) -> None:
 

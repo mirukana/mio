@@ -4,7 +4,7 @@ from datetime import datetime
 from functools import partial
 from pathlib import Path
 from typing import (
-    TYPE_CHECKING, Any, Collection, Dict, List, Optional, Tuple, Type,
+    TYPE_CHECKING, Any, Collection, Dict, List, Optional, Set, Tuple, Type,
 )
 
 import olm
@@ -40,9 +40,12 @@ InboundGroupSessionsType = Dict[
     Tuple[olm.InboundGroupSession, str, MessageIndice],
 ]
 
-# {room_id: (session, creation_date, encrypted_events_count)}
+# {user_id: {device_id}}
+SharedTo = Dict[UserId, Set[str]]
+
+# {room_id: (session, creation_date, encrypted_events_count, shared_to)}
 OutboundGroupSessionsType = Dict[
-    RoomId, Tuple[olm.OutboundGroupSession, datetime, int],
+    RoomId, Tuple[olm.OutboundGroupSession, datetime, int, SharedTo],
 ]
 
 
@@ -222,12 +225,14 @@ class E2E(JSONClientModule):
         content:   EventContent,
     ) -> Megolm:
 
-        default = (olm.OutboundGroupSession(), datetime.now(), 0)
+        for_users = set(for_users)
 
-        session, creation_date, encrypted_events_count = \
+        default: tuple = (olm.OutboundGroupSession(), datetime.now(), 0, {})
+
+        session, creation_date, encrypted_events_count, shared_to = \
             self.out_group_sessions.get(room_id, default)
 
-        # Do we have an existing non-expired OGSession for this room?
+        # If we have no existing non-expired OutbondGroupSession for this room:
         if (
             room_id not in self.out_group_sessions or
             datetime.now() - creation_date > settings.sessions_max_age or
@@ -240,34 +245,27 @@ class E2E(JSONClientModule):
 
             self.in_group_sessions[key] = (in_session, our_ed, {})
 
-            # Now share the outbound group session with everyone in the room:
-            await self.client.devices.query({u: [] for u in for_users})
+        # Make sure first we know about all the devices to send session to:
+        await self.client.devices.update(
+            # Users in client.devices will already be up-to-date
+            # thanks to client.sync
+            {uid for uid in for_users if uid not in self.client.devices},
+        )
 
-            room_key = RoomKey(
-                algorithm   = Algorithm.megolm_v1,
-                room_id     = room_id,
-                session_id  = session.id,
-                session_key = session.session_key,
-            )
+        # TODO: device trust, e2e_algorithms
+        in_need = {
+            device
+            for user_id in for_users
+            for device in self.client.devices[user_id].values()
+            if device.device_id not in shared_to.get(user_id, set())
+        }
 
-            # TODO: device trust, e2e_algorithms
-            olms, no_otks = await self.client.devices._encrypt(
-                room_key,
-                *[
-                    device for user_id in for_users
-                    for device in self.client.devices[user_id].values()
-                ],
-            )
+        await self._share_out_group_session(room_id, session, in_need)
 
-            if no_otks:
-                LOG.warning(
-                    "Didn't get one-time keys for %r, they will not receive"
-                    "the megolm keys to decrypt %r",
-                    no_otks, room_key,
-                )
+        for device in in_need:
+            shared_to.setdefault(device.user_id, set()).add(device.device_id)
 
-            await self.client.devices.send(olms)  # type: ignore
-
+        # Now that everyone else has our session, we can send the event
         payload = {
             "type":    content.type,
             "content": content.dict,
@@ -281,8 +279,9 @@ class E2E(JSONClientModule):
             ciphertext        = session.encrypt(self._canonical_json(payload)),
         )
 
-        msgs = encrypted_events_count + 1
-        self.out_group_sessions[room_id] = (session, creation_date, msgs)
+        self.out_group_sessions[room_id] = (
+            session, creation_date, encrypted_events_count + 1, shared_to,
+        )
         await self.save()
 
         return encrypted
@@ -362,6 +361,37 @@ class E2E(JSONClientModule):
                         valided[dev] = key_dict["key"]
 
         return valided
+
+
+    async def _share_out_group_session(
+        self,
+        room_id: RoomId,
+        session: olm.OutboundGroupSession,
+        to:      Set[Device],
+    ) -> None:
+
+        to = {d for d in to if d is not self.device}
+
+        if not to:
+            return
+
+        room_key = RoomKey(
+            algorithm   = Algorithm.megolm_v1,
+            room_id     = room_id,
+            session_id  = session.id,
+            session_key = session.session_key,
+        )
+
+        olms, no_otks = await self.client.devices._encrypt(room_key, *to)
+
+        if no_otks:
+            LOG.warning(
+                "Didn't get any one-time keys for %r, they won't receive "
+                "the megolm keys to decrypt %r!",
+                no_otks, room_key,
+            )
+
+        await self.client.devices.send(olms)  # type: ignore
 
 
     @staticmethod

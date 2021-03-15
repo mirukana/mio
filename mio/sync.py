@@ -3,7 +3,7 @@ from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import (
-    TYPE_CHECKING, Any, Awaitable, Callable, Dict, Optional, Set, Type, Union,
+    TYPE_CHECKING, Any, Awaitable, Callable, Dict, List, Optional, Type, Union,
 )
 
 from .core.events import Event, InvalidEvent
@@ -95,8 +95,6 @@ class Sync(JSONClientModule):
 
 
     async def handle_sync(self, sync: Dict[str, Any]) -> None:
-        # TODO: device_lists, partial syncs
-
         async def events_call(
             data: dict, key: str, evtype: Type[Event], coro: Callable,
         ) -> None:
@@ -132,21 +130,21 @@ class Sync(JSONClientModule):
 
                     await room.handle_event(ev)
 
-        users: Set[UserId] = set()
+        users: List[UserId] = sync.get("device_lists", {}).get("changed", [])
 
         for event in sync.get("to_device", {}).get("events", ()):
             if Olm.matches(event):
                 with suppress(InvalidEvent):
-                    users.add(event["sender"])
+                    users.append(event["sender"])
 
         for kind in ("invite", "join", "leave"):
             for data in sync.get("rooms", {}).get(kind, {}).values():
                 for event in data.get("timeline", {}).get("events", ()):
                     if Megolm.matches(event):
                         with suppress(InvalidEvent):
-                            users.add(event["sender"])
+                            users.append(event["sender"])
 
-        await self.client.devices.query({u: [] for u in users})
+        await self.client.devices.update(set(users), sync["next_batch"])
 
         coro = self.client.devices.handle_event
         await events_call(sync, "to_device", ToDeviceEvent, coro)
