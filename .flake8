@@ -12,7 +12,8 @@
 # PIE: https://github.com/sbdchd/flake8-pie#flake8-pie--
 # Q0: https://github.com/zheller/flake8-quotes#warnings
 # N8: https://github.com/PyCQA/pep8-naming#error-codes
-select = E, W, F, C9, B0, C8, C4, EXE, I0, G, PIE, Q0, N8
+# T100: https://github.com/JBKahn/flake8-debugger/blob/4.0.0/flake8_debugger.py#L15
+select = E, W, F, C9, B0, C8, C4, EXE, I0, G, PIE, Q0, N8, T100
 
 # E131: continuation line unaligned for hanging indent
 # E301: when method is after a commented line + one blank line
