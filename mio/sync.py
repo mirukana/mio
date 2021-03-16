@@ -3,7 +3,7 @@ from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import (
-    TYPE_CHECKING, Any, Awaitable, Callable, Dict, List, Optional, Type, Union,
+    TYPE_CHECKING, Any, Awaitable, Callable, Dict, Optional, Set, Type, Union,
 )
 
 from .core.events import Event, InvalidEvent
@@ -130,21 +130,24 @@ class Sync(JSONClientModule):
 
                     await room.handle_event(ev)
 
-        users: List[UserId] = sync.get("device_lists", {}).get("changed", [])
+        e2e_senders: Set[UserId] = set()
 
         for event in sync.get("to_device", {}).get("events", ()):
             if Olm.matches(event):
                 with suppress(InvalidEvent):
-                    users.append(event["sender"])
+                    e2e_senders.add(event["sender"])
 
         for kind in ("invite", "join"):
             for data in sync.get("rooms", {}).get(kind, {}).values():
                 for event in data.get("timeline", {}).get("events", ()):
                     if Megolm.matches(event):
                         with suppress(InvalidEvent):
-                            users.append(event["sender"])
+                            e2e_senders.add(event["sender"])
 
-        await self.client.devices.update(set(users), sync["next_batch"])
+        await self.client.devices.ensure_tracked(e2e_senders)
+
+        changed = sync.get("device_lists", {}).get("changed", [])
+        await self.client.devices.update(changed)
 
         coro = self.client.devices.handle_event
         await events_call(sync, "to_device", ToDeviceEvent, coro)

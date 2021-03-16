@@ -113,8 +113,8 @@ class E2E(JSONClientModule):
         self.account.generate_one_time_keys(minimum - currently_uploaded)
 
         one_time_keys = {
-            f"signed_curve25519:{keyid}": self._sign_dict({"key": key})
-            for keyid, key in self.account.one_time_keys["curve25519"].items()
+            f"signed_curve25519:{key_id}": self._sign_dict({"key": key})
+            for key_id, key in self.account.one_time_keys["curve25519"].items()
         }
 
         await self.client.send_json(
@@ -249,11 +249,7 @@ class E2E(JSONClientModule):
             self.in_group_sessions[key] = (in_session, our_ed, {})
 
         # Make sure first we know about all the devices to send session to:
-        await self.client.devices.update(
-            # Users in client.devices will already be up-to-date
-            # thanks to client.sync
-            {uid for uid in for_users if uid not in self.client.devices},
-        )
+        await self.client.devices.ensure_tracked(for_users)
 
         in_need = {
             device

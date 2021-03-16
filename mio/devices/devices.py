@@ -41,7 +41,7 @@ class Devices(JSONClientModule, IndexableMap[UserId, Dict[str, Device]]):
 
 
     async def __ainit__(self) -> None:
-        await self.update([self.client.user_id])
+        await self.ensure_tracked([self.client.user_id])
 
 
     @property
@@ -57,6 +57,13 @@ class Devices(JSONClientModule, IndexableMap[UserId, Dict[str, Device]]):
     @classmethod
     def get_path(cls, parent: "Client", **kwargs) -> Path:
         return parent.path.parent / "devices.json"
+
+
+    async def ensure_tracked(
+        self, users: Collection[UserId], timeout: float = 10,
+    ) -> None:
+        await self.update({u for u in users if u not in self}, timeout=timeout)
+
 
 
     async def update(
