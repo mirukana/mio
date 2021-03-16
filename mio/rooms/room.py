@@ -73,7 +73,6 @@ class Room(JSONFile):
             self.client.e2e.drop_outbound_group_session(self.id)
             await self.save()
 
-        # Run direct callbacks first
         for annotation, callbacks in self.client.rooms.callbacks.items():
             ann_type = getattr(annotation, "__origin__", annotation)
 
@@ -92,7 +91,6 @@ class Room(JSONFile):
                 for cb in callbacks:
                     await make_awaitable(cb(self, event))
 
-        # Then run CallbackGroup's
         for cb_group in self.client.rooms.callback_groups:
             await cb_group(self, event)
 

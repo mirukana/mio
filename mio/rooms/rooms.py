@@ -128,21 +128,14 @@ class CallbackGroup:
             if not callable(attr) or attr_name.startswith("_"):
                 continue
 
-            sig    = signature(attr)
-            params = list(sig.parameters.values())
+            params = list(signature(attr).parameters.values())
 
             if len(params) < 2:
                 continue
 
-            ann        = params[1].annotation
-            event_type = getattr(ann, "__origin__", ann)
-
-            if not issubclass(event_type, Event):
-                continue
-
-            default      = (EventContent,)
-            content_type = getattr(ann, "__args__", default)[0]
-
+            ann             = params[1].annotation
+            event_type      = getattr(ann, "__origin__", ann)
+            content_type    = getattr(ann, "__args__", (EventContent,))[0]
             event_matches   = isinstance(event, event_type)
             content_matches = isinstance(event.content, content_type)
 
