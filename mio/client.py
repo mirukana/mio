@@ -180,9 +180,10 @@ class Client(JSONFileBase):
 
         read = await response.read()
 
+        who = obj.user_id if isinstance(obj, Client) else obj.__name__
         LOG.debug(
-            "Sent %s %r params=%r data=%r\n\nGot %r\n",
-            method, url_path, parameters, data, read,
+            "%s → %s %r params=%r data=%r\n\n← %r\n",
+            who, method, url_path, parameters, data, read,
         )
 
         try:
