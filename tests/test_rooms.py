@@ -5,11 +5,11 @@ from pytest import mark
 
 from mio.client import Client
 from mio.core.types import RoomAlias
-from mio.rooms.callbacks import CallbackGroup
 from mio.rooms.contents.messages import Emote, Text
 from mio.rooms.contents.settings import CanonicalAlias, Name, Topic
 from mio.rooms.events import StateEvent, TimelineEvent
 from mio.rooms.room import Room
+from mio.rooms.rooms import CallbackGroup
 
 pytestmark = mark.asyncio
 
