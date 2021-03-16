@@ -1,15 +1,16 @@
 from dataclasses import dataclass, field
 from enum import Enum
+from inspect import signature
 from typing import (
-    TYPE_CHECKING, Awaitable, Callable, DefaultDict, Dict, Optional, Sequence,
-    Set, Tuple, Type, Union,
+    TYPE_CHECKING, Awaitable, Callable, DefaultDict, Dict, List, Optional,
+    Sequence, Set, Tuple, Type, Union,
 )
 
 from ..core.contents import EventContent
 from ..core.data import IndexableMap, Parent, Runtime
 from ..core.events import Event
 from ..core.types import RoomAlias, RoomId
-from ..core.utils import remove_none
+from ..core.utils import make_awaitable, remove_none
 from ..module import ClientModule
 from .room import Room
 
@@ -28,6 +29,8 @@ class Rooms(ClientModule, IndexableMap[RoomId, Room]):
     callbacks: Runtime[Dict[EventKey, Callbacks]] = field(
         init=False, repr=False, default_factory=lambda: DefaultDict(set),
     )
+
+    callback_groups: List["CallbackGroup"] = field(default_factory=list)
 
 
     @classmethod
@@ -115,3 +118,26 @@ class CreationPreset(Enum):
     public          = "public_chat"
     private         = "private_chat"
     private_trusted = "trusted_private_chat"
+
+
+class CallbackGroup:
+    async def __call__(self, room: Room, event: Event) -> None:
+        for attr_name in dir(self):
+            attr = getattr(self, attr_name)
+
+            if not callable(attr) or attr_name.startswith("_"):
+                continue
+
+            params = list(signature(attr).parameters.values())
+
+            if len(params) < 2:
+                continue
+
+            ann             = params[1].annotation
+            event_type      = getattr(ann, "__origin__", ann)
+            content_type    = getattr(ann, "__args__", (EventContent,))[0]
+            event_matches   = isinstance(event, event_type)
+            content_matches = isinstance(event.content, content_type)
+
+            if event_matches and content_matches:
+                await make_awaitable(attr(room, event))

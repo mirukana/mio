@@ -91,6 +91,9 @@ class Room(JSONFile):
                 for cb in callbacks:
                     await make_awaitable(cb(self, event))
 
+        for cb_group in self.client.rooms.callback_groups:
+            await cb_group(self, event)
+
 
     async def leave(self) -> None:
         path = [*self.client.api, "rooms", self.id, "leave"]

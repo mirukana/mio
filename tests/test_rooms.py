@@ -1,4 +1,7 @@
+from dataclasses import dataclass, field
 from uuid import uuid4
+
+from pytest import mark
 
 from mio.client import Client
 from mio.core.types import RoomAlias
@@ -6,9 +9,73 @@ from mio.rooms.contents.messages import Emote, Text
 from mio.rooms.contents.settings import CanonicalAlias, Name, Topic
 from mio.rooms.events import StateEvent, TimelineEvent
 from mio.rooms.room import Room
-from pytest import mark
+from mio.rooms.rooms import CallbackGroup
 
 pytestmark = mark.asyncio
+
+
+@dataclass
+class CallbackGroupTest(CallbackGroup):
+    timeline_result:      list = field(default_factory=list)
+    state_content_result: list = field(default_factory=list)
+    async_state_result:   list = field(default_factory=list)
+
+
+    def on_timeline_event(self, room: Room, event: TimelineEvent):
+        self.timeline_result += [room, event.content]
+
+    async def on_state_name_event(self, room: Room, event: StateEvent[Name]):
+        self.state_content_result += [room, event.content]
+
+    async def on_state_event(self, room: Room, event: StateEvent):
+        self.async_state_result += [room, event.content]
+
+
+async def test_timeline_event_callback_group(alice: Client, room: Room):
+    cb_group = CallbackGroupTest()
+    alice.rooms.callback_groups.append(cb_group)
+
+    text  = Text("This is a test")
+    emote = Emote("tests")
+
+    await room.timeline.send(text)
+    await room.timeline.send(emote)
+    # We parse a corresponding timeline event on sync for new states
+    await room.state.send(CanonicalAlias())
+    await alice.sync.once()
+
+    expected = [room, text, room, emote, room, CanonicalAlias()]
+
+    assert cb_group.timeline_result == expected
+
+
+async def test_async_and_state_event_callback_group(alice: Client, room: Room):
+    cb_group = CallbackGroupTest()
+    alice.rooms.callback_groups.append(cb_group)
+
+    topic = Topic("This is not a test")
+    name  = Name("Test Room 1000")
+
+    await room.state.send(name)
+    await room.state.send(topic)
+    await room.timeline.send(CanonicalAlias())
+    await alice.sync.once()
+
+    assert cb_group.async_state_result == [room, name, room, topic]
+
+
+async def test_state_event_content_callback_group(alice: Client, room: Room):
+    cb_group = CallbackGroupTest()
+    alice.rooms.callback_groups.append(cb_group)
+
+    name = Name("Test Room 1000")
+
+    await room.state.send(name)
+    await room.state.send(Topic("Certainly not a test"))
+    await room.timeline.send(CanonicalAlias())
+    await alice.sync.once()
+
+    assert cb_group.state_content_result == [room, name]
 
 
 async def test_timeline_event_callback(alice: Client, room: Room):
