@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import (
-    TYPE_CHECKING, Awaitable, Callable, DefaultDict, Dict, Optional, Sequence,
-    Set, Tuple, Type, Union,
+    TYPE_CHECKING, Awaitable, Callable, DefaultDict, Dict, List, Optional,
+    Sequence, Set, Tuple, Type, Union,
 )
 
 from ..core.contents import EventContent
@@ -11,6 +11,7 @@ from ..core.events import Event
 from ..core.types import RoomAlias, RoomId
 from ..core.utils import remove_none
 from ..module import ClientModule
+from .callbacks import CallbackGroup
 from .room import Room
 
 if TYPE_CHECKING:
@@ -28,6 +29,8 @@ class Rooms(ClientModule, IndexableMap[RoomId, Room]):
     callbacks: Runtime[Dict[EventKey, Callbacks]] = field(
         init=False, repr=False, default_factory=lambda: DefaultDict(set),
     )
+
+    callback_groups: List[CallbackGroup] = field(default_factory=list)
 
 
     @classmethod

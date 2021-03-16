@@ -1,14 +1,49 @@
+from dataclasses import dataclass, field
 from uuid import uuid4
+
+from pytest import mark
 
 from mio.client import Client
 from mio.core.types import RoomAlias
+from mio.rooms.callbacks import CallbackGroup
 from mio.rooms.contents.messages import Emote, Text
 from mio.rooms.contents.settings import CanonicalAlias, Name, Topic
 from mio.rooms.events import StateEvent, TimelineEvent
 from mio.rooms.room import Room
-from pytest import mark
 
 pytestmark = mark.asyncio
+
+
+@dataclass
+class CallbackGroupTest(CallbackGroup):
+    timeline_result:       list = field(default_factory=list)
+    # text_test_pass: bool = False
+    # text_test_pass: bool = False
+
+    async def async_timeline(self, room: Room, event: TimelineEvent):
+        self.timeline_result += [room, type(event.content)]
+
+    def timeline_name_does_not_matter(self, room: Room, event: TimelineEvent):
+        self.timeline_result += [room, type(event.content)]
+
+
+async def test_callback_group(alice: Client, room: Room):
+    cb_group = CallbackGroupTest()
+    alice.rooms.callback_groups.append(cb_group)
+
+    await room.timeline.send(Text("This is a test"))
+    await room.timeline.send(Emote("tests"))
+    # We parse a corresponding timeline event on sync for new states
+    await room.state.send(CanonicalAlias())
+    await alice.sync.once()
+
+    result = [
+        room, Text,           room, Text,
+        room, Emote,          room, Emote,
+        room, CanonicalAlias, room, CanonicalAlias,
+    ]
+
+    assert cb_group.timeline_result == result
 
 
 async def test_timeline_event_callback(alice: Client, room: Room):
