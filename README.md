@@ -68,7 +68,7 @@ async def main():
     await client.sync.once()
 
     # Register a function that will be called when we receive Text events:
-    client.rooms.callbacks[Text].add(on_text_message)
+    client.rooms.callbacks[Text].append(on_text_message)
 
     # Enable encryption in the room and send a text message:
     await client.rooms[room_id].state.send(Encryption())

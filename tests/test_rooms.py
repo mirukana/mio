@@ -81,7 +81,7 @@ async def test_state_event_content_callback_group(alice: Client, room: Room):
 async def test_timeline_event_callback(alice: Client, room: Room):
     got = []
     cb  = lambda r, e: got.extend([r, type(e.content)])  # noqa
-    alice.rooms.callbacks[TimelineEvent].add(cb)
+    alice.rooms.callbacks[TimelineEvent].append(cb)
 
     await room.timeline.send(Text("This is a test"))
     await room.timeline.send(Emote("tests"))
@@ -97,7 +97,7 @@ async def test_async_and_content_callback(alice: Client, room: Room):
     async def cb(room, event):
         got.extend([room, type(event.content)])
 
-    alice.rooms.callbacks[Name].add(cb)
+    alice.rooms.callbacks[Name].append(cb)
 
     # We will parse a timeline and state version of this event on sync
     await room.state.send(Name("Test room"))
@@ -108,7 +108,7 @@ async def test_async_and_content_callback(alice: Client, room: Room):
 async def test_state_event_content_callback(alice: Client, room: Room):
     got = []
     cb  = lambda room, event: got.extend([room, type(event.content)])  # noqa
-    alice.rooms.callbacks[StateEvent[Name]].add(cb)
+    alice.rooms.callbacks[StateEvent[Name]].append(cb)
 
     await room.state.send(Name("Test room"))
     await room.state.send(Topic("Not the right content type"))

@@ -3,7 +3,7 @@ from enum import Enum
 from inspect import signature
 from typing import (
     TYPE_CHECKING, Awaitable, Callable, DefaultDict, Dict, List, Optional,
-    Sequence, Set, Tuple, Type, Union,
+    Sequence, Tuple, Type, Union,
 )
 
 from ..core.contents import EventContent
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from ..client import Client
 
 EventKey  = Union[Type[Event], Type[EventContent]]
-Callbacks = Set[Callable[[Room, Event], Optional[Awaitable[None]]]]
+Callbacks = List[Callable[[Room, Event], Optional[Awaitable[None]]]]
 
 
 @dataclass
@@ -27,7 +27,7 @@ class Rooms(ClientModule, IndexableMap[RoomId, Room]):
     _data:     Dict[RoomId, Room]        = field(default_factory=dict)
 
     callbacks: Runtime[Dict[EventKey, Callbacks]] = field(
-        init=False, repr=False, default_factory=lambda: DefaultDict(set),
+        init=False, repr=False, default_factory=lambda: DefaultDict(list),
     )
 
     callback_groups: List["CallbackGroup"] = field(default_factory=list)
