@@ -1,24 +1,33 @@
 from dataclasses import dataclass, field
 from enum import Enum
-from inspect import signature
 from typing import (
-    TYPE_CHECKING, Awaitable, Callable, DefaultDict, Dict, List, Optional,
-    Sequence, Tuple, Type, Union,
+    TYPE_CHECKING, DefaultDict, Dict, List, Optional, Sequence, Tuple, Union,
 )
 
+from ..core.callbacks import CallbackGroup, Callbacks
 from ..core.contents import EventContent
 from ..core.data import IndexableMap, Parent, Runtime
-from ..core.events import Event
 from ..core.types import RoomAlias, RoomId
-from ..core.utils import make_awaitable, remove_none
+from ..core.utils import remove_none
 from ..module import ClientModule
+from .contents.users import Member
+from .events import StateBase, TimelineEvent
 from .room import Room
 
 if TYPE_CHECKING:
     from ..client import Client
 
-EventKey  = Union[Type[Event], Type[EventContent]]
-Callbacks = List[Callable[[Room, Event], Optional[Awaitable[None]]]]
+
+class MioRoomCallbacks(CallbackGroup):
+    async def on_timeline(self, room: Room, event: TimelineEvent) -> None:
+        await room.timeline.register_events(event)
+
+    async def on_state(self, room: Room, event: StateBase) -> None:
+        await room.state.register(event)
+
+    async def on_leave(self, room: Room, event: StateBase[Member]) -> None:
+        if event.content.left:
+            await room.client.e2e.drop_outbound_group_session(room.id)
 
 
 @dataclass
@@ -26,11 +35,13 @@ class Rooms(ClientModule, IndexableMap[RoomId, Room]):
     client:    Parent["Client"]          = field(repr=False)
     _data:     Dict[RoomId, Room]        = field(default_factory=dict)
 
-    callbacks: Runtime[Dict[EventKey, Callbacks]] = field(
+    callbacks: Runtime[Callbacks] = field(
         init=False, repr=False, default_factory=lambda: DefaultDict(list),
     )
 
-    callback_groups: List["CallbackGroup"] = field(default_factory=list)
+    callback_groups: Runtime[List["CallbackGroup"]] = field(
+        init=False, repr=False, default_factory=lambda: [MioRoomCallbacks()],
+    )
 
 
     @classmethod
@@ -118,26 +129,3 @@ class CreationPreset(Enum):
     public          = "public_chat"
     private         = "private_chat"
     private_trusted = "trusted_private_chat"
-
-
-class CallbackGroup:
-    async def __call__(self, room: Room, event: Event) -> None:
-        for attr_name in dir(self):
-            attr = getattr(self, attr_name)
-
-            if not callable(attr) or attr_name.startswith("_"):
-                continue
-
-            params = list(signature(attr).parameters.values())
-
-            if len(params) < 2:
-                continue
-
-            ann             = params[1].annotation
-            event_type      = getattr(ann, "__origin__", ann)
-            content_type    = getattr(ann, "__args__", (EventContent,))[0]
-            event_matches   = isinstance(event, event_type)
-            content_matches = isinstance(event.content, content_type)
-
-            if event_matches and content_matches:
-                await make_awaitable(attr(room, event))

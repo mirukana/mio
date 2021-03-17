@@ -34,6 +34,6 @@ class Device(JSON):
 
         for room_id, (_s, _c, _e, shared_to) in sessions.copy().items():
             if self.device_id in shared_to.get(self.user_id, set()):
-                e2e.drop_outbound_group_session(room_id)
+                await e2e.drop_outbound_group_session(room_id)
 
         await self.devices.save()

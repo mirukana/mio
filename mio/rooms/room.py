@@ -1,14 +1,10 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING, List, Tuple
 
-from ..core.contents import EventContent
+from ..core.callbacks import CallbackGroup, Callbacks, EventCallbacks
 from ..core.data import JSONFile, Parent, Runtime
-from ..core.events import Event
 from ..core.types import RoomAlias, RoomId, UserId
-from ..core.utils import make_awaitable
-from .contents.users import Member
-from .events import StateBase, TimelineEvent
 from .state import RoomState
 from .timeline import Timeline
 
@@ -16,9 +12,8 @@ if TYPE_CHECKING:
     from ..client import Client
 
 
-
 @dataclass
-class Room(JSONFile):
+class Room(JSONFile, EventCallbacks):
     client:  Parent["Client"] = field(repr=False)
     id:      RoomId
 
@@ -59,42 +54,14 @@ class Room(JSONFile):
         )
 
 
-    async def handle_event(self, event: Event) -> None:
-        # TODO: handle_event**s** function that only saves at the end
-
-        if isinstance(event, TimelineEvent):
-            await self.timeline.register_events(event)
-        elif isinstance(event, StateBase):
-            await self.state.register(event)
-
-        content = event.content
-
-        if isinstance(content, Member) and content.left:
-            self.client.e2e.drop_outbound_group_session(self.id)
-            await self.save()
-
-        for annotation, callbacks in self.client.rooms.callbacks.items():
-            ann_type = getattr(annotation, "__origin__", annotation)
-
-            if issubclass(ann_type, EventContent):
-                event_type   = Event
-                content_type = ann_type
-            else:
-                event_type   = ann_type
-                default      = (EventContent,)
-                content_type = getattr(annotation, "__args__", default)[0]
-
-            event_matches   = isinstance(event, event_type)
-            content_matches = isinstance(event.content, content_type)
-
-            if event_matches and content_matches:
-                for cb in callbacks:
-                    await make_awaitable(cb(self, event))
-
-        for cb_group in self.client.rooms.callback_groups:
-            await cb_group(self, event)
-
-
     async def leave(self) -> None:
         path = [*self.client.api, "rooms", self.id, "leave"]
         await self.client.send_json("POST", path)
+
+
+    def _callbacks(self) -> Callbacks:
+        return self.client.rooms.callbacks
+
+
+    def _callback_groups(self) -> List[CallbackGroup]:
+        return self.client.rooms.callback_groups

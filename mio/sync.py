@@ -95,6 +95,8 @@ class Sync(JSONClientModule):
 
 
     async def handle_sync(self, sync: Dict[str, Any]) -> None:
+        # TODO: account_data, ephemeral events, presence
+
         async def events_call(
             data: dict, key: str, evtype: Type[Event], coro: Callable,
         ) -> None:
@@ -118,7 +120,7 @@ class Sync(JSONClientModule):
             for event in data.get(key, {}).get("events", ()):
                 with log_errors(InvalidEvent):
                     if "state_key" in event:
-                        await room.handle_event(state.from_dict(event, room))
+                        await room(state.from_dict(event, room))
 
                     if key != "timeline":
                         continue
@@ -128,7 +130,7 @@ class Sync(JSONClientModule):
                     with log_errors(DecryptionError):
                         ev = await ev.decrypted()
 
-                    await room.handle_event(ev)
+                    await room(ev)
 
         e2e_senders: Set[UserId] = set()
 
@@ -151,9 +153,6 @@ class Sync(JSONClientModule):
 
         coro = self.client.devices.handle_event
         await events_call(sync, "to_device", ToDeviceEvent, coro)
-
-        # events_call(sync, "account_data", noop)  # TODO
-        # events_call(sync, "presence", noop)      # TODO
 
         rooms = self.client.rooms
 
@@ -217,8 +216,6 @@ class Sync(JSONClientModule):
                     prev_batch, before_id, after.id, after.date,
                 )
 
-            # await events_call(data, "account_data", room.handle_event)
-            # await events_call(data, "ephemeral", room.handle_event)
             await room_events_call(data, "state", room)
             await room_events_call(data, "timeline", room)
 

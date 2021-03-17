@@ -287,8 +287,9 @@ class E2E(JSONClientModule):
         return encrypted
 
 
-    def drop_outbound_group_session(self, room_id: RoomId) -> None:
+    async def drop_outbound_group_session(self, room_id: RoomId) -> None:
         self.out_group_sessions.pop(room_id, None)
+        await self.save()
 
 
     async def _upload_keys(self) -> None:
