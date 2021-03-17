@@ -3,12 +3,14 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import (
-    TYPE_CHECKING, Any, Collection, Dict, List, Optional, Set, Tuple,
+    TYPE_CHECKING, Any, Collection, DefaultDict, Dict, List, Optional, Set,
+    Tuple,
 )
 from uuid import uuid4
 
 import olm
 
+from ..core.callbacks import CallbackGroup, Callbacks, EventCallbacks
 from ..core.contents import EventContent
 from ..core.data import IndexableMap, Runtime
 from ..core.types import UserId
@@ -28,14 +30,45 @@ LOG = get_logger()
 # {user_id: [device_id]} - empty list means to get all devices for that user
 UserDeviceIds = Dict[UserId, List[str]]
 
+DeviceMap = IndexableMap[UserId, Dict[str, Device]]
+
+
+class MioDeviceCallbacks(CallbackGroup):
+    async def on_megolm_keys(
+        self, devices: "Devices", event: ToDeviceEvent[GroupSessionInfo],
+    ) -> None:
+
+        assert event.decryption
+        assert isinstance(event.decryption.original.content, Olm)
+
+        sender_curve25519 = event.decryption.original.content.sender_curve25519
+        sender_ed25519    = event.decryption.payload["keys"]["ed25519"]
+        content           = event.content
+
+        ses = devices.client.e2e.in_group_sessions
+        key = (content.room_id, sender_curve25519, content.session_id)
+
+        if key not in ses:
+            session  = olm.InboundGroupSession(content.session_key)
+            ses[key] = (session, sender_ed25519, {})
+            await devices.client.e2e.save()
+
 
 @dataclass
-class Devices(JSONClientModule, IndexableMap[UserId, Dict[str, Device]]):
+class Devices(JSONClientModule, DeviceMap, EventCallbacks):
     # {user_id: {device_id: Device}}
     _data: Dict[UserId, Dict[str, Device]] = field(default_factory=dict)
 
     # {user_id: sync.next_batch of last change of None for full update}
     outdated: Dict[UserId, Optional[str]] = field(default_factory=dict)
+
+    callbacks: Runtime[Callbacks] = field(
+        init=False, repr=False, default_factory=lambda: DefaultDict(list),
+    )
+
+    callback_groups: Runtime[List["CallbackGroup"]] = field(
+        init=False, repr=False, default_factory=lambda: [MioDeviceCallbacks()],
+    )
 
     _query_lock: Runtime[Lock] = field(init=False, default_factory=Lock)
 
@@ -153,28 +186,6 @@ class Devices(JSONClientModule, IndexableMap[UserId, Dict[str, Device]]):
             path   = [*self.client.api, "sendToDevice", m_type, str(uuid4())],
             body   = {"messages": msgs},
         )
-
-
-    async def handle_event(self, event: ToDeviceEvent) -> None:
-        LOG.debug("%s got to-device event: %r", self.client.user_id, event)
-
-        if not isinstance(event.content, GroupSessionInfo):
-            return
-
-        assert event.decryption
-        assert isinstance(event.decryption.original.content, Olm)
-
-        sender_curve25519 = event.decryption.original.content.sender_curve25519
-        sender_ed25519    = event.decryption.payload["keys"]["ed25519"]
-        content           = event.content
-
-        ses = self.client.e2e.in_group_sessions
-        key = (content.room_id, sender_curve25519, content.session_id)
-
-        if key not in ses:
-            session  = olm.InboundGroupSession(content.session_key)
-            ses[key] = (session, sender_ed25519, {})
-            await self.save()
 
 
     def _handle_queried(

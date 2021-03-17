@@ -151,8 +151,8 @@ class Sync(JSONClientModule):
         changed = sync.get("device_lists", {}).get("changed", [])
         await self.client.devices.update(changed)
 
-        coro = self.client.devices.handle_event
-        await events_call(sync, "to_device", ToDeviceEvent, coro)
+        to_call = self.client.devices
+        await events_call(sync, "to_device", ToDeviceEvent, to_call)
 
         rooms = self.client.rooms
 
