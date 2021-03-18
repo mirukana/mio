@@ -108,6 +108,11 @@ class MegolmPayloadWrongSender(MegolmVerificationError):
 
 
 @dataclass
+class MegolmPayloadFromUntrustedDevice(MegolmVerificationError):
+    device: "Device"
+
+
+@dataclass
 class MegolmPayloadFromBlockedDevice(MegolmVerificationError):
     device: "Device"
 

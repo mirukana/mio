@@ -190,8 +190,8 @@ class E2E(JSONClientModule):
             # TODO: unwedge, request keys?
             raise err.NoInboundGroupSessionToDecrypt(*key)
 
-        verif_err: Optional[err.MegolmVerificationError]
-        verif_err = err.MegolmPayloadWrongSender(
+        error: Optional[err.MegolmVerificationError]
+        error = err.MegolmPayloadWrongSender(
             starter_ed25519, content.sender_curve25519,
         )
 
@@ -199,9 +199,11 @@ class E2E(JSONClientModule):
             if device.curve25519 == content.sender_curve25519:
                 if device.ed25519 == starter_ed25519:
                     if device.trusted is False:
-                        verif_err = err.MegolmPayloadFromBlockedDevice(device)
+                        error = err.MegolmPayloadFromBlockedDevice(device)
+                    elif device.trusted is None:
+                        error = err.MegolmPayloadFromUntrustedDevice(device)
                     else:
-                        verif_err = None
+                        error = None
 
         try:
             json_payload, message_index = session.decrypt(content.ciphertext)
@@ -217,7 +219,7 @@ class E2E(JSONClientModule):
             decrypted_indice[message_index] = (event.id, event.date)
             await self.save()
 
-        return (json.loads(json_payload), verif_err)
+        return (json.loads(json_payload), error)
 
 
     async def encrypt_room_event(
