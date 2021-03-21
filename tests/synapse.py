@@ -109,9 +109,13 @@ class SynapseHandle:
                 },
             })
 
-            # Set log file path
             with edit_yaml(config["log_config"]) as log_config:
+                # Set log file path
                 log_config["handlers"]["file"]["filename"] = str(self.log)
+                # Ensure log file is updated in real time
+                log_config["handlers"]["buffer"]["capacity"] = 0
+                # Hide SQLite background updates noise
+                log_config["loggers"]["synapse.storage"] = {"level": "WARNING"}
 
 
     def stop(self) -> None:
