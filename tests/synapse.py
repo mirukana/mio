@@ -1,3 +1,4 @@
+import os
 import shutil
 import socket
 import subprocess
@@ -34,7 +35,12 @@ class SynapseHandle:
 
     @property
     def running(self) -> bool:
-        return (self.dir / "homeserver.pid").exists()
+        try:
+            # signal 0 does nothing if process exists, raises if it doesn't
+            os.kill(int((self.dir / "homeserver.pid").read_text()), 0)
+            return True
+        except OSError:
+            return False
 
 
     @property
