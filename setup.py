@@ -53,7 +53,6 @@ setup(
             pep8-naming           >= 0.11.1,  < 0.12
             pytest                >= 6.2.1,   < 7
             pytest-asyncio        >= 0.14.0,  < 0.15
-            pytest-clarity        >= 0.3.0a0, < 0.4
             pytest-xdist[psutil]  >= 2.2.1,   < 3
             ruamel.yaml           >= 0.16.13, < 0.17
         """),
