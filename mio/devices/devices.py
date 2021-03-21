@@ -86,6 +86,10 @@ class MioDeviceCallbacks(CallbackGroup):
             LOG.exception("Failed importing session from %r", event)
             return
 
+        if content.compare_key in devices.client.e2e.in_group_sessions:
+            LOG.warning("Session already present for %r, ignoring", event)
+            return
+
         sender_curve = event.decryption.original.content.sender_curve25519
 
         devices.client.e2e.in_group_sessions[content.compare_key] = (
