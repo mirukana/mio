@@ -1,8 +1,10 @@
+import asyncio
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 from ..core.data import JSON, Parent
 from ..core.types import UserId
+from ..e2e.contents import GroupSessionRequest
 
 if TYPE_CHECKING:
     from .devices import Devices
@@ -19,11 +21,21 @@ class Device(JSON):
     display_name:   Optional[str]  = field(default=None, compare=False)
     trusted:        Optional[bool] = field(default=None, compare=False)
 
+    pending_session_requests: Dict[str, GroupSessionRequest] = field(
+        default_factory=dict, compare=False,
+    )
+
 
     async def trust(self) -> None:
         self.trusted = True
-        # TODO: save devices in their own files
         await self.devices.save()
+
+        forward = self.devices.client.e2e.forward_group_session
+
+        await asyncio.gather(*[
+            forward(self.user_id, request)
+            for request in self.pending_session_requests.values()
+        ])
 
 
     async def block(self) -> None:

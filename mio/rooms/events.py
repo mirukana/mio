@@ -1,12 +1,13 @@
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional, Type, TypeVar
+from typing import TYPE_CHECKING, List, Optional, Type, TypeVar, Union
 
 from ..core.contents import ContentT
 from ..core.data import Parent, Runtime
 from ..core.events import Event
 from ..core.types import DictS, EventId, RoomId, UserId
 from ..core.utils import get_logger
+from ..devices.device import Device
 from ..e2e.contents import Megolm
 from ..e2e.errors import MegolmVerificationError
 
@@ -23,14 +24,14 @@ DecryptInfo = Optional["TimelineDecryptInfo"]
 class TimelineEvent(Event[ContentT]):
     aliases = {"id": "event_id", "date": "origin_server_ts"}
 
-    room:       Parent["Room"]       = field(repr=False)
+    room:       Parent["Room"] = field(repr=False)
     content:    ContentT
     id:         EventId
     sender:     UserId
     date:       datetime
     redacts:    Optional[EventId]    = None
     room_id:    Optional[RoomId]     = None
-    decryption: Runtime[DecryptInfo] = field(default=None, repr=False)
+    decryption: Runtime[DecryptInfo] = None
     # TODO: unsigned
 
     def __lt__(self, other: "TimelineEvent") -> bool:
@@ -40,13 +41,13 @@ class TimelineEvent(Event[ContentT]):
         if not isinstance(self.content, Megolm):
             return self
 
-        decrypt            = self.room.client.e2e.decrypt_megolm_payload
-        payload, verif_err = await decrypt(self.room.id, self)  # type: ignore
+        decrypt                = self.room.client.e2e.decrypt_megolm_payload
+        payload, chain, errors = await decrypt(self)  # type: ignore
 
         clear = type(self).from_dict({**self.source, **payload}, self.room)
-        clear.decryption = TimelineDecryptInfo(self, payload, verif_err)
+        clear.decryption = TimelineDecryptInfo(self, payload, chain, errors)
 
-        if verif_err:
+        if errors:
             LOG.warning("Error verifying decrypted event %r\n", clear)
 
         return clear
@@ -54,9 +55,13 @@ class TimelineEvent(Event[ContentT]):
 
 @dataclass
 class TimelineDecryptInfo:
-    original:           "TimelineEvent"
-    payload:            DictS
-    verification_error: Optional[MegolmVerificationError] = None
+    original:      "TimelineEvent"          = field(repr=False)
+    payload:       DictS                    = field(repr=False)
+    forward_chain: List[Union[Device, str]] = field(default_factory=list)
+
+    verification_errors: List[MegolmVerificationError] = field(
+        default_factory=list,
+    )
 
 
 @dataclass

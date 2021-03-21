@@ -43,7 +43,7 @@ class Sync(JSONClientModule):
         since:        Optional[str]  = None,
         full_state:   Optional[bool] = None,
         set_presence: Optional[str]  = None,
-    ) -> None:
+    ) -> Optional[dict]:
 
         parameters = {
             "timeout":      int(timeout * 1000),
@@ -63,6 +63,9 @@ class Sync(JSONClientModule):
 
         if self.next_batch != result["next_batch"]:
             await self.handle_sync(result)
+            return result
+
+        return None
 
 
     async def loop(

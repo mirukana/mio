@@ -20,6 +20,12 @@ async def get_client(synapse: SynapseHandle, path: Path, name: str) -> Client:
     return await Client.login_password(path, synapse.url, name, "test")
 
 
+async def new_device_from(client: Client, path: Path) -> Client:
+    return await Client.login_password(
+        path, client.server, client.user_id, password="test",
+    )
+
+
 def read_json(path: Union[Path, str]) -> dict:
     return json.loads(Path(path).read_text())
 

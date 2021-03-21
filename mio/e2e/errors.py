@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict
+from typing import TYPE_CHECKING, Dict, Optional
 
 from ..core.errors import MioError
 
@@ -102,18 +102,28 @@ class MegolmVerificationError(VerificationError):
 
 
 @dataclass
-class MegolmPayloadWrongSender(MegolmVerificationError):
+class MegolmWrongSender(MegolmVerificationError):
     starter_device_ed25519: str
     sender_curve25519:      str
 
 
 @dataclass
-class MegolmPayloadFromUntrustedDevice(MegolmVerificationError):
+class MegolmFromUntrustedDevice(MegolmVerificationError):
+    device: Optional["Device"]
+
+
+@dataclass
+class MegolmFromBlockedDevice(MegolmVerificationError):
     device: "Device"
 
 
 @dataclass
-class MegolmPayloadFromBlockedDevice(MegolmVerificationError):
+class MegolmUntrustedDeviceInForwardChain(MegolmVerificationError):
+    device: Optional["Device"]
+
+
+@dataclass
+class MegolmBlockedDeviceInForwardChain(MegolmVerificationError):
     device: "Device"
 
 

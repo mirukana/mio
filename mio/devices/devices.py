@@ -15,7 +15,10 @@ from ..core.contents import EventContent
 from ..core.data import IndexableMap, Runtime
 from ..core.types import UserId
 from ..core.utils import get_logger
-from ..e2e.contents import GroupSessionInfo, Olm
+from ..e2e.contents import (
+    CancelGroupSessionRequest, ForwardedGroupSessionInfo, GroupSessionInfo,
+    GroupSessionRequest, Olm,
+)
 from ..e2e.errors import InvalidSignedDict
 from ..module import JSONClientModule
 from . import errors
@@ -33,6 +36,7 @@ UserDeviceIds = Dict[UserId, List[str]]
 DeviceMap = IndexableMap[UserId, Dict[str, Device]]
 
 
+@dataclass
 class MioDeviceCallbacks(CallbackGroup):
     async def on_megolm_keys(
         self, devices: "Devices", event: ToDeviceEvent[GroupSessionInfo],
@@ -50,14 +54,84 @@ class MioDeviceCallbacks(CallbackGroup):
 
         if key not in ses:
             session  = olm.InboundGroupSession(content.session_key)
-            ses[key] = (session, sender_ed25519, {})
+            ses[key] = (session, sender_ed25519, {}, [])
+            LOG.info("Added group session from %r", event)
+
+            devices.client.e2e.sent_session_requests.pop(key, None)
             await devices.client.e2e.save()
+
+
+    async def on_forwarded_megolm_keys(
+        self,
+        devices: "Devices",
+        event:   ToDeviceEvent[ForwardedGroupSessionInfo],
+    ) -> None:
+
+        content          = event.content
+        requests         = devices.client.e2e.sent_session_requests
+        request, sent_to = requests.get(content.compare_key, (None, {}))
+
+        if not request or not sent_to:
+            LOG.warning("Ignoring unrequested %r (%r)", event, set(requests))
+            return
+
+        if not event.decryption:
+            LOG.warning("Ignoring %r sent unencrypted", event)
+            return
+
+        try:
+            key     = content.session_key
+            session = olm.InboundGroupSession.import_session(key)
+        except olm.OlmGroupSessionError:
+            LOG.exception("Failed importing session from %r", event)
+            return
+
+        sender_curve = event.decryption.original.content.sender_curve25519
+
+        devices.client.e2e.in_group_sessions[content.compare_key] = (
+            session,
+            content.creator_supposed_ed25519,
+            {},
+            content.curve25519_forward_chain + [sender_curve],
+        )
+        LOG.info("Imported group session from %r", event)
+
+        requests.pop(content.compare_key)
+        await devices.client.e2e.save()
+
+        await devices.send({
+            device: request.cancellation
+            for user_id in sent_to
+            for device in devices[user_id].values()
+        })
+
+
+    async def on_megolm_keys_request(
+        self,
+        devices: "Devices",
+        event:   ToDeviceEvent[GroupSessionRequest],
+    ) -> None:
+
+        e2e = devices.client.e2e
+        await e2e.forward_group_session(event.sender, event.content)
+
+
+    async def on_megolm_keys_request_cancel(
+        self,
+        devices: "Devices",
+        event:   ToDeviceEvent[CancelGroupSessionRequest],
+    ) -> None:
+
+        e2e = devices.client.e2e
+        await e2e.cancel_forward_group_session(event.sender, event.content)
 
 
 @dataclass
 class Devices(JSONClientModule, DeviceMap, EventCallbacks):
     # {user_id: {device_id: Device}}
     _data: Dict[UserId, Dict[str, Device]] = field(default_factory=dict)
+
+    by_curve: Runtime[Dict[str, Device]] = field(default_factory=dict)
 
     # {user_id: sync.next_batch of last change of None for full update}
     outdated: Dict[UserId, Optional[str]] = field(default_factory=dict)
@@ -95,8 +169,12 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
     async def ensure_tracked(
         self, users: Collection[UserId], timeout: float = 10,
     ) -> None:
-        await self.update({u for u in users if u not in self}, timeout=timeout)
 
+        for devices in self.values():
+            for device in devices.values():
+                self.by_curve[device.curve25519] = device
+
+        await self.update({u for u in users if u not in self}, timeout=timeout)
 
 
     async def update(
@@ -149,7 +227,8 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
 
     def drop(self, *users: UserId) -> None:
         for user_id in users:
-            self._data.pop(user_id, None)
+            for device in self._data.pop(user_id, {}).values():
+                self.by_curve.pop(device.curve25519, None)
 
 
     async def send(self, contents: Dict[Device, EventContent]) -> None:
@@ -207,19 +286,27 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
             if ed25519 != signer_ed25519:
                 raise errors.DeviceEd25519Mismatch(ed25519, signer_ed25519)
 
-        present = self._data.get(user_id, {}).get(device_id)
+        present    = self._data.get(user_id, {}).get(device_id)
+        us         = self.client
+        own_device = user_id == us.user_id and device_id == us.device_id
 
-        self._data.setdefault(user_id, {})[device_id] = Device(
+        device = Device(
             devices        = self,
             user_id        = user_id,
             device_id      = device_id,
             ed25519        = signer_ed25519,
             curve25519     = info["keys"][f"curve25519:{device_id}"],
             e2e_algorithms = info["algorithms"],
-            trusted        = present.trusted if present else None,
-            display_name   =
+
+            trusted =
+                True if own_device else present.trusted if present else None,
+
+            display_name =
                 info.get("unsigned", {}).get("device_display_name"),
         )
+
+        self._data.setdefault(user_id, {})[device_id] = device
+        self.by_curve[device.curve25519]              = device
 
 
     async def _encrypt(

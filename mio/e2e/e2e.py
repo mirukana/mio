@@ -1,15 +1,18 @@
 import json
+from asyncio import Future, ensure_future
 from dataclasses import dataclass, field
 from datetime import datetime
 from functools import partial
 from pathlib import Path
 from typing import (
     TYPE_CHECKING, Any, Collection, Dict, List, Optional, Set, Tuple, Type,
+    Union,
 )
 
 import olm
 
 from ..core.contents import EventContent
+from ..core.data import Runtime
 from ..core.types import EventId, RoomId, UserId
 from ..core.utils import get_logger
 from ..devices.device import Device
@@ -17,27 +20,31 @@ from ..devices.events import ToDeviceEvent
 from ..module import JSONClientModule
 from ..rooms.contents.settings import Encryption
 from ..rooms.timeline import TimelineEvent
-from . import Algorithm
+from . import Algorithm, MegolmAlgorithm
 from . import errors as err
-from .contents import GroupSessionInfo, Megolm, Olm
+from .contents import (
+    CancelGroupSessionRequest, ForwardedGroupSessionInfo, GroupSessionInfo,
+    GroupSessionRequest, Megolm, Olm,
+)
 
 if TYPE_CHECKING:
     from ..client import Client
 
-# TODO: https://github.com/matrix-org/matrix-doc/pull/2732 (fallback OTK)
 # TODO: protect against concurrency and saving sessions before sharing
 
 LOG = get_logger()
 
 Payload = Dict[str, Any]
 
+# (room_id, sender_curve25519, session_id)
+InboundGroupSessionKey = Tuple[RoomId, str, str]
+
 MessageIndice = Dict[int, Tuple[EventId, datetime]]
 
 InboundGroupSessionsType = Dict[
-    # (room_id, sender_curve25519, session_id)
-    Tuple[RoomId, str, str],
-    # (session, sender_ed25519, message_indices)
-    Tuple[olm.InboundGroupSession, str, MessageIndice],
+    InboundGroupSessionKey,
+    # (session, sender_ed25519, message_indices, curve25519_forwarding_chain)
+    Tuple[olm.InboundGroupSession, str, MessageIndice, List[str]],
 ]
 
 # {user_id: {device_id}}
@@ -47,6 +54,13 @@ SharedTo = Dict[UserId, Set[str]]
 OutboundGroupSessionsType = Dict[
     RoomId, Tuple[olm.OutboundGroupSession, datetime, int, SharedTo],
 ]
+
+SessionRequestsType = Dict[
+    InboundGroupSessionKey,
+    Tuple[GroupSessionRequest, Set[UserId]],  # set: users we sent request to
+]
+
+DeviceChain = List[Union[Device, str]]
 
 
 def _olm_pickle(self, obj) -> str:
@@ -86,6 +100,12 @@ class E2E(JSONClientModule):
 
     in_group_sessions:  InboundGroupSessionsType  = field(default_factory=dict)
     out_group_sessions: OutboundGroupSessionsType = field(default_factory=dict)
+
+    sent_session_requests: SessionRequestsType = field(default_factory=dict)
+
+    _forward_tasks: Runtime[Dict[str, Future]] = field(
+        init=False, default_factory=dict,
+    )
 
 
     async def __ainit__(self) -> None:
@@ -177,37 +197,32 @@ class E2E(JSONClientModule):
 
 
     async def decrypt_megolm_payload(
-        self, room_id: RoomId, event: TimelineEvent[Megolm],
-    ) -> Tuple[Payload, Optional[err.MegolmVerificationError]]:
+        self, event: TimelineEvent[Megolm],
+    ) -> Tuple[Payload, DeviceChain, List[err.MegolmVerificationError]]:
 
+        room_id = event.room.id
         content = event.content
         key     = (room_id, content.sender_curve25519, content.session_id)
 
         try:
-            session, starter_ed25519, decrypted_indice = \
+            session, starter_ed25519, decrypted_indice, forward_chain = \
                 self.in_group_sessions[key]
         except KeyError:
-            # TODO: unwedge, request keys?
+            await self._request_group_session(event)
             raise err.NoInboundGroupSessionToDecrypt(*key)
 
-        error: Optional[err.MegolmVerificationError]
-        error = err.MegolmPayloadWrongSender(
-            starter_ed25519, content.sender_curve25519,
-        )
+        # Last device is our current one because this chain is to be sent
+        # to users who might request this session
+        forward_chain = forward_chain[:-1]
 
-        for device in self.client.devices[event.sender].values():
-            if device.curve25519 == content.sender_curve25519:
-                if device.ed25519 == starter_ed25519:
-                    if device.trusted is False:
-                        error = err.MegolmPayloadFromBlockedDevice(device)
-                    elif device.trusted is None:
-                        error = err.MegolmPayloadFromUntrustedDevice(device)
-                    else:
-                        error = None
+        device_chain, verrors = self._verify_megolm(
+            event, content.sender_curve25519, starter_ed25519, forward_chain,
+        )
 
         try:
             json_payload, message_index = session.decrypt(content.ciphertext)
         except olm.OlmGroupSessionError as e:
+            await self._request_group_session(event)
             raise err.MegolmSessionError(code=e.args[0])
 
         known = message_index in decrypted_indice
@@ -219,7 +234,8 @@ class E2E(JSONClientModule):
             decrypted_indice[message_index] = (event.id, event.date)
             await self.save()
 
-        return (json.loads(json_payload), error)
+        # TODO: catch json error
+        return (json.loads(json_payload), device_chain, verrors)
 
 
     async def encrypt_room_event(
@@ -248,7 +264,7 @@ class E2E(JSONClientModule):
             our_ed     = self.device.ed25519
             in_session = olm.InboundGroupSession(session.session_key)
 
-            self.in_group_sessions[key] = (in_session, our_ed, {})
+            self.in_group_sessions[key] = (in_session, our_ed, {}, [])
 
         # Make sure first we know about all the devices to send session to:
         await self.client.devices.ensure_tracked(for_users)
@@ -293,6 +309,79 @@ class E2E(JSONClientModule):
         self.out_group_sessions.pop(room_id, None)
         await self.save()
 
+
+    async def forward_group_session(
+        self, to_user_id: UserId, request: GroupSessionRequest,
+    ) -> None:
+
+        devices = self.client.devices
+        details = self.in_group_sessions.get(request.compare_key)
+
+        if not details:
+            LOG.info("Ignoring %r, no matching session to share", request)
+            return
+
+        dev = devices.get(to_user_id, {}).get(request.requesting_device_id)
+
+        if not dev:
+            LOG.warning("Ignoring %r from unknown device")
+            return
+
+        if dev.user_id != devices.client.user_id:
+            LOG.warning("Ignoring %r, session not created by us", request, dev)
+            return
+
+        if not dev.trusted:
+            LOG.warning("Pending %r from untrusted device %r", request, dev)
+            dev.pending_session_requests[request.request_id] = request
+            await devices.save()
+            return
+
+        session, creator_ed25519, _i, forward_chain = details
+
+        exported = session.export_session(session.first_known_index)
+
+        info = ForwardedGroupSessionInfo(
+            algorithm                  = MegolmAlgorithm.megolm_v1,
+            room_id                    = request.room_id,
+            session_creator_curve25519 = request.session_creator_curve25519,
+            creator_supposed_ed25519   = creator_ed25519,
+            session_id                 = session.id,
+            session_key                = exported,
+            curve25519_forward_chain   = forward_chain,
+        )
+
+        olms, no_otks = await devices._encrypt(info, dev)
+
+        if no_otks:
+            LOG.warning("No one-time key for %r, can't send %r", no_otks, info)
+            return
+
+        task = ensure_future(devices.send(olms))  # type: ignore
+        self._forward_tasks[request.request_id] = task
+        await task
+
+        if dev.pending_session_requests.pop(request.request_id, None):
+            await devices.save()
+
+
+    async def cancel_forward_group_session(
+        self, for_user_id: UserId, request: CancelGroupSessionRequest,
+    ) -> None:
+
+        devices = self.client.devices
+
+        task = self._forward_tasks.pop(request.request_id, None)
+        dev  = devices.get(for_user_id, {}).get(request.requesting_device_id)
+
+        if task:
+            task.cancel()
+
+        if dev:
+            dev.pending_session_requests.pop(request.request_id, None)
+
+
+    # Private methods
 
     async def _upload_keys(self) -> None:
         device_keys = {
@@ -379,7 +468,7 @@ class E2E(JSONClientModule):
             return
 
         info = GroupSessionInfo(
-            algorithm   = Algorithm.megolm_v1,
+            algorithm   = MegolmAlgorithm.megolm_v1,
             room_id     = room_id,
             session_id  = session.id,
             session_key = session.session_key,
@@ -396,6 +485,36 @@ class E2E(JSONClientModule):
 
         await self.client.devices.send(olms)  # type: ignore
 
+
+    async def _request_group_session(
+        self, for_event: TimelineEvent[Megolm],
+    ) -> None:
+
+        curve       = for_event.content.sender_curve25519
+        session_id  = for_event.content.session_id
+        request_key = (for_event.room.id, curve, session_id)
+
+        if request_key in self.sent_session_requests:
+            return
+
+        request = GroupSessionRequest.from_megolm(for_event)
+        send_to = {self.client.user_id, for_event.sender}
+
+        self.sent_session_requests[request_key] = (request, send_to)
+
+        await self.client.devices.ensure_tracked([for_event.sender])
+
+        await self.client.devices.send({
+            device: request
+            for target in send_to
+            for device in self.client.devices[target].values()
+            if device.trusted is not False
+        })
+
+        await self.save()
+
+
+    # Utils
 
     @staticmethod
     def _canonical_json(value: Any) -> bytes:
@@ -463,6 +582,41 @@ class E2E(JSONClientModule):
             payload_from_ed,
             event.content.sender_curve25519,
         )
+
+
+    def _verify_megolm(
+        self,
+        event:                    TimelineEvent[Megolm],
+        sender_curve25519:        str,
+        session_creator_ed25519:  str,
+        curve25519_forward_chain: List[str],
+    ) -> Tuple[DeviceChain, List[err.MegolmVerificationError]]:
+
+        errors:       List[err.MegolmVerificationError] = []
+        device_chain: DeviceChain                       = []
+
+        content = event.content
+        device  = self.client.devices.by_curve.get(content.sender_curve25519)
+
+        if device and device.ed25519 == session_creator_ed25519:
+            if device.trusted is False:
+                errors.append(err.MegolmFromBlockedDevice(device))
+            elif device.trusted is None:
+                errors.append(err.MegolmFromUntrustedDevice(device))
+        else:
+            args = (session_creator_ed25519, content.sender_curve25519)
+            errors.append(err.MegolmWrongSender(*args))
+
+        for curve in curve25519_forward_chain:
+            found = self.client.devices.by_curve.get(curve)
+            device_chain.append(found or curve)
+
+            if found and found.trusted is False:
+                errors.append(err.MegolmBlockedDeviceInForwardChain(found))
+            elif not found or found.trusted is None:
+                errors.append(err.MegolmUntrustedDeviceInForwardChain(found))
+
+        return (device_chain, errors)
 
 
     @staticmethod
