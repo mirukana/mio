@@ -212,13 +212,19 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
                     result["failures"],
                 )
 
-            for user_id, devs in result["device_keys"].items():
+            for user_id, queried_devices in result["device_keys"].items():
                 if self.outdated[user_id] == sync_token:
                     del self.outdated[user_id]
 
-                for device_id, info in devs.items():
+                for device_id, device in self.get(user_id, {}).copy().items():
+                    if device_id not in queried_devices:
+                        del self[user_id][device_id]
+                        del self.by_curve[device.curve25519]
+
+                for device_id, info in queried_devices.items():
                     try:
-                        self._handle_queried(user_id, device_id, info)
+                        added = self._handle_queried(user_id, device_id, info)
+                        LOG.info("Registered %r", added)
                     except (errors.QueriedDeviceError, InvalidSignedDict) as e:
                         LOG.warning("Rejected queried device %r: %r", info, e)
 
@@ -269,7 +275,7 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
 
     def _handle_queried(
         self, user_id: UserId, device_id: str, info: Dict[str, Any],
-    ) -> None:
+    ) -> Device:
 
         if info["user_id"] != user_id:
             raise errors.DeviceUserIdMismatch(user_id, info["user_id"])
@@ -307,6 +313,7 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
 
         self._data.setdefault(user_id, {})[device_id] = device
         self.by_curve[device.curve25519]              = device
+        return device
 
 
     async def _encrypt(

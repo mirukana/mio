@@ -52,3 +52,18 @@ async def test_tracking(alice: Client, e2e_room: Room, bob: Client, tmp_path):
     assert bob.user_id not in alice.devices
     assert bob_dev1.curve25519 not in alice.devices.by_curve
     assert bob_dev2.curve25519 not in alice.devices.by_curve
+
+
+async def test_discard_gone_user_devices(alice: Client, tmp_path):
+    await alice.sync.once()
+    dev1 = alice.devices.current
+    assert list(alice.devices.own.values()) == [dev1]
+
+    alice2 = await new_device_from(alice, tmp_path)
+    dev2   = alice2.devices.current
+    await alice.sync.once()
+    assert list(alice.devices.own.values()) == [dev1, dev2]
+
+    await alice2.auth.logout()
+    await alice.sync.once()
+    assert list(alice.devices.own.values()) == [dev1]
