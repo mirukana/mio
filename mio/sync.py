@@ -123,7 +123,8 @@ class Sync(JSONClientModule):
             for event in data.get(key, {}).get("events", ()):
                 with log_errors(InvalidEvent):
                     if "state_key" in event:
-                        await room(state.from_dict(event, room))
+                        state_ev = state.from_dict(event, room)
+                        await room._call_callbacks(state_ev)
 
                     if key != "timeline":
                         continue
@@ -133,7 +134,7 @@ class Sync(JSONClientModule):
                     with log_errors(DecryptionError):
                         ev = await ev.decrypted()
 
-                    await room(ev)
+                    await room._call_callbacks(ev)
 
         e2e_senders: Set[UserId] = set()
 
@@ -154,7 +155,7 @@ class Sync(JSONClientModule):
         changed = sync.get("device_lists", {}).get("changed", [])
         await self.client.devices.update(changed)
 
-        to_call = self.client.devices
+        to_call = self.client.devices._call_callbacks
         await events_call(sync, "to_device", ToDeviceEvent, to_call)
 
         rooms = self.client.rooms

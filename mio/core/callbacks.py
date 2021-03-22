@@ -43,7 +43,7 @@ class EventCallbacks:
         return self.callback_groups  # type: ignore
 
 
-    async def __call__(self, event: Event) -> None:
+    async def _call_callbacks(self, event: Event) -> None:
         for annotation, callbacks in self._callbacks().items():
             ann_type = getattr(annotation, "__origin__", annotation)
 
