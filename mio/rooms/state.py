@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING, Dict, Optional, Tuple, Type, Union
 
 from ..core.contents import EventContent
 from ..core.data import JSONFile, Map, Parent
@@ -12,9 +12,13 @@ from .events import InvitedRoomStateEvent, StateBase, StateEvent
 if TYPE_CHECKING:
     from .room import Room
 
+Key = Union[
+    Type[EventContent], str, Tuple[Type[EventContent], str], Tuple[str, str],
+]
+
 
 @dataclass
-class RoomState(JSONFile, Map[str, Dict[str, StateBase]]):
+class RoomState(JSONFile, Map[Tuple[str, str], StateBase]):
     loaders = {
         **JSONFile.loaders,  # type: ignore
 
@@ -26,14 +30,22 @@ class RoomState(JSONFile, Map[str, Dict[str, StateBase]]):
     room: Parent["Room"] = field(repr=False)
 
     # {event.type: {event.state_key: event}}
-    _data: Dict[str, Dict[str, StateBase]] = field(default_factory=dict)
+    _data: Dict[Tuple[str, str], StateBase] = field(default_factory=dict)
+
+
+    def __getitem__(self, key: Key) -> StateBase:
+        if not isinstance(key, tuple):
+            key = (key, "")  # type: ignore
+
+        if isinstance(key[0], type):  # type: ignore
+            key = (key[0].type, key[1])  # type: ignore
+
+        return self._data[key]  # type: ignore
 
 
     async def load(self) -> "RoomState":
         await super().load()
-        await self._register(*[
-            ev for state_keys in self.values() for ev in state_keys.values()
-        ])
+        await self._register(*list(self.values()))
         return self
 
 
@@ -44,8 +56,7 @@ class RoomState(JSONFile, Map[str, Dict[str, StateBase]]):
 
     @property
     def encryption(self) -> Optional[Encryption]:
-        event = self.get(Encryption.type, {}).get("")
-        return event.content if event else None
+        return self[Encryption].content if Encryption in self else None
 
 
     def users(
@@ -56,9 +67,6 @@ class RoomState(JSONFile, Map[str, Dict[str, StateBase]]):
         banned:   bool = True,
     ) -> Dict[UserId, StateBase[Member]]:
 
-        if invitees and joined and left and banned:
-            return self.get(Member.type, {})  # type: ignore
-
         include = {
             Member.Kind.invite: invitees,
             Member.Kind.join: joined,
@@ -67,9 +75,10 @@ class RoomState(JSONFile, Map[str, Dict[str, StateBase]]):
         }
 
         return {
-            UserId(uid): event
-            for uid, event in self.get(Member.type, {}).items()
-            if include[event.content.membership]
+            UserId(state_key): event
+            for (_mtype, state_key), event in self.items()
+            if isinstance(event.content, Member) and
+            include[event.content.membership]
         }
 
 
@@ -119,7 +128,7 @@ class RoomState(JSONFile, Map[str, Dict[str, StateBase]]):
     async def _register(self, *events: StateBase) -> None:
         for event in events:
             assert event.type
-            self._data.setdefault(event.type, {})[event.state_key] = event
+            self._data[event.type, event.state_key] = event
             await self.room._call_callbacks(event)
 
         await self.save()

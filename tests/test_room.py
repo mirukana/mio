@@ -15,7 +15,7 @@ async def test_create_alias(room: Room):
     await room.create_alias(alias)
     await room.state.send(CanonicalAlias(alias))
     await room.client.sync.once()
-    assert room.state[CanonicalAlias.type][""].content.alias == alias
+    assert room.state[CanonicalAlias].content.alias == alias
 
 
 async def test_leave(e2e_room: Room):
