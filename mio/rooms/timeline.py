@@ -106,7 +106,7 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
             content = await room.client._e2e.encrypt_room_event(
                 room_id   = room.id,
                 for_users = room.state.members,
-                settings  = room.state.encryption.content,
+                settings  = room.state.encryption,
                 content   = content,
             )
 

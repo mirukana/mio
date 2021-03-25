@@ -43,8 +43,9 @@ class RoomState(JSONFile, Map[str, Dict[str, StateBase]]):
 
 
     @property
-    def encryption(self) -> Optional[StateBase[Encryption]]:
-        return self.get(Encryption.type, {}).get("")
+    def encryption(self) -> Optional[Encryption]:
+        event = self.get(Encryption.type, {}).get("")
+        return event.content if event else None
 
 
     def users(
