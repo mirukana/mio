@@ -11,7 +11,7 @@ from ..core.types import RoomAlias, RoomId
 from ..core.utils import remove_none
 from ..module import ClientModule
 from .contents.users import Member
-from .events import StateBase, TimelineEvent
+from .events import StateBase
 from .room import Room
 
 if TYPE_CHECKING:
@@ -19,12 +19,6 @@ if TYPE_CHECKING:
 
 
 class MioRoomCallbacks(CallbackGroup):
-    async def on_timeline(self, room: Room, event: TimelineEvent) -> None:
-        await room.timeline.register_events(event)
-
-    async def on_state(self, room: Room, event: StateBase) -> None:
-        await room.state.register(event)
-
     async def on_leave(self, room: Room, event: StateBase[Member]) -> None:
         if event.content.left:
             await room.client.e2e.drop_outbound_group_session(room.id)

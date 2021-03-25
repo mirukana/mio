@@ -29,6 +29,14 @@ class RoomState(JSONFile, Map[str, Dict[str, StateBase]]):
     _data: Dict[str, Dict[str, StateBase]] = field(default_factory=dict)
 
 
+    async def load(self) -> "RoomState":
+        await super().load()
+        await self.register(*[
+            ev for state_keys in self.values() for ev in state_keys.values()
+        ])
+        return self
+
+
     @property
     def path(self) -> Path:
         return self.room.client.path.parent / "state.json"
@@ -95,9 +103,12 @@ class RoomState(JSONFile, Map[str, Dict[str, StateBase]]):
         return self.us.sender if self.us and invited else None
 
 
-    async def register(self, event: StateBase) -> None:
-        assert event.type
-        self._data.setdefault(event.type, {})[event.state_key] = event
+    async def register(self, *events: StateBase) -> None:
+        for event in events:
+            assert event.type
+            self._data.setdefault(event.type, {})[event.state_key] = event
+            await self.room._call_callbacks(event)
+
         await self.save()
 
 

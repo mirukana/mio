@@ -48,7 +48,6 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
 
 
     def get_event_file(self, event: TimelineEvent) -> Path:
-        assert event.date
         return self.path.parent / event.date.strftime("%Y-%m-%d/%Hh.json")
 
 
@@ -59,6 +58,7 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
         event_after:      EventId,
         event_after_date: datetime,
     ) -> None:
+
         self.gaps[event_after] = Gap(
             room             = self.room,
             fill_token       = fill_token,
@@ -69,9 +69,16 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
         await self.save()
 
 
-    async def register_events(self, *events: TimelineEvent) -> None:
+    async def register_events(
+        self, *events: TimelineEvent, _save: bool = True,
+    ) -> None:
+
         for event in events:
             self._data[event.id] = event
+            await self.room._call_callbacks(event)
+
+        if not _save:
+            return
 
         for path, event_group in groupby(events, key=self.get_event_file):
             sorted_group = sorted(event_group)
@@ -93,7 +100,8 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
 
 
     async def load_history(self, count: int = 100) -> List[TimelineEvent]:
-        loaded: List[TimelineEvent] = await self._fill_newest_gap(count)
+        loaded:      List[TimelineEvent] = await self._fill_newest_gap(count)
+        disk_loaded: List[TimelineEvent] = []
 
         day_dirs = sorted(
             self.path.parent.glob("????-??-??"), key=lambda d: d.name,
@@ -124,12 +132,13 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
                     with log_errors(DecryptionError):
                         ev = await ev.decrypted()
 
+                    disk_loaded.append(ev)
                     loaded.append(ev)
 
                 if len(loaded) >= count:
                     break
 
-        self._data.update({e.id: e for e in loaded})
+        await self.register_events(*disk_loaded, _save=False)
         return loaded
 
 
