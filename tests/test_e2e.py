@@ -35,7 +35,7 @@ async def test_session_forwarding(alice: Client, e2e_room: Room, tmp_path):
         # Ensure session requests from untrusted or blocked device are pended
 
         assert alice.devices.own[other.device_id].pending_session_requests
-        assert len(other.e2e.sent_session_requests) == 1
+        assert len(other._e2e.sent_session_requests) == 1
 
         other_event = other.rooms[e2e_room.id].timeline[-1]
         assert isinstance(other_event.content, Megolm)
@@ -45,7 +45,7 @@ async def test_session_forwarding(alice: Client, e2e_room: Room, tmp_path):
         await alice.devices.own[other.device_id].trust()
         await other.sync.once()
         assert not alice.devices.own[other.device_id].pending_session_requests
-        assert not other.e2e.sent_session_requests
+        assert not other._e2e.sent_session_requests
 
         other_event = other.rooms[e2e_room.id].timeline[-1]
         assert isinstance(other_event.content, Text)
@@ -82,7 +82,7 @@ async def test_cancel_session_forward(alice: Client, e2e_room: Room, tmp_path):
         await other.rooms[e2e_room.id].timeline.load_history(1)
 
     sent_to = {alice.user_id, alice2.user_id}
-    assert next(iter(alice3.e2e.sent_session_requests.values()))[1] == sent_to
+    assert next(iter(alice3._e2e.sent_session_requests.values()))[1] == sent_to
 
     # Make alice respond to alice3's request before alice2
 
@@ -146,7 +146,7 @@ async def test_forwarding_chains(alice: Client, e2e_room: Room, tmp_path):
     # [forward chain: alice/blocked →] alice2/trusted → alice3
 
     await alice3.devices.own[alice.device_id].block()
-    event = await event.decryption.original.decrypted()
+    event = await event.decryption.original._decrypted()
     assert isinstance(event.content, Text) and event.decryption
     assert event.decryption.forward_chain == [alice.devices.current]
 
@@ -158,7 +158,7 @@ async def test_forwarding_chains(alice: Client, e2e_room: Room, tmp_path):
     # [forward chain: alice/untrusted →] alice2/trusted → alice3
 
     alice3.devices.own[alice.device_id].trusted = None
-    event = await event.decryption.original.decrypted()
+    event = await event.decryption.original._decrypted()
     assert isinstance(event.content, Text) and event.decryption
     assert event.decryption.forward_chain == [alice.devices.current]
 

@@ -113,6 +113,8 @@ class E2E(JSONClientModule):
         return self.client.devices.current
 
 
+    # Methods called from outside this module but shouldn't be used by users
+
     async def upload_one_time_keys(self, currently_uploaded: int) -> None:
         minimum = self.account.max_one_time_keys // 2
 
@@ -370,7 +372,7 @@ class E2E(JSONClientModule):
             dev.pending_session_requests.pop(request.request_id, None)
 
 
-    # Private methods
+    # Internal methods that are only called from this module
 
     async def _upload_keys(self) -> None:
         device_keys = {
@@ -501,7 +503,7 @@ class E2E(JSONClientModule):
         await self.save()
 
 
-    # Utils
+    # Internal utils and verification tools only called from this module
 
     @staticmethod
     def _canonical_json(value: Any) -> bytes:

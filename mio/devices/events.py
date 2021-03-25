@@ -24,11 +24,11 @@ class ToDeviceEvent(Event[ContentT]):
     sender:     UserId
     decryption: Runtime[DecryptInfo] = field(default=None, repr=False)
 
-    async def decrypted(self) -> "ToDeviceEvent":
+    async def _decrypted(self) -> "ToDeviceEvent":
         if not isinstance(self.content, Olm):
             return self
 
-        decrypt            = self.client.e2e.decrypt_olm_payload
+        decrypt            = self.client._e2e.decrypt_olm_payload
         payload, verif_err = await decrypt(self)  # type: ignore
 
         clear = type(self).from_dict({**self.source, **payload}, self.client)

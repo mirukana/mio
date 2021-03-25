@@ -54,64 +54,6 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
         return not self.gaps
 
 
-    def get_event_file(self, event: TimelineEvent) -> Path:
-        return self.path.parent / event.date.strftime("%Y-%m-%d/%Hh.json")
-
-
-    async def register_gap(
-        self,
-        fill_token:       str,
-        event_before:     Optional[EventId],
-        event_after:      EventId,
-        event_after_date: datetime,
-    ) -> None:
-
-        self.gaps[event_after] = Gap(
-            room             = self.room,
-            fill_token       = fill_token,
-            event_before     = event_before,
-            event_after      = event_after,
-            event_after_date = event_after_date,
-        )
-        await self.save()
-
-
-    async def register_events(
-        self, *events: TimelineEvent, _save: bool = True,
-    ) -> None:
-
-        for event in events:
-            self._data[event.id] = event
-
-            if isinstance(event.content, Megolm):
-                content = event.content
-                key     = (content.sender_curve25519, content.session_id)
-                self._undecrypted.setdefault(key, []).append(event)
-
-            await self.room._call_callbacks(event)
-
-        if not _save:
-            return
-
-        for path, event_group in groupby(events, key=self.get_event_file):
-            sorted_group = sorted(event_group)
-            event_dicts  = [e.dict for e in sorted_group]
-
-            if not path.exists():
-                path.parent.mkdir(parents=True, exist_ok=True)
-
-                async with aiopen(path, "w") as file:
-                    await file.write("[]")
-
-            async with aiopen(path, "r+") as file:
-                evs  = json.loads(await file.read())
-                evs += event_dicts
-                await file.seek(0)
-                await file.write(json.dumps(evs, indent=4, ensure_ascii=False))
-
-            self._loaded_files.add(path)
-
-
     async def load_history(self, count: int = 100) -> List[TimelineEvent]:
         loaded:      List[TimelineEvent] = await self._fill_newest_gap(count)
         disk_loaded: List[TimelineEvent] = []
@@ -143,7 +85,7 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
                         ev = TimelineEvent.from_dict(source, self.room)
 
                     with log_errors(DecryptionError):
-                        ev = await ev.decrypted()
+                        ev = await ev._decrypted()
 
                     disk_loaded.append(ev)
                     loaded.append(ev)
@@ -151,7 +93,7 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
                 if len(loaded) >= count:
                     break
 
-        await self.register_events(*disk_loaded, _save=False)
+        await self._register_events(*disk_loaded, _save=False)
         return loaded
 
 
@@ -161,7 +103,7 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
         room = self.room
 
         if room.state.encryption and not isinstance(content, Megolm):
-            content = await room.client.e2e.encrypt_room_event(
+            content = await room.client._e2e.encrypt_room_event(
                 room_id   = room.id,
                 for_users = room.state.members,
                 settings  = room.state.encryption.content,
@@ -174,6 +116,64 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
 
         result = await room.client.send_json("PUT", path, body=content.dict)
         return result["event_id"]
+
+
+    def _get_event_file(self, event: TimelineEvent) -> Path:
+        return self.path.parent / event.date.strftime("%Y-%m-%d/%Hh.json")
+
+
+    async def _register_gap(
+        self,
+        fill_token:       str,
+        event_before:     Optional[EventId],
+        event_after:      EventId,
+        event_after_date: datetime,
+    ) -> None:
+
+        self.gaps[event_after] = Gap(
+            room             = self.room,
+            fill_token       = fill_token,
+            event_before     = event_before,
+            event_after      = event_after,
+            event_after_date = event_after_date,
+        )
+        await self.save()
+
+
+    async def _register_events(
+        self, *events: TimelineEvent, _save: bool = True,
+    ) -> None:
+
+        for event in events:
+            self._data[event.id] = event
+
+            if isinstance(event.content, Megolm):
+                content = event.content
+                key     = (content.sender_curve25519, content.session_id)
+                self._undecrypted.setdefault(key, []).append(event)
+
+            await self.room._call_callbacks(event)
+
+        if not _save:
+            return
+
+        for path, event_group in groupby(events, key=self._get_event_file):
+            sorted_group = sorted(event_group)
+            event_dicts  = [e.dict for e in sorted_group]
+
+            if not path.exists():
+                path.parent.mkdir(parents=True, exist_ok=True)
+
+                async with aiopen(path, "w") as file:
+                    await file.write("[]")
+
+            async with aiopen(path, "r+") as file:
+                evs  = json.loads(await file.read())
+                evs += event_dicts
+                await file.seek(0)
+                await file.write(json.dumps(evs, indent=4, ensure_ascii=False))
+
+            self._loaded_files.add(path)
 
 
     async def _fill_newest_gap(self, min_events: int) -> List[TimelineEvent]:
@@ -199,12 +199,12 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
         for key in sessions:
             for event in self._undecrypted.get(key, []):
                 with log_errors(DecryptionError):
-                    event2 = await event.decrypted()
+                    event2 = await event._decrypted()
 
                     if not isinstance(event2.content, Megolm):
                         decrypted.append(event2)
 
-        await self.register_events(*decrypted)
+        await self._register_events(*decrypted)
 
 
 @dataclass
@@ -257,11 +257,11 @@ class Gap(JSON):
                 ev = TimelineEvent.from_dict(source, self.room)
 
             with log_errors(DecryptionError):
-                ev = await ev.decrypted()
+                ev = await ev._decrypted()
 
             evs.append(ev)
 
-        await self.room.timeline.register_events(*evs)
+        await self.room.timeline._register_events(*evs)
 
         if any(
             isinstance(e.content, Creation) or e.id == self.event_before

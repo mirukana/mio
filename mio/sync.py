@@ -64,7 +64,7 @@ class Sync(JSONClientModule):
         )
 
         if self.next_batch != result["next_batch"]:
-            await self.handle_sync(result)
+            await self._handle_sync(result)
             return result
 
         return None
@@ -99,7 +99,7 @@ class Sync(JSONClientModule):
             await asyncio.sleep(sleep_between_syncs)
 
 
-    async def handle_sync(self, sync: Dict[str, Any]) -> None:
+    async def _handle_sync(self, sync: Dict[str, Any]) -> None:
         # TODO: account_data, ephemeral events, presence
 
         async def events_call(
@@ -111,7 +111,7 @@ class Sync(JSONClientModule):
 
                     with log_errors(DecryptionError):
                         if isinstance(ev, ToDeviceEvent):
-                            ev = await ev.decrypted()
+                            ev = await ev._decrypted()
 
                     await coro(ev)
 
@@ -125,7 +125,8 @@ class Sync(JSONClientModule):
             for event in data.get(key, {}).get("events", ()):
                 with log_errors(InvalidEvent):
                     if "state_key" in event:
-                        await room.state.register(state.from_dict(event, room))
+                        state_ev = state.from_dict(event, room)
+                        await room.state._register(state_ev)
 
                     if key != "timeline":
                         continue
@@ -133,9 +134,9 @@ class Sync(JSONClientModule):
                     ev: TimelineEvent = TimelineEvent.from_dict(event, room)
 
                     with log_errors(DecryptionError):
-                        ev = await ev.decrypted()
+                        ev = await ev._decrypted()
 
-                    await room.timeline.register_events(ev)
+                    await room.timeline._register_events(ev)
 
         e2e_senders: Set[UserId] = set()
 
@@ -208,7 +209,7 @@ class Sync(JSONClientModule):
                 with suppress(InvalidEvent):
                     after = TimelineEvent.from_dict(event, room)
                     with suppress(DecryptionError):
-                        after = await after.decrypted()
+                        after = await after._decrypted()
                     break
 
             if limited and prev_batch and after:
@@ -216,7 +217,7 @@ class Sync(JSONClientModule):
                     await room.timeline.load_history(count=1)
 
                 before_id = next(reversed(tuple(room.timeline)), None)
-                await room.timeline.register_gap(
+                await room.timeline._register_gap(
                     prev_batch, before_id, after.id, after.date,
                 )
 
@@ -235,7 +236,7 @@ class Sync(JSONClientModule):
 
         if "device_one_time_keys_count" in sync:
             up = sync["device_one_time_keys_count"].get("signed_curve25519", 0)
-            await self.client.e2e.upload_one_time_keys(currently_uploaded=up)
+            await self.client._e2e.upload_one_time_keys(currently_uploaded=up)
 
         self.next_batch = sync["next_batch"]
         await self.save()

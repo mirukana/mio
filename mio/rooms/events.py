@@ -37,11 +37,11 @@ class TimelineEvent(Event[ContentT]):
     def __lt__(self, other: "TimelineEvent") -> bool:
         return self.date < other.date
 
-    async def decrypted(self) -> "TimelineEvent":
+    async def _decrypted(self) -> "TimelineEvent":
         if not isinstance(self.content, Megolm):
             return self
 
-        decrypt                = self.room.client.e2e.decrypt_megolm_payload
+        decrypt                = self.room.client._e2e.decrypt_megolm_payload
         payload, chain, errors = await decrypt(self)  # type: ignore
 
         clear = type(self).from_dict({**self.source, **payload}, self.room)

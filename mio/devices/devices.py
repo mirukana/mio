@@ -49,7 +49,7 @@ class MioDeviceCallbacks(CallbackGroup):
         sender_ed25519    = event.decryption.payload["keys"]["ed25519"]
         content           = event.content
 
-        ses = devices.client.e2e.in_group_sessions
+        ses = devices.client._e2e.in_group_sessions
         key = (content.room_id, sender_curve25519, content.session_id)
 
         if key not in ses:
@@ -57,8 +57,8 @@ class MioDeviceCallbacks(CallbackGroup):
             ses[key] = (session, sender_ed25519, {}, [])
             LOG.info("Added group session from %r", event)
 
-            devices.client.e2e.sent_session_requests.pop(key, None)
-            await devices.client.e2e.save()
+            devices.client._e2e.sent_session_requests.pop(key, None)
+            await devices.client._e2e.save()
 
             if content.room_id in devices.client.rooms:
                 timeline = devices.client.rooms[content.room_id].timeline
@@ -72,7 +72,7 @@ class MioDeviceCallbacks(CallbackGroup):
     ) -> None:
 
         content          = event.content
-        requests         = devices.client.e2e.sent_session_requests
+        requests         = devices.client._e2e.sent_session_requests
         request, sent_to = requests.get(content.compare_key, (None, {}))
 
         if not request or not sent_to:
@@ -90,13 +90,13 @@ class MioDeviceCallbacks(CallbackGroup):
             LOG.exception("Failed importing session from %r", event)
             return
 
-        if content.compare_key in devices.client.e2e.in_group_sessions:
+        if content.compare_key in devices.client._e2e.in_group_sessions:
             LOG.warning("Session already present for %r, ignoring", event)
             return
 
         sender_curve = event.decryption.original.content.sender_curve25519
 
-        devices.client.e2e.in_group_sessions[content.compare_key] = (
+        devices.client._e2e.in_group_sessions[content.compare_key] = (
             session,
             content.creator_supposed_ed25519,
             {},
@@ -105,7 +105,7 @@ class MioDeviceCallbacks(CallbackGroup):
         LOG.info("Imported group session from %r", event)
 
         requests.pop(content.compare_key)
-        await devices.client.e2e.save()
+        await devices.client._e2e.save()
 
         if content.room_id in devices.client.rooms:
             timeline = devices.client.rooms[content.room_id].timeline
@@ -124,7 +124,7 @@ class MioDeviceCallbacks(CallbackGroup):
         event:   ToDeviceEvent[GroupSessionRequest],
     ) -> None:
 
-        e2e = devices.client.e2e
+        e2e = devices.client._e2e
         await e2e.forward_group_session(event.sender, event.content)
 
 
@@ -134,7 +134,7 @@ class MioDeviceCallbacks(CallbackGroup):
         event:   ToDeviceEvent[CancelGroupSessionRequest],
     ) -> None:
 
-        e2e = devices.client.e2e
+        e2e = devices.client._e2e
         await e2e.cancel_forward_group_session(event.sender, event.content)
 
 
@@ -294,7 +294,7 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
             raise errors.DeviceIdMismatch(device_id, info["device_id"])
 
         signer_ed25519 = info["keys"][f"ed25519:{device_id}"]
-        verify         = self.client.e2e._verify_signed_dict
+        verify         = self.client._e2e._verify_signed_dict
         verify(info, user_id, device_id, signer_ed25519)
 
         with suppress(KeyError):
@@ -335,7 +335,7 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
         olms:             Dict[Device, Olm]                 = {}
         no_otks:          Set[Device]                       = set()
 
-        e2e = self.client.e2e
+        e2e = self.client._e2e
 
         for device in devices:
             try:

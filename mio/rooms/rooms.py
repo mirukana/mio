@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 class MioRoomCallbacks(CallbackGroup):
     async def on_leave(self, room: Room, event: StateBase[Member]) -> None:
         if event.content.left:
-            await room.client.e2e.drop_outbound_group_session(room.id)
+            await room.client._e2e.drop_outbound_group_session(room.id)
 
 
 @dataclass

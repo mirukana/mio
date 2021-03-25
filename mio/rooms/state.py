@@ -31,7 +31,7 @@ class RoomState(JSONFile, Map[str, Dict[str, StateBase]]):
 
     async def load(self) -> "RoomState":
         await super().load()
-        await self.register(*[
+        await self._register(*[
             ev for state_keys in self.values() for ev in state_keys.values()
         ])
         return self
@@ -103,15 +103,6 @@ class RoomState(JSONFile, Map[str, Dict[str, StateBase]]):
         return self.us.sender if self.us and invited else None
 
 
-    async def register(self, *events: StateBase) -> None:
-        for event in events:
-            assert event.type
-            self._data.setdefault(event.type, {})[event.state_key] = event
-            await self.room._call_callbacks(event)
-
-        await self.save()
-
-
     async def send(self, content: EventContent, state_key: str = "") -> str:
         assert content.type
         room = self.room
@@ -122,3 +113,12 @@ class RoomState(JSONFile, Map[str, Dict[str, StateBase]]):
 
         result = await room.client.send_json("PUT", path, body=content.dict)
         return result["event_id"]
+
+
+    async def _register(self, *events: StateBase) -> None:
+        for event in events:
+            assert event.type
+            self._data.setdefault(event.type, {})[event.state_key] = event
+            await self.room._call_callbacks(event)
+
+        await self.save()
