@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from itertools import groupby
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 from uuid import uuid4
 
 from aiofiles import open as aiopen
@@ -24,6 +24,9 @@ if TYPE_CHECKING:
 
 LOG = get_logger()
 
+InGroupSessionKey = Tuple[str, str]  # (sender_curve25519, session_id)
+UndecryptedEvents = Dict[InGroupSessionKey, List[TimelineEvent[Megolm]]]
+
 
 @dataclass
 class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
@@ -32,6 +35,10 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
 
     _data: Runtime[Dict[EventId, TimelineEvent]] = field(
         default_factory=ValueSortedDict,
+    )
+
+    _undecrypted: Runtime[UndecryptedEvents] = field(
+        init=False, repr=False, default_factory=dict,
     )
 
     _loaded_files: Runtime[Set[Path]] = field(init=False, default_factory=set)
@@ -75,6 +82,12 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
 
         for event in events:
             self._data[event.id] = event
+
+            if isinstance(event.content, Megolm):
+                content = event.content
+                key     = (content.sender_curve25519, content.session_id)
+                self._undecrypted.setdefault(key, []).append(event)
+
             await self.room._call_callbacks(event)
 
         if not _save:
@@ -178,6 +191,20 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
             events += await gap.fill(min_events)
 
         return events
+
+
+    async def _retry_decrypt(self, *sessions: InGroupSessionKey) -> None:
+        decrypted = []
+
+        for key in sessions:
+            for event in self._undecrypted.get(key, []):
+                with log_errors(DecryptionError):
+                    event2 = await event.decrypted()
+
+                    if not isinstance(event2.content, Megolm):
+                        decrypted.append(event2)
+
+        await self.register_events(*decrypted)
 
 
 @dataclass

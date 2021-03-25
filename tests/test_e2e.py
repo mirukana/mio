@@ -47,8 +47,8 @@ async def test_session_forwarding(alice: Client, e2e_room: Room, tmp_path):
         assert not alice.devices.own[other.device_id].pending_session_requests
         assert not other.e2e.sent_session_requests
 
-        decrypted = await other_event.decrypted()
-        assert isinstance(decrypted.content, Text)
+        other_event = other.rooms[e2e_room.id].timeline[-1]
+        assert isinstance(other_event.content, Text)
 
 
 async def test_session_forwarding_already_trusted_device(
@@ -65,7 +65,7 @@ async def test_session_forwarding_already_trusted_device(
     await alice.sync.once()   # get session request
     await alice2.sync.once()  # get forwarded session
 
-    event = await alice2.rooms[e2e_room.id].timeline[-1].decrypted()
+    event = alice2.rooms[e2e_room.id].timeline[-1]
     assert isinstance(event.content, Text)
 
 
@@ -119,7 +119,7 @@ async def test_forwarding_chains(alice: Client, e2e_room: Room, tmp_path):
     await alice.sync.once()   # get session request
     await alice2.sync.once()  # get forwarded session
 
-    event = await alice2.rooms[e2e_room.id].timeline[-1].decrypted()
+    event = alice2.rooms[e2e_room.id].timeline[-1]
     assert isinstance(event.content, Text) and event.decryption
     assert not event.decryption.forward_chain
     assert not event.decryption.verification_errors
@@ -138,7 +138,7 @@ async def test_forwarding_chains(alice: Client, e2e_room: Room, tmp_path):
     await alice2.sync.once()  # get session request
     await alice3.sync.once()  # get forwarded session
 
-    event = await alice3.rooms[e2e_room.id].timeline[-1].decrypted()
+    event = alice3.rooms[e2e_room.id].timeline[-1]
     assert isinstance(event.content, Text) and event.decryption
     assert event.decryption.forward_chain == [alice.devices.current]
     assert not event.decryption.verification_errors

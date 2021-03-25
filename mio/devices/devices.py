@@ -60,6 +60,10 @@ class MioDeviceCallbacks(CallbackGroup):
             devices.client.e2e.sent_session_requests.pop(key, None)
             await devices.client.e2e.save()
 
+            if content.room_id in devices.client.rooms:
+                timeline = devices.client.rooms[content.room_id].timeline
+                await timeline._retry_decrypt(key[1:])
+
 
     async def on_forwarded_megolm_keys(
         self,
@@ -102,6 +106,10 @@ class MioDeviceCallbacks(CallbackGroup):
 
         requests.pop(content.compare_key)
         await devices.client.e2e.save()
+
+        if content.room_id in devices.client.rooms:
+            timeline = devices.client.rooms[content.room_id].timeline
+            await timeline._retry_decrypt(content.compare_key[1:])
 
         await devices.send({
             device: request.cancellation
