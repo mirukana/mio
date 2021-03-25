@@ -5,8 +5,7 @@ from datetime import datetime
 from functools import partial
 from pathlib import Path
 from typing import (
-    TYPE_CHECKING, Any, Collection, Dict, List, Optional, Set, Tuple, Type,
-    Union,
+    Any, Collection, Dict, List, Optional, Set, Tuple, Type, Union,
 )
 
 import olm
@@ -26,9 +25,6 @@ from .contents import (
     CancelGroupSessionRequest, ForwardedGroupSessionInfo, GroupSessionInfo,
     GroupSessionRequest, Megolm, Olm,
 )
-
-if TYPE_CHECKING:
-    from ..client import Client
 
 # TODO: protect against concurrency and saving sessions before sharing
 
@@ -91,8 +87,7 @@ class E2E(JSONClientModule):
             partial(_olm_unpickle, obj_type=olm.OutboundGroupSession),
     }
 
-    account:              olm.Account = field(default_factory=olm.Account)
-    device_keys_uploaded: bool        = False
+    account: olm.Account = field(default_factory=olm.Account)
 
     # key = sender (inbound)/receiver (outbound) curve25519
     in_sessions:  Dict[str, List[olm.Session]] = field(default_factory=dict)
@@ -108,20 +103,14 @@ class E2E(JSONClientModule):
     )
 
 
-    async def __ainit__(self) -> None:
-        if not self.device_keys_uploaded:
-            await self._upload_keys()
-            await self.save()
+    @property
+    def path(self) -> Path:
+        return self.client.path.parent / "e2e.json"
 
 
     @property
     def device(self) -> "Device":
         return self.client.devices.current
-
-
-    @classmethod
-    def get_path(cls, parent: "Client", **kwargs) -> Path:
-        return parent.path.parent / "e2e.json"
 
 
     async def upload_one_time_keys(self, currently_uploaded: int) -> None:
@@ -401,8 +390,6 @@ class E2E(JSONClientModule):
             path   = [*self.client.api, "keys", "upload"],
             body   = {"device_keys": device_keys},
         )
-
-        self.device_keys_uploaded = True
 
         uploaded = result["one_time_key_counts"].get("signed_curve25519", 0)
         await self.upload_one_time_keys(uploaded)

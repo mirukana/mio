@@ -13,17 +13,26 @@ def pytest_configure(config):
     SynapseHandle()
 
 
+def compare_clients(client1: Client, client2: Client, token: bool = False):
+    assert client1.base_dir == client2.base_dir
+    assert client1.server == client2.server
+    assert client1.user_id == client2.user_id
+    assert client1.device_id == client2.device_id
+
+    if token:
+        assert client1.access_token == client2.access_token
+
+
 async def get_client(synapse: SynapseHandle, path: Path, name: str) -> Client:
     name = f"{name}.{uuid4()}"
     path = path / "{user_id}.{device_id}"
     synapse.register(name)
-    return await Client.login_password(path, synapse.url, name, "test")
+    return await Client(path, synapse.url).auth.login_password(name, "test")
 
 
 async def new_device_from(client: Client, path: Path) -> Client:
-    return await Client.login_password(
-        path, client.server, client.user_id, password="test",
-    )
+    new = Client(path, client.server)
+    return await new.auth.login_password(client.user_id, "test")
 
 
 def read_json(path: Union[Path, str]) -> dict:

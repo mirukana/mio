@@ -30,20 +30,22 @@ class Room(JSONFile, EventCallbacks):
     state:    Runtime[RoomState] = field(init=False, repr=False)
 
 
+    def __post_init__(self) -> None:
+        self.timeline = Timeline(self)
+        self.state    = RoomState(self)
+        super().__post_init__()
+
+
     @property
     def path(self) -> Path:
-        return self.get_path(self.parent, id=self.id)  # type: ignore
+        return self.client.path.parent / "rooms" / self.id / "room.json"
 
 
-    @classmethod
-    def get_path(cls, parent: "Client", **kwargs) -> Path:
-        return parent.path.parent / "rooms" / kwargs["id"] / "room.json"
-
-
-    async def __ainit__(self) -> None:
-        self.timeline = await Timeline.load(self)
-        self.state    = await RoomState.load(self)
-        await self.save()
+    async def load(self) -> "Room":
+        await super().load()
+        await self.timeline.load()
+        await self.state.load()
+        return self
 
 
     async def create_alias(self, alias: RoomAlias) -> None:

@@ -30,20 +30,21 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
     room: Parent["Room"]       = field(repr=False)
     gaps: Dict[EventId, "Gap"] = field(default_factory=ValueSortedDict)
 
-    _loaded_files: Runtime[Set[Path]] = field(default_factory=set)
+    _data: Runtime[Dict[EventId, TimelineEvent]] = field(
+        default_factory=ValueSortedDict,
+    )
 
-    _data: Runtime[Dict[EventId, TimelineEvent]] = \
-        field(default_factory=ValueSortedDict)
+    _loaded_files: Runtime[Set[Path]] = field(init=False, default_factory=set)
+
+
+    @property
+    def path(self) -> Path:
+        return self.room.client.path.parent / "timeline.json"
 
 
     @property
     def fully_loaded(self) -> bool:
         return not self.gaps
-
-
-    @classmethod
-    def get_path(cls, parent: "Room", **kwargs) -> Path:
-        return parent.path.parent / "timeline.json"
 
 
     def get_event_file(self, event: TimelineEvent) -> Path:

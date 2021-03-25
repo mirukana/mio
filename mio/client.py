@@ -1,18 +1,19 @@
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any, Dict, List, Optional, Union
 from urllib.parse import quote
 
 from aiohttp import ClientResponseError, ClientSession
 
 from .auth import Auth
-from .core.data import JSONFileBase, Runtime
+from .core.data import JSONFile, Runtime
 from .core.errors import ServerError
 from .core.types import HttpUrl, UserId
-from .core.utils import get_logger, remove_none
+from .core.utils import get_logger
 from .devices.devices import Devices
 from .e2e.e2e import E2E
+from .module import ClientModule
 from .rooms.rooms import Rooms
 from .sync import Sync
 
@@ -20,12 +21,12 @@ LOG = get_logger()
 
 
 @dataclass
-class Client(JSONFileBase):
-    base_dir:     Runtime[Path]
-    server:       HttpUrl
-    user_id:      UserId
-    access_token: str
-    device_id:    str
+class Client(JSONFile):
+    base_dir:     Runtime[Union[str, Path]]
+    server:       HttpUrl = ""  # type: ignore
+    device_id:    str     = ""
+    user_id:      UserId  = ""  # type: ignore
+    access_token: str     = ""
 
     auth:    Runtime[Auth]    = field(init=False, repr=False)
     rooms:   Runtime[Rooms]   = field(init=False, repr=False)
@@ -38,13 +39,13 @@ class Client(JSONFileBase):
     )
 
 
-    async def __ainit__(self) -> None:
-        self.auth    = await Auth.load(self)
-        self.rooms   = await Rooms.load(self)
-        self.sync    = await Sync.load(self)
-        self.e2e     = await E2E.load(self)
-        self.devices = await Devices.load(self)
-        await self.save()
+    def __post_init__(self) -> None:
+        self.auth    = Auth(self)
+        self.rooms   = Rooms(self)
+        self.sync    = Sync(self)
+        self.e2e     = E2E(self)
+        self.devices = Devices(self)
+        super().__post_init__()
 
 
     @property
@@ -54,100 +55,22 @@ class Client(JSONFileBase):
 
     @property
     def path(self) -> Path:
-        return self.base_dir / "client.json"
+        return Path(self.base_dir) / "client.json"
 
 
-    @classmethod
-    async def load(cls, base_dir: Union[Path, str]) -> "Client":
-        file = Path(base_dir) / "client.json"
+    async def load(self, **base_dir_placeholders: str) -> "Client":
+        self.base_dir = str(self.base_dir).format(**base_dir_placeholders)
+        await super().load()
 
-        if not file.exists():
-            raise FileNotFoundError(f"{file} does not exist")
+        for attr in self.__dict__.values():
+            if isinstance(attr, ClientModule):
+                await attr.load()
 
-        data = await cls._read_file(file)
-        return await cls.from_dict({**data, "base_dir": base_dir}, None)
-
-
-    @classmethod
-    async def login(
-        cls,
-        base_dir: Union[Path, str],
-        server:   HttpUrl,
-        auth:     Dict[str, Any],
-    ) -> "Client":
-        """Login to a homeserver using a custom authentication dict.
-
-        The `base_dir`, folder where client data will be stored, can contain
-        `{user_id}` and `{device_id}` placeholders that will be
-        automatically filled.
-        """
-
-        result = await cls.send_json(
-            obj    = cls,
-            method = "POST",
-            path   = [server, "_matrix", "client", "r0", "login"],
-            body   = auth,
-        )
-
-        base_dir = str(base_dir).format(
-            user_id=result["user_id"], device_id=result["device_id"],
-        )
-
-        return await cls(
-            base_dir     = Path(base_dir),
-            server       = server,
-            user_id      = result["user_id"],
-            access_token = result["access_token"],
-            device_id    = result["device_id"],
-        )
-
-
-    @classmethod
-    async def login_password(
-        cls,
-        base_dir:            Union[Path, str],
-        server:              HttpUrl,
-        user:                str,
-        password:            str,
-        device_id:           Optional[str] = None,
-        initial_device_name: str           = "mio",
-    ) -> "Client":
-
-        auth = {
-            "type":                        "m.login.password",
-            "user":                        user,
-            "password":                    password,
-            "device_id":                   device_id,
-            "initial_device_display_name": initial_device_name,
-        }
-
-        return await cls.login(base_dir, server, remove_none(auth))
-
-
-    @classmethod
-    async def login_token(
-        cls,
-        base_dir:            Union[Path, str],
-        server:              HttpUrl,
-        user:                str,
-        token:               str,
-        device_id:           Optional[str] = None,
-        initial_device_name: str           = "mio",
-    ) -> "Client":
-
-        auth = {
-            "type":                        "m.login.token",
-            "user":                        user,
-            "token":                       token,
-            "device_id":                   device_id,
-            "initial_device_display_name": initial_device_name,
-        }
-
-        return await cls.login(base_dir, server, remove_none(auth))
+        return self
 
 
     async def send(
-        obj:        Union[Type["Client"], "Client"],  # noqa
+        self,
         method:     str,
         path:       List[str],
         parameters: Optional[Dict[str, Any]] = None,
@@ -159,8 +82,8 @@ class Client(JSONFileBase):
         parameters = parameters or {}
         url_path   = "/".join(quote(p, safe="") for p in path[1:])
 
-        if hasattr(obj, "access_token"):
-            headers["Authorization"] = f"Bearer {obj.access_token}"
+        if self.access_token:
+            headers["Authorization"] = f"Bearer {self.access_token}"
 
         for key, value in parameters.items():
             if not isinstance(value, str):
@@ -168,9 +91,7 @@ class Client(JSONFileBase):
                     value, ensure_ascii=False, separators=(",", ":"),
                 )
 
-        session = obj._session if isinstance(obj, Client) else ClientSession()
-
-        response = await session.request(
+        response = await self._session.request(
             method  = method,
             url     = f"{path[0]}/{url_path}",
             params  = parameters,
@@ -180,18 +101,14 @@ class Client(JSONFileBase):
 
         read = await response.read()
 
-        who = obj.user_id if isinstance(obj, Client) else obj.__name__
         LOG.debug(
             "%s → %s %r params=%r data=%r\n\n← %r\n",
-            who, method, url_path, parameters, data, read,
+            self.user_id or "client", method, url_path, parameters, data, read,
         )
 
         try:
             response.raise_for_status()
         except ClientResponseError as e:
-            if not isinstance(obj, Client):
-                await session.close()
-
             raise ServerError.from_response(
                 reply      = read,
                 http_code  = e.status,
@@ -202,14 +119,11 @@ class Client(JSONFileBase):
                 data       = data,
             )
 
-        if not isinstance(obj, Client):
-            await session.close()
-
         return read
 
 
     async def send_json(
-        obj:        Union[Type["Client"], "Client"],  # noqa
+        self,
         method:     str,
         path:       List[str],
         parameters: Optional[Dict[str, Any]] = None,
@@ -217,7 +131,6 @@ class Client(JSONFileBase):
         headers:    Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
 
-        cls    = type(obj) if isinstance(obj, Client) else obj
         data   = None if body is None else json.dumps(body).encode()
-        result = await cls.send(obj, method, path, parameters, data, headers)
+        result = await self.send(method, path, parameters, data, headers)
         return json.loads(result)

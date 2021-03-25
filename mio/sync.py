@@ -1,11 +1,12 @@
 import asyncio
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import (
     TYPE_CHECKING, Any, Awaitable, Callable, Dict, Optional, Set, Type, Union,
 )
 
+from .core.data import Parent
 from .core.events import Event, InvalidEvent
 from .core.types import RoomId, UserId
 from .core.utils import get_logger, log_errors, make_awaitable, remove_none
@@ -28,12 +29,13 @@ ExceptionHandler = Callable[[Exception], Optional[Awaitable[None]]]
 
 @dataclass
 class Sync(JSONClientModule):
-    next_batch: Optional[str] = None
+    client:     Parent["Client"] = field(repr=False)
+    next_batch: Optional[str]    = None
 
 
-    @classmethod
-    def get_path(cls, parent: "Client", **kwargs) -> Path:
-        return parent.path.parent / "sync.json"
+    @property
+    def path(self) -> Path:
+        return self.client.path.parent / "sync.json"
 
 
     async def once(
@@ -164,9 +166,8 @@ class Sync(JSONClientModule):
             if room_id in rooms._data:
                 return rooms._data[room_id]
 
-            room = await Room(client=self.client, id=room_id)
-            rooms._data[room_id] = room
-            return room
+            rooms._data[room_id] = Room(client=self.client, id=room_id)
+            return rooms._data[room_id]
 
         for room_id, data in sync.get("rooms", {}).get("invite", {}).items():
             room         = await set_room(room_id)

@@ -53,24 +53,22 @@ def on_text_message(room, event):
 
 
 async def main():
-    # Create a new client that saves its state to /tmp/@alice:matrix.org.mio1:
-    client = await Client.login_password(
-        base_dir  = "/tmp/{user_id}.{device_id}",
-        server    = "https://matrix.org",
-        user      = "alice",
-        password  = "1234",
-    )
-
-    # Do one initial sync with the homeserver and see what rooms we have:
-    await client.sync.once()
-    print(client.rooms, end="\n\n")
-
-    # Create a room, syncing will register it from details given by the server
-    room_id = await client.rooms.create("mio example room")
-    await client.sync.once()
+    client = Client(base_dir="/tmp/mio-example", server="https://example.org")
 
     # Register a function that will be called when we receive Text events:
     client.rooms.callbacks[Text].append(on_text_message)
+
+    if client.path.exists():
+        await client.load()
+    else:
+        await client.auth.login_password("alice", "1234")
+
+    # Sync with the server to update the client's state:
+    await client.sync.once()
+
+    # Create a room and sync to make it available in client.rooms:
+    room_id = await client.rooms.create("mio example room")
+    await client.sync.once()
 
     # Enable encryption in the room and send a text message:
     await client.rooms[room_id].state.send(Encryption())
@@ -80,28 +78,6 @@ async def main():
     # Explore our room's state and timeline:
     print(client.rooms[room_id].state, end="\n\n")
     print(client.rooms[room_id].timeline)
-
-
-asyncio.get_event_loop().run_until_complete(main())
-```
-
-A previously created client can be loaded again from disk:
-
-```py
-import asyncio
-
-from mio.client import Client
-from rich import print
-
-
-async def main():
-    client = await Client.load("/tmp/@alice:matrix.org.mio1")
-
-    # For whatever room was loaded first, load at least 20 messages that we 
-    # received previously. If we get to the end of what we saved locally, 
-    # we ask the server for more.
-    await client.rooms[0].timeline.load_history(20)
-    print(client.rooms[0].timeline)
 
 
 asyncio.get_event_loop().run_until_complete(main())

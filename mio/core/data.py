@@ -24,14 +24,13 @@ if sys.version_info <= (3, 9):
 else:
     from typing import Annotated, get_origin
 
-Loaders       = Dict[Union[str, Type], Callable[[Any, Any], Any]]
-Dumpers       = Dict[Union[str, Type], Callable[["JSON", Any], Any]]
-KT            = TypeVar("KT")
-VT            = TypeVar("VT")
-JSONT         = TypeVar("JSONT", bound="JSON")
-JSONFileBaseT = TypeVar("JSONFileBaseT", bound="JSONFileBase")
-JSONFileT     = TypeVar("JSONFileT", bound="JSONFile")
-_Missing      = object()
+Loaders   = Dict[Union[str, Type], Callable[[Any, Any], Any]]
+Dumpers   = Dict[Union[str, Type], Callable[["JSON", Any], Any]]
+KT        = TypeVar("KT")
+VT        = TypeVar("VT")
+JSONT     = TypeVar("JSONT", bound="JSON")
+JSONFileT = TypeVar("JSONFileT", bound="JSONFile")
+_Missing  = object()
 
 _Runtime = object()
 _Parent  = object()
@@ -51,15 +50,6 @@ class AutoStrEnum(Enum):
     @staticmethod
     def _generate_next_value_(name: str, *_):
         return name
-
-
-class AsyncInit:
-    def __await__(self):
-        yield from self.__ainit__().__await__()
-        return self
-
-    async def __ainit__(self) -> None:
-        pass
 
 
 @dataclass
@@ -158,28 +148,7 @@ class JSON(RichFix):
 
     @classmethod
     def from_dict(cls: Type[JSONT], data: DictS, parent) -> JSONT:
-
-        if not isinstance(data, dict):
-            raise JSONLoadError(data, dict, "Expected dict")
-
-        fields = {}
-
-        for f in get_fields(cls):
-            if parent and annotation_is_parent(f.type):
-                fields[f.name] = parent
-                continue
-
-            path  = cls.aliases.get(f.name, f.name)
-            path  = (path,) if isinstance(path, str) else path
-            value = data
-
-            for part in path:
-                value = value.get(part, _Missing)
-                if value is _Missing:
-                    break
-
-            if value is not _Missing:
-                fields[f.name] = cls._load(f.type, value, parent, f.name)
+        fields = cls._fields_from_dict(data, parent)
 
         try:
             return cls(**fields)  # type: ignore
@@ -246,6 +215,34 @@ class JSON(RichFix):
             return key
 
         return json.dumps(key, ensure_ascii=False)
+
+
+    @classmethod
+    def _fields_from_dict(cls: Type[JSONT], data: DictS, parent) -> DictS:
+
+        if not isinstance(data, dict):
+            raise JSONLoadError(data, dict, "Expected dict")
+
+        fields = {}
+
+        for f in get_fields(cls):
+            if parent and annotation_is_parent(f.type):
+                fields[f.name] = parent
+                continue
+
+            path  = cls.aliases.get(f.name, f.name)
+            path  = (path,) if isinstance(path, str) else path
+            value = data
+
+            for part in path:
+                value = value.get(part, _Missing)
+                if value is _Missing:
+                    break
+
+            if value is not _Missing:
+                fields[f.name] = cls._load(f.type, value, parent, f.name)
+
+        return fields
 
 
     @classmethod
@@ -398,49 +395,45 @@ class JSON(RichFix):
 
 
 @dataclass
-class JSONFileBase(JSON, AsyncInit):
+class JSONFile(JSON):
     @property
     def path(self) -> Path:
         raise NotImplementedError()
+
+
+    def __post_init__(self) -> None:
+        if not self.path.exists():
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            data = self.json
+
+            if data != "{}":
+                self.path.write_text(data)
 
 
     async def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         data = self.json
 
-        async with aiopen(self.path, "w") as file:
-            await file.write(data)
+        if data != "{}":
+            async with aiopen(self.path, "w") as file:
+                await file.write(data)
 
 
-    @classmethod
-    async def _read_file(cls: Type[JSONFileBaseT], path: Path) -> DictS:
-        data = {"path": path}
+    async def load(self) -> "JSONFile":
+        data = await self._read_file()
 
-        if path.exists():
-            async with aiopen(path) as file:
-                data.update(json.loads(await file.read()))
+        for name, value in self._fields_from_dict(data, self.parent).items():
+            setattr(self, name, value)
 
-        return data
+        return self
 
 
-@dataclass
-class JSONFile(JSONFileBase, AsyncInit):
-    @property
-    def path(self) -> Path:
-        return self.get_path(self.parent)
+    async def _read_file(self) -> DictS:
+        if self.path.exists():
+            async with aiopen(self.path) as file:
+                return json.loads(await file.read())
 
-
-    @classmethod
-    def get_path(cls, parent, **kwargs) -> Path:
-        raise NotImplementedError()
-
-
-    @classmethod
-    async def load(
-        cls: Type[JSONFileT], parent: "JSON", **kwargs,
-    ) -> JSONFileT:
-        data = await cls._read_file(cls.get_path(parent, **kwargs))
-        return await cls.from_dict(data, parent)
+        return {}
 
 
 def annotation_is_runtime(ann: Any) -> bool:

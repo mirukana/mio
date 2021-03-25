@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 class RoomState(JSONFile, Map[str, Dict[str, StateBase]]):
     loaders = {
         **JSONFile.loaders,  # type: ignore
+
         StateBase: lambda v, parent: (  # type: ignore
             StateEvent if "event_id" in v else InvitedRoomStateEvent
         ).from_dict(v, parent),
@@ -29,13 +30,13 @@ class RoomState(JSONFile, Map[str, Dict[str, StateBase]]):
 
 
     @property
+    def path(self) -> Path:
+        return self.room.client.path.parent / "state.json"
+
+
+    @property
     def encryption(self) -> Optional[StateBase[Encryption]]:
         return self.get(Encryption.type, {}).get("")
-
-
-    @classmethod
-    def get_path(cls, parent: "Room", **kwargs) -> Path:
-        return parent.path.parent / "state.json"
 
 
     def users(

@@ -12,7 +12,7 @@ import olm
 
 from ..core.callbacks import CallbackGroup, Callbacks, EventCallbacks
 from ..core.contents import EventContent
-from ..core.data import IndexableMap, Runtime
+from ..core.data import IndexableMap, Parent, Runtime
 from ..core.types import UserId
 from ..core.utils import get_logger
 from ..e2e.contents import (
@@ -132,6 +132,8 @@ class MioDeviceCallbacks(CallbackGroup):
 
 @dataclass
 class Devices(JSONClientModule, DeviceMap, EventCallbacks):
+    client: Parent["Client"] = field(repr=False)
+
     # {user_id: {device_id: Device}}
     _data: Dict[UserId, Dict[str, Device]] = field(default_factory=dict)
 
@@ -151,8 +153,9 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
     _query_lock: Runtime[Lock] = field(init=False, default_factory=Lock)
 
 
-    async def __ainit__(self) -> None:
-        await self.ensure_tracked([self.client.user_id])
+    @property
+    def path(self) -> Path:
+        return self.client.path.parent / "devices.json"
 
 
     @property
@@ -163,11 +166,6 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
     @property
     def current(self) -> Device:
         return self.own[self.client.device_id]
-
-
-    @classmethod
-    def get_path(cls, parent: "Client", **kwargs) -> Path:
-        return parent.path.parent / "devices.json"
 
 
     async def ensure_tracked(

@@ -32,27 +32,16 @@ class MioRoomCallbacks(CallbackGroup):
 
 @dataclass
 class Rooms(ClientModule, IndexableMap[RoomId, Room]):
-    client:    Parent["Client"]          = field(repr=False)
-    _data:     Dict[RoomId, Room]        = field(default_factory=dict)
+    client: Parent["Client"]   = field(repr=False)
+    _data:  Dict[RoomId, Room] = field(default_factory=dict)
 
     callbacks: Runtime[Callbacks] = field(
-        init=False, repr=False, default_factory=lambda: DefaultDict(list),
+        default_factory=lambda: DefaultDict(list),
     )
 
     callback_groups: Runtime[List["CallbackGroup"]] = field(
-        init=False, repr=False, default_factory=lambda: [MioRoomCallbacks()],
+        default_factory=lambda: [MioRoomCallbacks()],
     )
-
-
-    @classmethod
-    async def load(cls, parent: "Client") -> "Rooms":
-        rooms = cls(parent)
-
-        for room_dir in (parent.path.parent / "rooms").glob("!*"):
-            id              = RoomId(room_dir.name)
-            rooms._data[id] = await Room.load(parent, id=id)
-
-        return rooms
 
 
     @property
@@ -68,6 +57,14 @@ class Rooms(ClientModule, IndexableMap[RoomId, Room]):
     @property
     def left(self) -> Dict[RoomId, Room]:
         return {k: v for k, v in self.items() if v.left}
+
+
+    async def load(self) -> "Rooms":
+        for room_dir in (self.client.path.parent / "rooms").glob("!*"):
+            id             = RoomId(room_dir.name)
+            self._data[id] = await Room(self.client, id=id).load()
+
+        return self
 
 
     async def create(
