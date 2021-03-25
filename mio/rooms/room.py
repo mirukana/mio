@@ -50,15 +50,15 @@ class Room(JSONFile, EventCallbacks):
 
     async def create_alias(self, alias: RoomAlias) -> None:
         await self.client.send_json(
-            method = "PUT",
-            path   = [*self.client.api, "directory", "room", alias],
-            body   = {"room_id": self.id},
+            "PUT",
+            self.client.api / "directory" / "room" / alias,
+            {"room_id": self.id},
         )
 
 
     async def leave(self) -> None:
-        path = [*self.client.api, "rooms", self.id, "leave"]
-        await self.client.send_json("POST", path)
+        url = self.client.api / "rooms" / self.id / "leave"
+        await self.client.send_json("POST", url)
 
 
     def _callbacks(self) -> Callbacks:

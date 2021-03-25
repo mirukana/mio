@@ -14,6 +14,7 @@ from uuid import UUID
 
 import typingplus
 from aiofiles import open as aiopen
+from yarl import URL
 
 from .errors import MioError
 from .types import DictS, NoneType, T
@@ -95,6 +96,7 @@ class JSON(RichFix):
     # Matrix API doesn't like getting floats for time-related stuff
     dumpers: ClassVar[Runtime[Dumpers]] = {
         UUID: lambda self, v: str(v),
+        URL: lambda self, v: str(v),
         Path: lambda self, v: str(v),
         Enum: lambda self, v: v.value,
         bytes: lambda self, v: v.decode(),

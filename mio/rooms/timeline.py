@@ -111,10 +111,10 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
             )
 
         assert content.type
-        tx   = transaction_id if transaction_id else str(uuid4())
-        path = [*room.client.api, "rooms", room.id, "send", content.type, tx]
+        tx  = transaction_id if transaction_id else str(uuid4())
+        url = room.client.api / "rooms" / room.id / "send" / content.type / tx
 
-        result = await room.client.send_json("PUT", path, body=content.dict)
+        result = await room.client.send_json("PUT", url, content.dict)
         return result["event_id"]
 
 
@@ -230,10 +230,8 @@ class Gap(JSON):
 
         client = self.room.client
         result = await client.send_json(
-            method = "GET",
-            path   = [*client.api, "rooms", self.room.id, "messages"],
-
-            parameters = remove_none({
+            "GET",
+            client.api / "rooms" / self.room.id / "messages" % remove_none({
                 "from":  self.fill_token,
                 "dir":   "b",  # direction: backwards
                 "limit": max_events,

@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Union
 
-from mio.core.types import HttpUrl
 from ruamel.yaml import YAML
 
 
@@ -44,8 +43,8 @@ class SynapseHandle:
 
 
     @property
-    def url(self) -> HttpUrl:
-        return f"http://{self.host}:{self.port}"  # type: ignore
+    def url(self) -> str:
+        return f"http://{self.host}:{self.port}"
 
 
     def __post_init__(self) -> None:

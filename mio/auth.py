@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict
 
+from yarl import URL
+
 from .core.data import Runtime
 from .module import ClientModule
 
@@ -26,11 +28,11 @@ class Auth(ClientModule):
         if "initial_device_display_name" not in auth:
             auth["initial_device_display_name"]  = self.default_device_name
 
-        path  = [*client.api, "login"]
-        reply = await client.send_json("POST", path, body=auth)
+        reply = await client.send_json("POST", client.api / "login", auth)
 
         if "well_known" in reply:
-            client.server = reply["well_known"]["m.homeserver"]["base_url"]
+            homeserver    = reply["well_known"]["m.homeserver"]
+            client.server = URL(homeserver["base_url"])
 
         client.base_dir     = str(self.client.base_dir).format(**reply)
         client.user_id      = reply["user_id"]
@@ -60,15 +62,14 @@ class Auth(ClientModule):
 
 
     async def logout(self) -> None:
-        await self.client.send_json("POST", [*self.client.api, "logout"])
+        await self.client.send_json("POST", self.client.api / "logout")
         self.client.access_token = ""
         self.was_logged_out      = True
         await self.client.save()
 
 
     async def logout_all_devices(self) -> None:
-        path = [*self.client.api, "logout", "all"]
-        await self.client.send_json("POST", path)
+        await self.client.send_json("POST", self.client.api / "logout" / "all")
         self.client.access_token = ""
         self.was_logged_out      = True
         await self.client.save()

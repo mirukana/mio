@@ -1,7 +1,7 @@
 import json
 from dataclasses import dataclass
 
-from .types import DictS
+from yarl import URL
 
 
 class MioError(Exception):
@@ -10,13 +10,12 @@ class MioError(Exception):
 
 @dataclass
 class ServerError(MioError):
-    http_code:  int
-    message:    str
-    method:     str
-    path:       str
-    parameters: DictS
-    data:       bytes
-    reply:      bytes
+    http_code: int
+    message:   str
+    method:    str
+    url:       URL
+    data:      bytes
+    reply:     bytes
 
     @classmethod
     def from_response(cls, reply: bytes, **kwargs) -> "ServerError":

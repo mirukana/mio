@@ -31,6 +31,7 @@ setup(
         rich              >= 9.13.0, <10
         sortedcollections >= 1.2.1,  < 2
         typingplus        >= 2.2.3,  < 3
+        yarl              >= 1.6.3,  < 2
 
         dataclasses       >= 0.6,     < 0.7; python_version<'3.7'
         typing-extensions >= 3.7.4.3, < 4;   python_version<'3.9'

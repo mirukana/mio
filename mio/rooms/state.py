@@ -106,12 +106,12 @@ class RoomState(JSONFile, Map[str, Dict[str, StateBase]]):
     async def send(self, content: EventContent, state_key: str = "") -> str:
         assert content.type
         room = self.room
-        path = [*room.client.api, "rooms", room.id, "state", content.type]
+        url  = room.client.api / "rooms" / room.id / "state" / content.type
 
         if state_key:
-            path.append(state_key)
+            url = url / state_key
 
-        result = await room.client.send_json("PUT", path, body=content.dict)
+        result = await room.client.send_json("PUT", url, content.dict)
         return result["event_id"]
 
 

@@ -129,9 +129,9 @@ class E2E(JSONClientModule):
         }
 
         await self.client.send_json(
-            method = "POST",
-            path   = [*self.client.api, "keys", "upload"],
-            body   = {"one_time_keys": one_time_keys},
+            "POST",
+            self.client.api / "keys" / "upload",
+            {"one_time_keys": one_time_keys},
         )
 
         self.account.mark_keys_as_published()
@@ -388,9 +388,9 @@ class E2E(JSONClientModule):
         device_keys = self._sign_dict(device_keys)
 
         result = await self.client.send_json(
-            method = "POST",
-            path   = [*self.client.api, "keys", "upload"],
-            body   = {"device_keys": device_keys},
+            "POST",
+            self.client.api / "keys" / "upload",
+            {"device_keys": device_keys},
         )
 
         uploaded = result["one_time_key_counts"].get("signed_curve25519", 0)
@@ -411,9 +411,9 @@ class E2E(JSONClientModule):
             otk.setdefault(d.user_id, {})[d.device_id] = "signed_curve25519"
 
         result = await self.client.send_json(
-            method = "POST",
-            path   = [*self.client.api, "keys", "claim"],
-            body   = {"timeout": int(timeout * 1000), "one_time_keys": otk},
+            "POST",
+            self.client.api / "keys" / "claim",
+            {"timeout": int(timeout * 1000), "one_time_keys": otk},
         )
 
         if result["failures"]:

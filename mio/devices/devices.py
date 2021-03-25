@@ -205,9 +205,9 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
             LOG.info("Querying devices for %r", set(self.outdated))
 
             result = await self.client.send_json(
-                method = "POST",
-                path   = [*self.client.api, "keys", "query"],
-                body   = {
+                "POST",
+                self.client.api / "keys" / "query",
+                {
                     # [] means "get all devices of the user" to the server
                     "device_keys": {user_id: [] for user_id in self.outdated},
                     "token":       sync_token,
@@ -277,9 +277,9 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
                 msgs[user_id] = {"*": device_events[0]}
 
         await self.client.send_json(
-            method = "PUT",
-            path   = [*self.client.api, "sendToDevice", m_type, str(uuid4())],
-            body   = {"messages": msgs},
+            "PUT",
+            self.client.api / "sendToDevice" / m_type / str(uuid4()),
+            {"messages": msgs},
         )
 
 

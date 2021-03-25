@@ -1,4 +1,5 @@
 import asyncio
+import json
 from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -47,21 +48,22 @@ class Sync(JSONClientModule):
         set_presence: Optional[str]  = None,
     ) -> Optional[dict]:
 
-        parameters = {
+        filter_param: Any = None
+
+        if sync_filter:
+            filter_param = json.dumps(sync_filter, ensure_ascii=False)
+
+        url = self.client.api / "sync" % remove_none({
             "timeout":      int(timeout * 1000),
-            "filter":       sync_filter,
+            "filter":       filter_param,
             "since":        since or self.next_batch,
             "full_state":   full_state,
             "set_presence": set_presence,
             # or self.client.presence.to_set TODO
-        }
+        })
 
-        # TODO: timeout
-        result = await self.client.send_json(
-            method     = "GET",
-            path       = [*self.client.api, "sync"],
-            parameters = remove_none(parameters),
-        )
+        # TODO: client-side timeout
+        result = await self.client.send_json("GET", url)
 
         if self.next_batch != result["next_batch"]:
             await self._handle_sync(result)

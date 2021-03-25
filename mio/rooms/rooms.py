@@ -95,17 +95,15 @@ class Rooms(ClientModule, IndexableMap[RoomId, Room]):
         }
 
         result = await self.client.send_json(
-            "POST", [*self.client.api, "createRoom"], body=remove_none(body),
+            "POST", self.client.api / "createRoom", remove_none(body),
         )
 
         return result["room_id"]
 
 
     async def join(self, id_or_alias: Union[RoomId, RoomAlias]) -> RoomId:
-        result = await self.client.send_json(
-            "POST", [*self.client.api, "join", id_or_alias],
-        )
-
+        url    = self.client.api / "join" / id_or_alias
+        result = await self.client.send_json("POST", url)
         return result["room_id"]
 
 

@@ -4,7 +4,7 @@ from typing import Optional
 
 from ...core.contents import EventContent
 from ...core.data import AutoStrEnum
-from ...core.types import MxcUri
+from ...core.types import MXC
 
 # TODO: m.room.third_party_invite
 
@@ -26,10 +26,10 @@ class Member(EventContent):
     }
 
     membership:       Kind
-    avatar_url:       Optional[MxcUri] = None
-    display_name:     Optional[str]    = None
-    is_direct:        bool             = False
-    third_party_name: Optional[str]    = None
+    avatar_url:       Optional[MXC] = None
+    display_name:     Optional[str] = None
+    is_direct:        bool          = False
+    third_party_name: Optional[str] = None
     # invite_room_state: List[StrippedState] = []  # TODO
 
     @property

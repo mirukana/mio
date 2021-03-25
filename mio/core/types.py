@@ -6,6 +6,7 @@ from phantom.predicates.boolean import both
 from phantom.predicates.collection import count
 from phantom.predicates.interval import open
 from phantom.predicates.re import is_match
+from yarl import URL
 
 DictS    = Dict[str, Any]
 T        = TypeVar("T")
@@ -13,6 +14,8 @@ NoneType = type(None)
 
 HOST_REGEX    = r"[a-zA-Z\d.:-]*[a-zA-Z\d]"
 USER_ID_REGEX = rf"^@[\x21-\x39\x3B-\x7E]+:{HOST_REGEX}$"
+
+MXC = URL
 
 
 def match(regex: str) -> Predicate:
@@ -36,12 +39,4 @@ class RoomId(str, Phantom, predicate=match_255(rf"^!.+:{HOST_REGEX}$")):
 
 
 class RoomAlias(str, Phantom, predicate=match_255(rf"^#.+:{HOST_REGEX}$")):
-    pass
-
-
-class HttpUrl(str, Phantom, predicate=match(rf"https?://{HOST_REGEX}.*")):
-    pass
-
-
-class MxcUri(str, Phantom, predicate=match(rf"mxc://{HOST_REGEX}/.+")):
     pass
