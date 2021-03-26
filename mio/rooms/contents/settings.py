@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import auto
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Type
 
 from ...core.contents import EventContent
 from ...core.data import AutoStrEnum
@@ -112,7 +112,7 @@ class GuestAccess(EventContent):
 class PinnedEvents(EventContent):
     type = "m.room.pinned_events"
 
-    pinned: List[EventId]
+    pinned: List[EventId] = field(default_factory=list)
 
 
 @dataclass
@@ -140,6 +140,18 @@ class PowerLevels(EventContent):
     notifications:  Dict[str, int]    = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        content: Type[EventContent]
+
+        for content in (
+            PowerLevels, HistoryVisibility, Tombstone, ServerACL, Encryption,
+        ):
+            assert content.type
+            self.events.setdefault(content.type, 100)
+
+        for content in (Name, CanonicalAlias, Avatar):
+            assert content.type
+            self.events.setdefault(content.type, 50)
+
         self.notifications.setdefault("room", 50)
 
 
