@@ -1,11 +1,15 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, Optional, Tuple, Type, Union
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Type, Union
 
 from ..core.contents import EventContent
 from ..core.data import JSONFile, Map, Parent
-from ..core.types import UserId
-from .contents.settings import Encryption
+from ..core.types import MXC, EventId, RoomAlias, UserId
+from .contents.settings import (
+    Avatar, CanonicalAlias, Creation, Encryption, GuestAccess,
+    HistoryVisibility, JoinRules, Name, PinnedEvents, PowerLevels, ServerACL,
+    Tombstone, Topic,
+)
 from .contents.users import Member
 from .events import InvitedRoomStateEvent, StateBase, StateEvent
 
@@ -18,7 +22,7 @@ Key = Union[
 
 
 @dataclass
-class RoomState(JSONFile, Map[Tuple[str, str], StateBase]):
+class RoomState(JSONFile, Map):
     loaders = {
         **JSONFile.loaders,  # type: ignore
 
@@ -55,31 +59,96 @@ class RoomState(JSONFile, Map[Tuple[str, str], StateBase]):
 
 
     @property
+    def creator(self) -> UserId:
+        return self[Creation].sender
+
+
+    @property
+    def federated(self) -> bool:
+        return self[Creation].content.federate
+
+
+    @property
+    def version(self) -> str:
+        return self[Creation].content.version
+
+
+    @property
+    def predecessor(self) -> Optional[Creation.Predecessor]:
+        return self[Creation].content.predecessor
+
+
+    @property
     def encryption(self) -> Optional[Encryption]:
         return self[Encryption].content if Encryption in self else None
 
 
-    def users(
-        self,
-        invitees: bool = True,
-        joined:   bool = True,
-        left:     bool = True,
-        banned:   bool = True,
-    ) -> Dict[UserId, StateBase[Member]]:
+    @property
+    def name(self) -> Optional[str]:
+        return self[Name].content.name if Name in self else None
 
-        include = {
-            Member.Kind.invite: invitees,
-            Member.Kind.join: joined,
-            Member.Kind.leave: left,
-            Member.Kind.ban: banned,
-        }
 
-        return {
-            UserId(state_key): event
-            for (_mtype, state_key), event in self.items()
-            if isinstance(event.content, Member) and
-            include[event.content.membership]
-        }
+    @property
+    def topic(self) -> Optional[str]:
+        return self[Topic].content.topic if Topic in self else None
+
+
+    @property
+    def avatar(self) -> Optional[MXC]:
+        return self[Avatar].content.url if Avatar in self else None
+
+
+    @property
+    def alias(self) -> Optional[RoomAlias]:
+        got = CanonicalAlias in self
+        return self[CanonicalAlias].content.alias if got else None
+
+
+    @property
+    def alt_aliases(self) -> List[RoomAlias]:
+        got = CanonicalAlias in self
+        return self[CanonicalAlias].content.alternatives if got else []
+
+
+    @property
+    def join_rule(self) -> JoinRules.Rule:
+        return self[JoinRules].content.rule
+
+
+    @property
+    def history_visibility(self) -> HistoryVisibility.Visibility:
+        if HistoryVisibility in self:
+            return self[HistoryVisibility].content.visibility
+        return HistoryVisibility.Visibility.shared
+
+
+    @property
+    def guest_access(self) -> GuestAccess.Access:
+        d = GuestAccess.Access.forbidden
+        return self[GuestAccess].content.access if GuestAccess in self else d
+
+
+    @property
+    def pinned_events(self) -> List[EventId]:
+        got = PinnedEvents in self
+        return self[PinnedEvents].content.pinned if got else []
+
+
+    @property
+    def tombstone(self) -> Optional[Tombstone]:
+        return self[Tombstone].content if Tombstone in self else None
+
+
+    @property
+    def power_levels(self) -> PowerLevels:
+        missing = PowerLevels(state_default=0)
+        return self[PowerLevels].content if PowerLevels in self else missing
+
+
+    @property
+    def server_acl(self) -> ServerACL:
+        default = ServerACL(allow=["*"])
+        return self[ServerACL].content if ServerACL in self else default
 
 
     @property
@@ -111,6 +180,29 @@ class RoomState(JSONFile, Map[Tuple[str, str], StateBase]):
     def inviter(self) -> Optional[UserId]:
         invited = self.us and self.us.content.membership == Member.Kind.invite
         return self.us.sender if self.us and invited else None
+
+
+    def users(
+        self,
+        invitees: bool = True,
+        joined:   bool = True,
+        left:     bool = True,
+        banned:   bool = True,
+    ) -> Dict[UserId, StateBase[Member]]:
+
+        include = {
+            Member.Kind.invite: invitees,
+            Member.Kind.join: joined,
+            Member.Kind.leave: left,
+            Member.Kind.ban: banned,
+        }
+
+        return {
+            UserId(state_key): event
+            for (_mtype, state_key), event in self.items()
+            if isinstance(event.content, Member) and
+            include[event.content.membership]
+        }
 
 
     async def send(self, content: EventContent, state_key: str = "") -> str:
