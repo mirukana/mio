@@ -56,6 +56,11 @@ class Room(JSONFile, EventCallbacks):
         )
 
 
+    async def invite(self, user_id: UserId) -> None:
+        url = self.client.api / "rooms" / self.id / "invite"
+        await self.client.send_json("POST", url, {"user_id": user_id})
+
+
     async def leave(self) -> None:
         url = self.client.api / "rooms" / self.id / "leave"
         await self.client.send_json("POST", url)

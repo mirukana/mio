@@ -1,6 +1,7 @@
 import asyncio
 from uuid import uuid4
 
+from mio.client import Client
 from mio.core.types import RoomAlias
 from mio.rooms.contents.settings import (
     Avatar, CanonicalAlias, Creation, Encryption, GuestAccess,
@@ -38,12 +39,14 @@ async def test_indexing(room: Room):
         room.state[Member]
 
 
-async def test_settings_properties(room: Room):
-    state = room.state
+async def test_settings_properties(alice: Client, room: Room):
+    state       = room.state
+    base_levels = PowerLevels(users={room.client.user_id: 100})
+
     assert state.creator == room.client.user_id
     assert state.federated is True
     assert state.version == state[Creation].content.version
-    assert state.predecessor is None  # TODO
+    assert state.predecessor is None
     assert state.encryption is None
     assert state.name is None
     assert state.topic is None
@@ -55,13 +58,12 @@ async def test_settings_properties(room: Room):
     assert state.guest_access is GuestAccess.Access.forbidden
     assert state.pinned_events == []
     assert state.tombstone is None
-    assert state.power_levels == PowerLevels(users={room.client.user_id: 100})
+    assert state.power_levels == base_levels
     assert state.server_acl == ServerACL(allow=["*"])
 
-    alias     = RoomAlias(f"#{uuid4()}:localhost")
-    alt_alias = RoomAlias(f"#{uuid4()}:localhost")
-
-    to_send = [
+    alias       = RoomAlias(f"#{uuid4()}:localhost")
+    alt_alias   = RoomAlias(f"#{uuid4()}:localhost")
+    to_send     = [
         Encryption(),
         Name("example"),
         Topic("blah"),
@@ -71,13 +73,13 @@ async def test_settings_properties(room: Room):
         HistoryVisibility(HistoryVisibility.Visibility.invited),
         GuestAccess(GuestAccess.Access.can_join),
         PinnedEvents(["$a:localhost"]),  # type: ignore
-        Tombstone("dead", "!n:localhost"),  # type: ignore
-        PowerLevels(events_default=-1),
+        base_levels.but(events_default=-1),
         ServerACL(allow_ip_literals=False, allow=["*"]),
     ]
 
     await asyncio.gather(*[room.create_alias(a) for a in (alias, alt_alias)])
-    await asyncio.gather(*[state.send(content) for content in to_send])
+    await asyncio.gather(*[state.send(c) for c in to_send])  # type: ignore
+    await state.send(Tombstone("dead", "!n:localhost"))
     await room.client.sync.once()
 
     assert state.encryption == Encryption()
@@ -92,5 +94,5 @@ async def test_settings_properties(room: Room):
     assert state.guest_access is GuestAccess.Access.can_join
     assert state.pinned_events == ["$a:localhost"]
     assert state.tombstone == Tombstone("dead", "!n:localhost")
-    assert state.power_levels == PowerLevels(events_default=-1)
+    assert state.power_levels == base_levels.but(events_default=-1)
     assert state.server_acl == ServerACL(allow_ip_literals=False, allow=["*"])
