@@ -41,6 +41,7 @@ class Auth(ClientModule):
 
         await client._e2e._upload_keys()
         await client.devices.ensure_tracked([client.user_id])
+        await client.profile._query()
         await client.save()
         return client
 

@@ -66,6 +66,13 @@ async def room(alice):
 
 
 @fixture
+async def room2(alice):
+    room_id = await alice.rooms.create(public=True)
+    await alice.sync.once()
+    return alice.rooms[room_id]
+
+
+@fixture
 async def e2e_room(room):
     await room.state.send(Encryption())
     await room.client.sync.once()

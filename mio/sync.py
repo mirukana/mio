@@ -4,7 +4,8 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import (
-    TYPE_CHECKING, Any, Awaitable, Callable, Dict, Optional, Set, Type, Union,
+    TYPE_CHECKING, Any, Awaitable, Callable, Dict, List, Optional, Set, Type,
+    Union,
 )
 
 from .core.data import Parent
@@ -15,6 +16,7 @@ from .devices.events import ToDeviceEvent
 from .e2e.contents import Megolm, Olm
 from .e2e.errors import DecryptionError
 from .module import JSONClientModule
+from .rooms.contents.users import Member
 from .rooms.room import Room
 from .rooms.state import InvitedRoomStateEvent, StateBase, StateEvent
 from .rooms.timeline import TimelineEvent
@@ -104,6 +106,8 @@ class Sync(JSONClientModule):
     async def _handle_sync(self, sync: Dict[str, Any]) -> None:
         # TODO: account_data, ephemeral events, presence
 
+        state_member_events: List[StateEvent[Member]] = []
+
         async def events_call(
             data: dict, key: str, evtype: Type[Event], coro: Callable,
         ) -> None:
@@ -129,6 +133,9 @@ class Sync(JSONClientModule):
                     if "state_key" in event:
                         state_ev = state.from_dict(event, room)
                         await room.state._register(state_ev)
+
+                        if isinstance(state_ev.content, Member):
+                            state_member_events.append(state_ev)  # type:ignore
 
                     if key != "timeline":
                         continue
@@ -239,6 +246,8 @@ class Sync(JSONClientModule):
         if "device_one_time_keys_count" in sync:
             up = sync["device_one_time_keys_count"].get("signed_curve25519", 0)
             await self.client._e2e.upload_one_time_keys(currently_uploaded=up)
+
+        await self.client.profile._update_on_sync(*state_member_events)
 
         self.next_batch = sync["next_batch"]
         await self.save()

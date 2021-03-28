@@ -14,6 +14,7 @@ from .core.utils import get_logger
 from .devices.devices import Devices
 from .e2e.e2e import E2E
 from .module import ClientModule
+from .profile import Profile
 from .rooms.rooms import Rooms
 from .sync import Sync
 
@@ -29,6 +30,7 @@ class Client(JSONFile):
     access_token: str             = ""
 
     auth:    Runtime[Auth]    = field(init=False, repr=False)
+    profile: Runtime[Profile] = field(init=False, repr=False)
     rooms:   Runtime[Rooms]   = field(init=False, repr=False)
     sync:    Runtime[Sync]    = field(init=False, repr=False)
     _e2e:    Runtime[E2E]     = field(init=False, repr=False)
@@ -41,6 +43,7 @@ class Client(JSONFile):
 
     def __post_init__(self) -> None:
         self.auth    = Auth(self)
+        self.profile = Profile(self)
         self.rooms   = Rooms(self)
         self.sync    = Sync(self)
         self._e2e    = E2E(self)
