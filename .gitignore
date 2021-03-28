@@ -8,3 +8,4 @@ dist
 tags
 TODO.md
 tests/synapse
+tests/coverage

@@ -28,9 +28,12 @@ mypy mio & flake8 mio & python3 -m pytest
 Using `python3 -m pytest` instead of `pytest` will ensure that the current
 folder is added to import paths.
 
-Tests will be run in parallel by default, add the `--pdb` flag to the pytest
-command to disable this and let debugger calls work normally.
-Add `--capture=no` to show logging in real time.
+Arguments that can be added to the pytest command include:
+
+- Paths to the files in *tests/* to run, instead of running everything
+- `--pdb` to disable parallel testing and let debugger calls work normally
+- `--capture=no`/`-s` to show logging output and prints in real time
+- `--cov` to generate test coverage info, terminal and HTML by default
 
 Tests leave a Synapse server (which has a long startup time) running,
 use `synctl stop tests/synapse/homeserver.yaml` to stop it.

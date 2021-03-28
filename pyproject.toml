@@ -1,11 +1,45 @@
 [tool.pytest.ini_options]
-testpaths        = "tests"
-minversion       = "6.2.1"
-required_plugins = ["pytest-asyncio", "pytest-xdist"]
-addopts          = [
-    "--strict-config",
-    "--strict-markers",
-    "--failed-first",
-    "--new-first",
-    "--numprocesses=auto",
-]
+    testpaths        = "tests"
+    minversion       = "6.2.1"
+    required_plugins = ["pytest-asyncio", "pytest-cov", "pytest-xdist"]
+    addopts          = [
+        "--strict-config",
+        "--strict-markers",
+        "--failed-first",
+        "--new-first",
+        "--numprocesses=auto",
+        "--no-cov-on-fail",
+        "--cov-report=term",
+        "--cov-report=html",
+    ]
+
+[tool.coverage]
+    [tool.coverage.run]
+        source    = ["mio"]
+        data_file = "tests/coverage/data.bin"
+        branch    = true
+        # dynamic_context = "test_function"
+
+    [tool.coverage.report]
+        precision     = 2
+        show_missing  = true
+        skip_empty    = true
+        skip_covered  = true
+        fail_under    = 100
+        exclude_lines = [
+            "pragma: no cover",
+            "def __repr__",
+            "if TYPE_CHECKING:",
+        ]
+
+    [tool.coverage.html]
+        directory     = "tests/coverage/html"
+        show_contexts = true
+
+    [tool.coverage.xml]
+        output = "tests/coverage/output.xml"
+
+    [tool.coverage.json]
+        output        = "tests/coverage/output.json"
+        pretty_print  = true
+        show_contexts = true
