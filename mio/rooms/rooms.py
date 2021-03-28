@@ -7,20 +7,50 @@ from typing import (
 from ..core.callbacks import CallbackGroup, Callbacks
 from ..core.contents import EventContent
 from ..core.data import IndexableMap, Parent, Runtime
-from ..core.types import RoomAlias, RoomId
+from ..core.types import RoomAlias, RoomId, UserId
 from ..core.utils import remove_none
 from ..module import ClientModule
 from .contents.users import Member
-from .events import StateBase
+from .events import StateBase, StateEvent
 from .room import Room
+from .user import RoomUser
 
 if TYPE_CHECKING:
     from ..client import Client
 
 
 class MioRoomCallbacks(CallbackGroup):
-    async def on_leave(self, room: Room, event: StateBase[Member]) -> None:
-        if event.content.left:
+    async def on_member(self, room: Room, event: StateBase[Member]) -> None:
+        content  = event.content
+        user_id  = UserId(event.state_key)
+        previous = event.previous if isinstance(event, StateEvent) else None
+        places   = {
+            Member.Kind.invite: room.state.invitees,
+            Member.Kind.join:   room.state.members,
+            Member.Kind.leave:  room.state.leavers,
+            Member.Kind.ban:    room.state.banned,
+        }
+
+        for place in places.values():
+            room_member = place.pop(user_id, None)
+
+            if room_member:
+                room_member.state = event
+                break
+        else:
+            room_member = RoomUser(room, event)
+
+        places[content.membership][user_id] = room_member
+
+        if previous and previous.display_name:
+            room.state._display_names[previous.display_name].discard(user_id)
+
+        if content.absent and content.display_name:
+            room.state._display_names[content.display_name].discard(user_id)
+        elif content.display_name:
+            room.state._display_names[content.display_name].add(user_id)
+
+        if content.absent:
             await room.client._e2e.drop_outbound_group_session(room.id)
 
 

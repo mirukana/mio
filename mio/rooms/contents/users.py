@@ -14,7 +14,6 @@ class Member(EventContent):
     class Kind(AutoStrEnum):
         invite = auto()
         join   = auto()
-        knock  = auto()
         leave  = auto()
         ban    = auto()
 
@@ -26,12 +25,13 @@ class Member(EventContent):
     }
 
     membership:       Kind
-    avatar_url:       Optional[MXC] = None
+    reason:           Optional[str] = None
     display_name:     Optional[str] = None
+    avatar_url:       Optional[MXC] = None
     is_direct:        bool          = False
     third_party_name: Optional[str] = None
     # invite_room_state: List[StrippedState] = []  # TODO
 
     @property
-    def left(self) -> bool:
+    def absent(self) -> bool:
         return self.membership in (self.Kind.leave, self.Kind.ban)

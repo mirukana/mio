@@ -72,7 +72,6 @@ class CanonicalAlias(EventContent):
 class JoinRules(EventContent):
     class Rule(AutoStrEnum):
         public  = auto()
-        knock   = auto()
         invite  = auto()
         private = auto()
 

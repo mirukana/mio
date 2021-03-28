@@ -39,7 +39,7 @@ async def test_indexing(room: Room):
         room.state[Member]
 
 
-async def test_settings_properties(alice: Client, room: Room):
+async def test_settings_properties(room: Room):
     state       = room.state
     base_levels = PowerLevels(users={room.client.user_id: 100})
 
@@ -96,3 +96,31 @@ async def test_settings_properties(alice: Client, room: Room):
     assert state.tombstone == Tombstone("dead", "!n:localhost")
     assert state.power_levels == base_levels.but(events_default=-1)
     assert state.server_acl == ServerACL(allow_ip_literals=False, allow=["*"])
+
+
+async def test_user_dicts(alice: Client, room: Room, bob: Client):
+    state = room.state
+    assert set(state.users) == {alice.user_id}
+    assert set(state.members) == {alice.user_id}
+    assert not state.invitees and not state.leavers and not state.banned
+
+    await room.invite(bob.user_id)
+    await alice.sync.once()
+    assert set(state.users) == {alice.user_id, bob.user_id}
+    assert set(state.members) == {alice.user_id}
+    assert set(state.invitees) == {bob.user_id}
+    assert not state.leavers and not state.banned
+
+    await state.invitees[bob.user_id].kick()
+    await alice.sync.once()
+    assert set(state.users) == {alice.user_id, bob.user_id}
+    assert set(state.members) == {alice.user_id}
+    assert set(state.leavers) == {bob.user_id}
+    assert not state.invitees and not state.banned
+
+    await state.leavers[bob.user_id].ban()
+    await alice.sync.once()
+    assert set(state.users) == {alice.user_id, bob.user_id}
+    assert set(state.members) == {alice.user_id}
+    assert set(state.banned) == {bob.user_id}
+    assert not state.invitees and not state.leavers

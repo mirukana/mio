@@ -1,17 +1,20 @@
+from collections import ChainMap
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Type, Union
+from typing import (
+    TYPE_CHECKING, DefaultDict, Dict, List, Optional, Set, Tuple, Type, Union,
+)
 
 from ..core.contents import EventContent
-from ..core.data import JSONFile, Map, Parent
+from ..core.data import JSONFile, Map, Parent, Runtime
 from ..core.types import MXC, EventId, RoomAlias, UserId
 from .contents.settings import (
     Avatar, CanonicalAlias, Creation, Encryption, GuestAccess,
     HistoryVisibility, JoinRules, Name, PinnedEvents, PowerLevels, ServerACL,
     Tombstone, Topic,
 )
-from .contents.users import Member
 from .events import InvitedRoomStateEvent, StateBase, StateEvent
+from .user import RoomUser
 
 if TYPE_CHECKING:
     from .room import Room
@@ -35,6 +38,16 @@ class RoomState(JSONFile, Map):
 
     # {event.type: {event.state_key: event}}
     _data: Dict[Tuple[str, str], StateBase] = field(default_factory=dict)
+
+    invitees: Runtime[Dict[UserId, RoomUser]] = field(default_factory=dict)
+    members:  Runtime[Dict[UserId, RoomUser]] = field(default_factory=dict)
+    leavers:  Runtime[Dict[UserId, RoomUser]] = field(default_factory=dict)
+    banned:   Runtime[Dict[UserId, RoomUser]] = field(default_factory=dict)
+
+    # {name: {user_id}} - For detecting multiple users having a same name
+    _display_names: Runtime[Dict[str, Set[UserId]]] = field(
+        init=False, repr=False, default_factory=lambda: DefaultDict(set),
+    )
 
 
     def __getitem__(self, key: Key) -> StateBase:
@@ -152,57 +165,13 @@ class RoomState(JSONFile, Map):
 
 
     @property
-    def invitees(self) -> Dict[UserId, StateBase[Member]]:
-        return self.users(joined=False, left=False, banned=False)
+    def users(self) -> ChainMap[UserId, RoomUser]:
+        return ChainMap(self.invitees, self.members, self.leavers, self.banned)
 
 
     @property
-    def members(self) -> Dict[UserId, StateBase[Member]]:
-        return self.users(invitees=False, left=False, banned=False)
-
-
-    @property
-    def leavers(self) -> Dict[UserId, StateBase[Member]]:
-        return self.users(invitees=False, joined=False, banned=False)
-
-
-    @property
-    def banned(self) -> Dict[UserId, StateBase[Member]]:
-        return self.users(invitees=False, joined=False, left=False)
-
-
-    @property
-    def us(self) -> Optional[StateBase[Member]]:
-        return self.users().get(self.room.client.user_id)
-
-
-    @property
-    def inviter(self) -> Optional[UserId]:
-        invited = self.us and self.us.content.membership == Member.Kind.invite
-        return self.us.sender if self.us and invited else None
-
-
-    def users(
-        self,
-        invitees: bool = True,
-        joined:   bool = True,
-        left:     bool = True,
-        banned:   bool = True,
-    ) -> Dict[UserId, StateBase[Member]]:
-
-        include = {
-            Member.Kind.invite: invitees,
-            Member.Kind.join: joined,
-            Member.Kind.leave: left,
-            Member.Kind.ban: banned,
-        }
-
-        return {
-            UserId(state_key): event
-            for (_mtype, state_key), event in self.items()
-            if isinstance(event.content, Member) and
-            include[event.content.membership]
-        }
+    def me(self) -> RoomUser:
+        return self.users[self.room.client.user_id]
 
 
     async def send(self, content: EventContent, state_key: str = "") -> str:
