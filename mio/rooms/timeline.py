@@ -83,6 +83,7 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
 
                     with log_errors(InvalidEvent, trace=True):
                         ev = TimelineEvent.from_dict(source, self.room)
+                        ev.historic = True
 
                     with log_errors(DecryptionError):
                         ev = await ev._decrypted()
@@ -253,6 +254,7 @@ class Gap(JSON):
 
             with log_errors(InvalidEvent):
                 ev = TimelineEvent.from_dict(source, self.room)
+                ev.historic = True
 
             with log_errors(DecryptionError):
                 ev = await ev._decrypted()

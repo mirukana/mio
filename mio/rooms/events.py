@@ -32,6 +32,7 @@ class TimelineEvent(Event[ContentT]):
     redacts:    Optional[EventId]    = None
     room_id:    Optional[RoomId]     = None
     decryption: Runtime[DecryptInfo] = None
+    historic:   Runtime[bool]        = False
     # TODO: unsigned
 
     def __lt__(self, other: "TimelineEvent") -> bool:
@@ -71,10 +72,15 @@ class StateBase(Event[ContentT]):
     state_key: str
     sender:    UserId
 
+    def __post_init__(self) -> None:
+        if type(self) is StateBase:  # hack to avoid mypy errors
+            self.from_disk: bool = False
+
 
 @dataclass
 class InvitedRoomStateEvent(StateBase[ContentT]):
-    content: ContentT
+    content:   ContentT
+    from_disk: Runtime[bool] = False
 
 
 @dataclass
@@ -85,11 +91,12 @@ class StateEvent(StateBase[ContentT]):
         "previous": ("unsigned", "prev_content"),
     }
 
-    content:  ContentT
-    id:       EventId
-    date:     datetime
-    previous: Optional[ContentT] = None
-    room_id:  Optional[RoomId]   = None
+    content:   ContentT
+    id:        EventId
+    date:      datetime
+    previous:  Optional[ContentT] = None
+    room_id:   Optional[RoomId]   = None
+    from_disk: Runtime[bool]      = False
 
     @classmethod
     def from_dict(

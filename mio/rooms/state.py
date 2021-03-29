@@ -62,6 +62,10 @@ class RoomState(JSONFile, Map):
 
     async def load(self) -> "RoomState":
         await super().load()
+
+        for event in self.values():
+            event.from_disk = True
+
         await self._register(*list(self.values()))
         return self
 
