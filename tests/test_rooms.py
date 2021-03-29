@@ -166,9 +166,10 @@ async def test_join_room_id(room: Room, bob: Client):
     await bob.sync.once()
     assert room.id not in bob.rooms
 
-    await bob.rooms.join(room.id)
+    await bob.rooms.join(room.id, reason="test")
     await bob.sync.once()
     assert room.id in bob.rooms
+    assert bob.rooms[room.id].state.me.membership_reason == "test"
 
 
 async def test_join_room_alias(room: Room, bob: Client):
@@ -180,6 +181,7 @@ async def test_join_room_alias(room: Room, bob: Client):
     await bob.sync.once()
     assert room.id not in bob.rooms
 
-    await bob.rooms.join(alias)
+    await bob.rooms.join(alias, reason="test")
     await bob.sync.once()
     assert room.id in bob.rooms
+    assert bob.rooms[room.id].state.me.membership_reason == "test"

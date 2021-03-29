@@ -1,10 +1,11 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Set, Tuple
+from typing import TYPE_CHECKING, List, Optional, Set, Tuple
 
 from ..core.callbacks import CallbackGroup, Callbacks, EventCallbacks
 from ..core.data import JSONFile, Parent, Runtime
 from ..core.types import RoomAlias, RoomId, UserId
+from ..core.utils import remove_none
 from .state import RoomState
 from .timeline import Timeline
 
@@ -75,23 +76,31 @@ class Room(JSONFile, EventCallbacks):
         )
 
 
-    async def invite(self, user_id: UserId) -> None:
-        url = self.client.api / "rooms" / self.id / "invite"
-        await self.client.send_json("POST", url, {"user_id": user_id})
+    async def invite(
+        self, user_id: UserId, reason: Optional[str] = None,
+    ) -> None:
+        await self.client.send_json(
+            "POST",
+            self.client.api / "rooms" / self.id / "invite",
+            remove_none({"user_id": user_id, "reason": reason}),
+        )
 
 
-    async def leave(self) -> None:
-        url = self.client.api / "rooms" / self.id / "leave"
-        await self.client.send_json("POST", url)
+    async def leave(self, reason: Optional[str] = None) -> None:
+        await self.client.send_json(
+            "POST",
+            self.client.api / "rooms" / self.id / "leave",
+            remove_none({"reason": reason}),
+        )
 
 
-    async def forget(self) -> None:
+    async def forget(self, leave_reason: Optional[str] = None) -> None:
         # Prevent a sync from occuring AFTER leaving room, but BEFORE having
         # marked it as forgotten. We will get a "we left" event on next sync,
         # which we must ignore if we know we forgot the room.
         with self.client.sync.pause():
             if not self.left:
-                await self.leave()
+                await self.leave(leave_reason)
 
             url = self.client.api / "rooms" / self.id / "forget"
             await self.client.send_json("POST", url)

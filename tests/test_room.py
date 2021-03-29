@@ -35,19 +35,21 @@ async def test_create_alias(room: Room):
 
 async def test_invite(room: Room, bob: Client):
     assert room.id not in bob.rooms
-    await room.invite(bob.user_id)
+    await room.invite(bob.user_id, reason="test")
     await bob.sync.once()
     assert room.id in bob.rooms.invited
+    assert bob.rooms[room.id].state.me.membership_reason == "test"
 
 
 async def test_leave(e2e_room: Room):
     await e2e_room.timeline.send(Text("make a session"))
     assert e2e_room.id in e2e_room.client._e2e.out_group_sessions
 
-    await e2e_room.leave()
+    await e2e_room.leave(reason="bye")
     await e2e_room.client.sync.once()
     assert e2e_room.left
     assert e2e_room.id not in e2e_room.client._e2e.out_group_sessions
+    assert e2e_room.state.me.membership_reason == "bye"
 
 
 async def test_forget(room: Room, bob: Client):
@@ -55,12 +57,16 @@ async def test_forget(room: Room, bob: Client):
     await bob.rooms.join(room.id)
 
     assert not room.left
-    await room.forget()
+    await room.forget(leave_reason="bye")
     await room.client.sync.once()
 
     assert room.left
     assert room.id not in room.client.rooms
     assert room.id in room.client.rooms.forgotten
+
+    await bob.sync.once()
+    bob_members = bob.rooms[room.id].state.leavers
+    assert bob_members[room.client.user_id].membership_reason == "bye"
 
     # Make sure events are not ignored if we rejoin or get invited again
     await room.client.rooms.join(room.id)

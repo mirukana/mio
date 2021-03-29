@@ -94,9 +94,9 @@ async def test_ban_unban(alice: Client, bob: Client, room: Room):
     with raises(MatrixError):
         await bob.rooms.join(room.id)
 
-    await room.state.banned[bob.user_id].unban()
+    await room.state.banned[bob.user_id].unban("mistake")
     await alice.sync.once()
     assert room.state.leavers[bob.user_id].banned_by is None
-    assert room.state.leavers[bob.user_id].membership_reason is None
+    assert room.state.leavers[bob.user_id].membership_reason == "mistake"
 
     await bob.rooms.join(room.id)

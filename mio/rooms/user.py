@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING, Optional
 
 from ..core.data import Parent
 from ..core.types import MXC, UserId
+from ..core.utils import remove_none
 from .contents.users import Member
 from .events import StateBase
 
@@ -90,7 +91,7 @@ class RoomUser:
         await self.room.client.send_json(
             "POST",
             self.room.client.api / "rooms" / self.room.id / "kick",
-            {"user_id": self.user_id, "reason": reason},
+            remove_none({"user_id": self.user_id, "reason": reason}),
         )
 
 
@@ -98,13 +99,13 @@ class RoomUser:
         await self.room.client.send_json(
             "POST",
             self.room.client.api / "rooms" / self.room.id / "ban",
-            {"user_id": self.user_id, "reason": reason},
+            remove_none({"user_id": self.user_id, "reason": reason}),
         )
 
 
-    async def unban(self) -> None:
+    async def unban(self, reason: Optional[str] = None) -> None:
         await self.room.client.send_json(
             "POST",
             self.room.client.api / "rooms" / self.room.id / "unban",
-            {"user_id": self.user_id},
+            remove_none({"user_id": self.user_id, "reason": reason}),
         )

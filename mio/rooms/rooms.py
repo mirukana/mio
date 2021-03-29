@@ -139,9 +139,18 @@ class Rooms(ClientModule, IndexableMap[RoomId, Room]):
         return result["room_id"]
 
 
-    async def join(self, id_or_alias: Union[RoomId, RoomAlias]) -> RoomId:
-        url    = self.client.api / "join" / id_or_alias
-        result = await self.client.send_json("POST", url)
+    async def join(
+        self,
+        id_or_alias: Union[RoomId, RoomAlias],
+        reason:      Optional[str] = None,
+    ) -> RoomId:
+
+        result = await self.client.send_json(
+            "POST",
+            self.client.api / "join" / id_or_alias,
+            remove_none({"reason": reason}),
+        )
+
         return result["room_id"]
 
 
