@@ -50,7 +50,7 @@ class MioRoomCallbacks(CallbackGroup):
         elif content.display_name:
             room.state._display_names[content.display_name].add(user_id)
 
-        if content.absent:
+        if not event.from_disk and content.absent:
             await room.client._e2e.drop_outbound_group_session(room.id)
 
 
