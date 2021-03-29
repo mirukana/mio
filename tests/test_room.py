@@ -33,3 +33,22 @@ async def test_leave(e2e_room: Room):
     await e2e_room.client.sync.once()
     assert e2e_room.left
     assert e2e_room.id not in e2e_room.client._e2e.out_group_sessions
+
+
+async def test_forget(room: Room, bob: Client):
+    # Server will destroy the room if there's only one user in who forgets it
+    await bob.rooms.join(room.id)
+
+    assert not room.left
+    await room.forget()
+    await room.client.sync.once()
+
+    assert room.left
+    assert room.id not in room.client.rooms
+    assert room.id in room.client.rooms.forgotten
+
+    # Make sure events are not ignored if we rejoin or get invited again
+    await room.client.rooms.join(room.id)
+    await room.client.sync.once()
+    assert room.id in room.client.rooms
+    assert room.id not in room.client.rooms.forgotten

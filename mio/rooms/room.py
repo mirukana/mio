@@ -31,8 +31,11 @@ class Room(JSONFile, EventCallbacks):
 
 
     def __post_init__(self) -> None:
+        self.client.rooms.forgotten.discard(self.id)
+
         self.timeline = Timeline(self)
         self.state    = RoomState(self)
+
         super().__post_init__()
 
 
@@ -64,6 +67,22 @@ class Room(JSONFile, EventCallbacks):
     async def leave(self) -> None:
         url = self.client.api / "rooms" / self.id / "leave"
         await self.client.send_json("POST", url)
+
+
+    async def forget(self) -> None:
+        # Prevent a sync from occuring AFTER leaving room, but BEFORE having
+        # marked it as forgotten. We will get a "we left" event on next sync,
+        # which we must ignore if we know we forgot the room.
+        with self.client.sync.pause():
+            if not self.left:
+                await self.leave()
+
+            url = self.client.api / "rooms" / self.id / "forget"
+            await self.client.send_json("POST", url)
+
+            self.left = True
+            self.client.rooms._data.pop(self.id, None)
+            self.client.rooms.forgotten.add(self.id)
 
 
     def _callbacks(self) -> Callbacks:

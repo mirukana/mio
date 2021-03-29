@@ -1,7 +1,8 @@
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import (
-    TYPE_CHECKING, DefaultDict, Dict, List, Optional, Sequence, Tuple, Union,
+    TYPE_CHECKING, DefaultDict, Dict, List, Optional, Sequence, Set, Tuple,
+    Union,
 )
 
 from ..core.callbacks import CallbackGroup, Callbacks
@@ -66,6 +67,8 @@ class Rooms(ClientModule, IndexableMap[RoomId, Room]):
     callback_groups: Runtime[List["CallbackGroup"]] = field(
         default_factory=lambda: [MioRoomCallbacks()],
     )
+
+    forgotten: Runtime[Set[RoomId]] = field(default_factory=set)
 
 
     @property

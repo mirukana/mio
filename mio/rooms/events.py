@@ -73,8 +73,8 @@ class StateBase(Event[ContentT]):
     sender:    UserId
 
     def __post_init__(self) -> None:
-        if type(self) is StateBase:  # hack to avoid mypy errors
-            self.from_disk: bool = False
+        if type(self) is StateBase:  # pragma: no cover
+            self.from_disk: bool = False  # mypy hack
 
 
 @dataclass

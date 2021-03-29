@@ -1,14 +1,14 @@
 import asyncio
 import json
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import (
-    TYPE_CHECKING, Any, Awaitable, Callable, Dict, List, Optional, Set, Type,
-    Union,
+    TYPE_CHECKING, Any, Awaitable, Callable, Dict, Iterator, List, Optional,
+    Set, Type, Union,
 )
 
-from .core.data import Parent
+from .core.data import Parent, Runtime
 from .core.events import Event, InvalidEvent
 from .core.types import RoomId, UserId
 from .core.utils import get_logger, log_errors, make_awaitable, remove_none
@@ -34,6 +34,7 @@ ExceptionHandler = Callable[[Exception], Optional[Awaitable[None]]]
 class Sync(JSONClientModule):
     client:     Parent["Client"] = field(repr=False)
     next_batch: Optional[str]    = None
+    paused:     Runtime[bool]    = False
 
 
     @property
@@ -103,8 +104,20 @@ class Sync(JSONClientModule):
             await asyncio.sleep(sleep_between_syncs)
 
 
+    @contextmanager
+    def pause(self) -> Iterator[None]:
+        self.paused = True
+        try:
+            yield
+        finally:
+            self.paused = False
+
+
     async def _handle_sync(self, sync: Dict[str, Any]) -> None:
         # TODO: account_data, ephemeral events, presence
+
+        while self.paused:
+            await asyncio.sleep(0.1)
 
         state_member_events: List[StateEvent[Member]] = []
 
@@ -234,6 +247,9 @@ class Sync(JSONClientModule):
             await room_events_call(data, "timeline", room)
 
         for room_id, data in sync.get("rooms", {}).get("leave", {}).items():
+            if room_id in self.client.rooms.forgotten:
+                continue
+
             room      = await set_room(room_id)
             room.left = True
             # await events_call(data, "account_data", room.handle_event)
