@@ -49,7 +49,7 @@ setup(
             flake8-logging-format >= 0.6.0,   < 0.7
             flake8-pie            >= 0.6.1,   < 0.7
             flake8-quotes         >= 3.2.0,   < 4
-            matrix-synapse        >= 1.29.0,  < 2
+            matrix-synapse        >= 1.30.1,  < 2
             mypy                  >= 0.812,   < 0.900
             pep8-naming           >= 0.11.1,  < 0.12
             pytest                >= 6.2.1,   < 7
