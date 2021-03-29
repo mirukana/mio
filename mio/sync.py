@@ -17,9 +17,11 @@ from .e2e.contents import Megolm, Olm
 from .e2e.errors import DecryptionError
 from .module import JSONClientModule
 from .rooms.contents.users import Member
+from .rooms.events import (
+    EphemeralEvent, InvitedRoomStateEvent, StateBase, StateEvent,
+    TimelineEvent,
+)
 from .rooms.room import Room
-from .rooms.state import InvitedRoomStateEvent, StateBase, StateEvent
-from .rooms.timeline import TimelineEvent
 
 if TYPE_CHECKING:
     from .client import Client
@@ -114,7 +116,7 @@ class Sync(JSONClientModule):
 
 
     async def _handle_sync(self, sync: Dict[str, Any]) -> None:
-        # TODO: account_data, ephemeral events, presence
+        # TODO: account_data, presence
 
         while self.paused:
             await asyncio.sleep(0.1)
@@ -149,6 +151,12 @@ class Sync(JSONClientModule):
 
                         if isinstance(state_ev.content, Member):
                             state_member_events.append(state_ev)  # type:ignore
+
+                    if key == "ephemeral":
+                        await room._call_callbacks(
+                            EphemeralEvent.from_dict(event, room),
+                        )
+                        continue
 
                     if key != "timeline":
                         continue
@@ -245,6 +253,7 @@ class Sync(JSONClientModule):
 
             await room_events_call(data, "state", room)
             await room_events_call(data, "timeline", room)
+            await room_events_call(data, "ephemeral", room)
 
         for room_id, data in sync.get("rooms", {}).get("leave", {}).items():
             if room_id in self.client.rooms.forgotten:

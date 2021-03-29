@@ -81,6 +81,11 @@ class RoomUser:
         return self.state.content.reason
 
 
+    @property
+    def typing(self) -> bool:
+        return self.user_id in self.room.typing
+
+
     async def kick(self, reason: Optional[str] = None) -> None:
         await self.room.client.send_json(
             "POST",

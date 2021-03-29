@@ -11,8 +11,9 @@ from ..core.data import IndexableMap, Parent, Runtime
 from ..core.types import RoomAlias, RoomId, UserId
 from ..core.utils import remove_none
 from ..module import ClientModule
+from .contents.actions import Typing
 from .contents.users import Member
-from .events import StateBase, StateEvent
+from .events import EphemeralEvent, StateBase, StateEvent
 from .room import Room
 from .user import RoomUser
 
@@ -21,7 +22,7 @@ if TYPE_CHECKING:
 
 
 class MioRoomCallbacks(CallbackGroup):
-    async def on_member(self, room: Room, event: StateBase[Member]) -> None:
+    async def member(self, room: Room, event: StateBase[Member]) -> None:
         content  = event.content
         user_id  = UserId(event.state_key)
         previous = event.previous if isinstance(event, StateEvent) else None
@@ -53,6 +54,10 @@ class MioRoomCallbacks(CallbackGroup):
 
         if not event.from_disk and content.absent:
             await room.client._e2e.drop_outbound_group_session(room.id)
+
+
+    async def typing(self, room: Room, event: EphemeralEvent[Typing]) -> None:
+        room.typing = event.content.users
 
 
 @dataclass

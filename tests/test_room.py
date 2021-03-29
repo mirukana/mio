@@ -10,6 +10,21 @@ from pytest import mark
 pytestmark = mark.asyncio
 
 
+async def test_typing(room: Room):
+    assert not room.typing
+    assert not room.state.members[room.client.user_id].typing
+
+    await room.start_typing(timeout=600)
+    await room.client.sync.once()
+    assert room.typing == {room.client.user_id}
+    assert room.state.members[room.client.user_id].typing
+
+    await room.stop_typing()
+    await room.client.sync.once()
+    assert not room.typing
+    assert not room.state.members[room.client.user_id].typing
+
+
 async def test_create_alias(room: Room):
     alias = RoomAlias(f"#{uuid4()}:localhost")
     await room.create_alias(alias)

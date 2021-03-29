@@ -110,3 +110,9 @@ class StateEvent(StateBase[ContentT]):
             data.setdefault("unsigned", {})["prev_content"] = content
 
         return super().from_dict(data, parent)
+
+
+@dataclass
+class EphemeralEvent(Event[ContentT]):
+    room:      Parent["Room"] = field(repr=False)
+    content:   ContentT
