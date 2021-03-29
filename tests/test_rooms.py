@@ -21,6 +21,8 @@ class CallbackGroupTest(CallbackGroup):
     state_content_result: list = field(default_factory=list)
     async_state_result:   list = field(default_factory=list)
 
+    def bad_signature(self, room: Room):
+        self.timeline_result += ["bad"]
 
     def on_timeline_event(self, room: Room, event: TimelineEvent):
         self.timeline_result += [room, event.content]
@@ -46,7 +48,6 @@ async def test_timeline_event_callback_group(alice: Client, room: Room):
     await alice.sync.once()
 
     expected = [room, text, room, emote, room, CanonicalAlias()]
-
     assert cb_group.timeline_result == expected
 
 
