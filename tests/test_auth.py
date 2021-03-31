@@ -9,9 +9,8 @@ pytestmark = mark.asyncio
 
 
 async def test_login_password(alice: Client):
-    username = alice.user_id.split(":")[0][1:]
-    client   = Client(alice.base_dir, alice.server, alice.device_id)
-    await client.auth.login_password(username, "test")
+    client = Client(alice.base_dir, alice.server, alice.device_id)
+    await client.auth.login_password(alice.user_id.localpart, "test")
     compare_clients(client, alice)
 
 

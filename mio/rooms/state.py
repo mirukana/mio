@@ -178,7 +178,10 @@ class RoomState(JSONFile, Map):
         return self.users[self.room.client.user_id]
 
 
-    async def send(self, content: EventContent, state_key: str = "") -> str:
+    async def send(
+        self, content: EventContent, state_key: str = "",
+    ) -> EventId:
+
         assert content.type
         room = self.room
         url  = room.client.api / "rooms" / room.id / "state" / content.type
@@ -187,7 +190,7 @@ class RoomState(JSONFile, Map):
             url = url / state_key
 
         result = await room.client.send_json("PUT", url, content.dict)
-        return result["event_id"]
+        return EventId(result["event_id"])
 
 
     async def _register(self, *events: StateBase) -> None:

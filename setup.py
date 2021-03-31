@@ -26,7 +26,6 @@ setup(
     install_requires = requires("""
         aiofiles          >= 0.6.0,  < 0.7
         aiohttp           >= 3.7.3,  < 4
-        phantom-types     >= 0.7.0,  < 0.8
         python-olm        >= 3.1.3,  < 4
         rich              >= 9.13.0, <10
         sortedcollections >= 1.2.1,  < 2

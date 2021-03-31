@@ -100,7 +100,7 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
 
     async def send(
         self, content: EventContent, transaction_id: Optional[str] = None,
-    ) -> str:
+    ) -> EventId:
         room = self.room
 
         if room.state.encryption and not isinstance(content, Megolm):
@@ -116,7 +116,7 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
         url = room.client.api / "rooms" / room.id / "send" / content.type / tx
 
         result = await room.client.send_json("PUT", url, content.dict)
-        return result["event_id"]
+        return EventId(result["event_id"])
 
 
     def _get_event_file(self, event: TimelineEvent) -> Path:

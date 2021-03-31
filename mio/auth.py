@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any, Dict
 from yarl import URL
 
 from .core.data import Runtime
+from .core.types import UserId
 from .module import ClientModule
 
 if TYPE_CHECKING:
@@ -35,7 +36,7 @@ class Auth(ClientModule):
             client.server = URL(homeserver["base_url"])
 
         client.base_dir     = str(self.client.base_dir).format(**reply)
-        client.user_id      = reply["user_id"]
+        client.user_id      = UserId(reply["user_id"])
         client.access_token = reply["access_token"]
         client.device_id    = reply["device_id"]
 

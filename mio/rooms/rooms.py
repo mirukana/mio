@@ -113,8 +113,8 @@ class Rooms(ClientModule, IndexableMap[RoomId, Room]):
         additional_states: Sequence[Tuple[str, EventContent]] = (),
     ) -> RoomId:
 
-        if alias and isinstance(alias, RoomAlias):
-            alias = alias.split(":")[0][0:]
+        if alias and isinstance(alias, str):
+            alias = RoomAlias(alias).localpart
 
         body = {
             "visibility": "public" if public else "private",
@@ -136,7 +136,7 @@ class Rooms(ClientModule, IndexableMap[RoomId, Room]):
             "POST", self.client.api / "createRoom", remove_none(body),
         )
 
-        return result["room_id"]
+        return RoomId(result["room_id"])
 
 
     async def join(
@@ -151,7 +151,7 @@ class Rooms(ClientModule, IndexableMap[RoomId, Room]):
             remove_none({"reason": reason}),
         )
 
-        return result["room_id"]
+        return RoomId(result["room_id"])
 
 
 class CreationPreset(Enum):

@@ -1,42 +1,77 @@
 import re
-from typing import Any, Dict, TypeVar
+from typing import Any, Dict, Optional, TypeVar
 
-from phantom.base import Phantom, Predicate
-from phantom.predicates.boolean import both
-from phantom.predicates.collection import count
-from phantom.predicates.interval import open
-from phantom.predicates.re import is_match
 from yarl import URL
 
 DictS    = Dict[str, Any]
 T        = TypeVar("T")
 NoneType = type(None)
 
-HOST_REGEX    = r"[a-zA-Z\d.:-]*[a-zA-Z\d]"
-USER_ID_REGEX = rf"^@[\x21-\x39\x3B-\x7E]+:{HOST_REGEX}$"
-
 MXC = URL
 
 
-def match(regex: str) -> Predicate:
-    return is_match(re.compile(regex))
+class _Identifier(str):
+    sigil           = r"one character, set me in subclasses"
+    localpart_regex = r".+"
+    server_regex    = r"[a-zA-Z\d.:-]*[a-zA-Z\d]"
 
 
-def match_255(regex: str) -> Predicate:
-    return both(count(open(0, 255)), is_match(re.compile(regex)))
+    def __new__(cls, content: str) -> "_Identifier":
+        if not re.match(cls.regex(), content) or len(content) > 255:
+            raise TypeError(f"{content}: incorrect format or >255 characters")
+
+        return str.__new__(cls, content)
 
 
-class UserId(str, Phantom, predicate=match_255(USER_ID_REGEX)):
-    pass
+    def __repr__(self) -> str:
+        return "%s(%s)" % (type(self).__name__, self)
 
 
-class EventId(str, Phantom, predicate=match_255(r"^\$.+")):
-    pass
+    @classmethod
+    def regex(cls) -> str:
+        return rf"^{cls.sigil}{cls.localpart_regex}(:{cls.server_regex})?"
 
 
-class RoomId(str, Phantom, predicate=match_255(rf"^!.+:{HOST_REGEX}$")):
-    pass
+    @property
+    def localpart(self) -> str:
+        return self.split(":")[0][1:]
 
 
-class RoomAlias(str, Phantom, predicate=match_255(rf"^#.+:{HOST_REGEX}$")):
-    pass
+    @property
+    def server(self) -> Optional[str]:
+        if ":" not in self:
+            return None
+        return self.split(":", maxsplit=1)[1]
+
+
+class _DomainIdentifier(_Identifier):
+    @classmethod
+    def regex(cls) -> str:
+        return rf"^{cls.sigil}{cls.localpart_regex}:{cls.server_regex}"
+
+
+    @property
+    def server(self) -> str:
+        return self.split(":", maxsplit=1)[1]
+
+
+class GroupId(_DomainIdentifier):
+    sigil           = r"+"
+    localpart_regex = r"[a-z\d._=/-]+"
+
+
+class RoomId(_DomainIdentifier):
+    sigil = r"!"
+
+
+class RoomAlias(_DomainIdentifier):
+    sigil = r"#"
+
+
+class UserId(_DomainIdentifier):
+    sigil           = r"@"
+    localpart_regex = r"[\x21-\x39\x3B-\x7E]+"
+
+
+class EventId(_Identifier):
+    sigil = r"\$"

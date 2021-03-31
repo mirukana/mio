@@ -223,6 +223,8 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
                 )
 
             for user_id, queried_devices in result["device_keys"].items():
+                user_id = UserId(user_id)
+
                 if self.outdated[user_id] == sync_token:
                     del self.outdated[user_id]
 
