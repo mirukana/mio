@@ -1,3 +1,4 @@
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional, Set, Tuple
@@ -108,6 +109,8 @@ class Room(JSONFile, EventCallbacks):
             self.left = True
             self.client.rooms._data.pop(self.id, None)
             self.client.rooms.forgotten.add(self.id)
+
+        shutil.rmtree(self.path.parent)
 
 
     def _callbacks(self) -> Callbacks:

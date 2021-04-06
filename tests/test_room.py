@@ -57,12 +57,14 @@ async def test_forget(room: Room, bob: Client):
     await bob.rooms.join(room.id)
 
     assert not room.left
+    assert room.path.exists()
     await room.forget(leave_reason="bye")
     await room.client.sync.once()
 
     assert room.left
     assert room.id not in room.client.rooms
     assert room.id in room.client.rooms.forgotten
+    assert not room.path.parent.exists()
 
     await bob.sync.once()
     bob_members = bob.rooms[room.id].state.leavers
