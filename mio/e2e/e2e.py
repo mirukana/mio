@@ -89,9 +89,8 @@ class E2E(JSONClientModule):
 
     account: olm.Account = field(default_factory=olm.Account)
 
-    # key = sender (inbound)/receiver (outbound) curve25519
-    in_sessions:  Dict[str, List[olm.Session]] = field(default_factory=dict)
-    out_sessions: Dict[str, List[olm.Session]] = field(default_factory=dict)
+    # key = peer device curve25519
+    sessions: Dict[str, List[olm.Session]] = field(default_factory=dict)
 
     in_group_sessions:  InboundGroupSessionsType  = field(default_factory=dict)
     out_group_sessions: OutboundGroupSessionsType = field(default_factory=dict)
@@ -155,7 +154,7 @@ class E2E(JSONClientModule):
         msg_class = olm.OlmPreKeyMessage if is_prekey else olm.OlmMessage
         message   = msg_class(cipher.body)
 
-        for session in self.in_sessions.get(sender_curve, []):
+        for session in self.sessions.get(sender_curve, []):
             if is_prekey and not session.matches(message, sender_curve):
                 continue
 
@@ -178,7 +177,7 @@ class E2E(JSONClientModule):
         await self.save()
 
         payload = json.loads(session.decrypt(message))
-        self.in_sessions.setdefault(sender_curve, []).append(session)
+        self.sessions.setdefault(sender_curve, []).append(session)
         await self.save()
 
         try:

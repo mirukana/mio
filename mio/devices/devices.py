@@ -332,17 +332,17 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
         self, content: EventContent, *devices: Device,
     ) -> Tuple[Dict[Device, Olm], Set[Device]]:
 
-        sessions:         Dict[Device, olm.OutboundSession] = {}
-        missing_sessions: Set[Device]                       = set()
-        olms:             Dict[Device, Olm]                 = {}
-        no_otks:          Set[Device]                       = set()
+        sessions:         Dict[Device, olm.Session] = {}
+        missing_sessions: Set[Device]               = set()
+        olms:             Dict[Device, Olm]         = {}
+        no_otks:          Set[Device]               = set()
 
         e2e = self.client._e2e
 
         for device in devices:
             try:
                 sessions[device] = sorted(
-                    e2e.out_sessions[device.curve25519],
+                    e2e.sessions[device.curve25519],
                     key=lambda session: session.id,
                 )[0]
             except (KeyError, IndexError):
@@ -357,7 +357,7 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
                 sessions[device] = olm.OutboundSession(
                     e2e.account, device.curve25519, new_otks[device],
                 )
-                e2e.out_sessions.setdefault(
+                e2e.sessions.setdefault(
                     device.curve25519, [],
                 ).append(sessions[device])
 
