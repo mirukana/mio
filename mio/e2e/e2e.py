@@ -33,7 +33,7 @@ LOG = get_logger()
 
 Payload = Dict[str, Any]
 
-# (room_id, sender_curve25519, session_id)
+# (room_id, undecrypable_megolm_sender_curve25519, session_id)
 InboundGroupSessionKey = Tuple[RoomId, str, str]
 
 MessageIndice = Dict[int, Tuple[EventId, datetime]]
@@ -470,10 +470,14 @@ class E2E(JSONClientModule):
         self, event: ToDeviceEvent[Olm],
     ) -> None:
 
-        await self.client.devices.ensure_tracked([event.sender])
-        device = self.client.devices.by_curve[event.content.sender_curve25519]
+        # If we received an undecryptable olm message, its corresponding
+        # session is now corrupted. Establish a new one with our peer's device:
 
-        olms, no_otks = await self.client.devices.encrypt(
+        devices = self.client.devices
+        await devices.ensure_tracked([event.sender])
+        device = devices.by_curve[event.content.sender_curve25519]
+
+        olms, no_otks = await devices.encrypt(
             Dummy(), device, force_new_sessions=True,
         )
 
@@ -482,8 +486,18 @@ class E2E(JSONClientModule):
                 "Didn't get any one-time keys for %r, cannot send %r!",
                 no_otks, Dummy(),
             )
+            return
 
-        await self.client.devices.send(olms)  # type: ignore
+        await devices.send(olms)  # type: ignore
+
+        # If we had sent a group session request to this device, then
+        # this undecryptable event was probably supposed to be our response.
+        # Now that we've established a new session, resend that request:
+
+        for request, sent_to in self.sent_session_requests.values():
+            if event.sender in sent_to:
+                await devices.send({device: request.cancellation})
+                await devices.send({device: request})
 
 
     async def _share_out_group_session(

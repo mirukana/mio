@@ -242,6 +242,38 @@ async def test_olm_recovery(alice: Client, bob: Client):
     await send_check(await prepare_dummy())
 
 
+async def test_broken_olm_lost_forwarded_session_recovery(
+    alice: Client, e2e_room: Room, tmp_path,
+):
+    await e2e_room.timeline.send(Text("sent before other devices exist"))
+
+    # Receive an undecryptable megolm and send a group session request for it
+
+    alice2 = await new_device_from(alice, tmp_path / "second")
+    await alice2.sync.once()
+    assert isinstance(alice2.rooms[e2e_room.id].timeline[-1].content, Megolm)
+
+    # Respond to alice2's group session request
+
+    await alice.sync.once()
+    await alice.devices.own[alice2.device_id].trust()
+
+    # Fail to decrypt alice's response to our group session request,
+    # alice2 will create a new olm session and send a new request
+
+    sync_data = await alice2.sync.once(_handle=False)
+    assert sync_data
+    sync_data["to_device"]["events"][0]["content"]["ciphertext"].clear()
+    await alice2.sync._handle_sync(sync_data)
+    assert isinstance(alice2.rooms[e2e_room.id].timeline[-1].content, Megolm)
+
+    # Alice responds to the new requerst, then alice2 should be able to decrypt
+
+    await alice.sync.once()
+    await alice2.sync.once()
+    assert isinstance(alice2.rooms[e2e_room.id].timeline[-1].content, Text)
+
+
 async def test_olm_session_reordering(alice: Client, bob: Client):
     # Set up a situation where Alice has 2 olm sessions for Bob
 

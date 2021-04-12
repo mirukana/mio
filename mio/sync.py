@@ -50,6 +50,7 @@ class Sync(JSONClientModule):
         since:        Optional[str]  = None,
         full_state:   Optional[bool] = None,
         set_presence: Optional[str]  = None,
+        _handle:      bool           = True,
     ) -> Optional[dict]:
 
         filter_param: Any = None
@@ -70,7 +71,9 @@ class Sync(JSONClientModule):
         result = await self.client.send_json("GET", url)
 
         if self.next_batch != result["next_batch"]:
-            await self._handle_sync(result)
+            if _handle:
+                await self._handle_sync(result)
+
             return result
 
         return None
