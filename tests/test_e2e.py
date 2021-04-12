@@ -1,9 +1,12 @@
 from conftest import new_device_from
 from mio.client import Client
-from mio.e2e.contents import Megolm
+from mio.core.types import NoneType
+from mio.devices.events import ToDeviceEvent
+from mio.e2e.contents import Dummy, Megolm, Olm
 from mio.e2e.errors import (
     MegolmBlockedDeviceInForwardChain, MegolmFromBlockedDevice,
     MegolmFromUntrustedDevice, MegolmUntrustedDeviceInForwardChain,
+    NoCipherForUs, OlmExcpectedPrekey, OlmSessionError,
 )
 from mio.rooms.contents.messages import Text
 from mio.rooms.room import Room
@@ -166,3 +169,109 @@ async def test_forwarding_chains(alice: Client, e2e_room: Room, tmp_path):
         MegolmFromUntrustedDevice(alice.devices.current),
         MegolmUntrustedDeviceInForwardChain(alice.devices.current),
     ]
+
+
+async def test_olm_recovery(alice: Client, bob: Client):
+    sent     = 0
+    bob_got  = []
+    callback = lambda self, event: bob_got.append(event)  # noqa
+    bob.devices.callbacks[ToDeviceEvent].append(callback)
+    await bob.sync.once()
+
+    bob_curve = bob.devices.current.curve25519
+
+    async def prepare_dummy(clear_alice_sessions=True):
+        target        = bob.devices.current
+        olms, no_otks = await alice.devices.encrypt(Dummy(), target)
+        assert not no_otks
+
+        # Remove sessions to make sure recovery process is creating a new one
+        if clear_alice_sessions:
+            alice._e2e.sessions[bob_curve].clear()
+
+        return olms[target]
+
+    async def send_check(olm_for_bob_current, expected_error_type=NoneType):
+        await alice.devices.send({bob.devices.current: olm_for_bob_current})
+        await bob.sync.once()
+
+        nonlocal sent
+        sent += 1
+
+        assert len(bob_got) == sent
+        assert isinstance(bob_got[-1].decryption.error, expected_error_type)
+        return bob_got[-1]
+
+    # Normal decryptable olm
+
+    await send_check(await prepare_dummy())
+
+    # NoCipherForUs
+
+    olmed = await prepare_dummy()
+    alice._e2e.sessions[bob_curve].clear()
+    olmed.ciphertext.clear()
+    await send_check(olmed, NoCipherForUs)
+    # this would fail is recovery didn't create a new session
+    await send_check(await prepare_dummy())
+
+    # OlmSessionError for existing session
+
+    await send_check(await prepare_dummy(clear_alice_sessions=False))
+    olmed = await prepare_dummy()
+    olmed.ciphertext[bob_curve].type = Olm.Cipher.Type.normal
+    olmed.ciphertext[bob_curve].body = "invalid base64"
+    got = await send_check(olmed, OlmSessionError)
+    assert not got.decryption.error.was_new_session
+    await send_check(await prepare_dummy())
+
+    # OlmSessionError for new session
+
+    olmed = await prepare_dummy()
+    olmed.ciphertext[bob_curve].body = "invalid base64"
+    got = await send_check(olmed, OlmSessionError)
+    assert got.decryption.error.was_new_session
+    await send_check(await prepare_dummy())
+
+    # OlmExcpectedPrekey
+
+    olmed = await prepare_dummy()
+    olmed.ciphertext[bob_curve].type = Olm.Cipher.Type.normal
+    bob._e2e.sessions.clear()
+    await send_check(olmed, OlmExcpectedPrekey)
+    await send_check(await prepare_dummy())
+
+
+async def test_olm_session_reordering(alice: Client, bob: Client):
+    # Set up a situation where Alice has 2 olm sessions for Bob
+
+    bobdev  = bob.devices.current
+    olms, _ = await alice.devices.encrypt(Dummy(), bobdev)
+    await alice.devices.send(olms)  # type: ignore
+
+    alice_sessions = alice._e2e.sessions[bobdev.curve25519]
+    oldest_session = alice_sessions[0]
+    alice_sessions.clear()
+
+    olms, _ = await alice.devices.encrypt(Dummy(), bobdev)
+    await alice.devices.send(olms)  # type: ignore
+
+    alice_sessions.appendleft(oldest_session)
+    assert len(alice_sessions) == 2
+    assert alice_sessions[0] is oldest_session
+
+    # Now make Bob send an olm message using the oldest session
+
+    await bob.sync.once()
+
+    bob_sessions = bob._e2e.sessions[alice.devices.current.curve25519]
+    del bob_sessions[-1]
+
+    olms, _ = await bob.devices.encrypt(Dummy(), alice.devices.current)
+    await bob.devices.send(olms)  # type: ignore
+
+    # Verify that the oldest session on Alice's side got moved to last position
+
+    await alice.sync.once()
+    assert alice_sessions[0] is not oldest_session
+    assert alice_sessions[1] is oldest_session

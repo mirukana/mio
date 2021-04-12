@@ -3,8 +3,8 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import (
-    TYPE_CHECKING, Any, Collection, DefaultDict, Dict, List, Optional, Set,
-    Tuple,
+    TYPE_CHECKING, Any, Collection, DefaultDict, Deque, Dict, List, Optional,
+    Set, Tuple,
 )
 from uuid import uuid4
 
@@ -250,6 +250,69 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
                 self.by_curve.pop(device.curve25519, None)
 
 
+    async def encrypt(
+        self,
+        content:            EventContent,
+        *devices:           Device,
+        force_new_sessions: bool = False,
+    ) -> Tuple[Dict[Device, Olm], Set[Device]]:
+
+        sessions:        Dict[Device, olm.Session] = {}
+        no_session_devs: Set[Device]               = set()
+        olms:            Dict[Device, Olm]         = {}
+        no_otks:         Set[Device]               = set()
+
+        e2e = self.client._e2e
+
+        for device in devices:
+            if force_new_sessions:
+                no_session_devs.add(device)
+                continue
+
+            try:
+                sessions[device] = e2e.sessions[device.curve25519][-1]
+            except (KeyError, IndexError):
+                no_session_devs.add(device)
+
+        new_otks = await e2e._claim_one_time_keys(*no_session_devs)
+
+        for device in no_session_devs:
+            if device not in new_otks:
+                no_otks.add(device)
+            else:
+                sessions[device] = olm.OutboundSession(
+                    e2e.account, device.curve25519, new_otks[device],
+                )
+                d: Deque       = Deque(maxlen=e2e.max_sessions_per_device)
+                saved_sessions = e2e.sessions.setdefault(device.curve25519, d)
+                saved_sessions.append(sessions[device])
+
+        payload_base: Dict[str, Any] = {
+            "type":    content.type,
+            "content": content.dict,
+            "sender":  self.client.user_id,
+            "keys":    {"ed25519": self.current.ed25519},
+        }
+
+        for device, session in sessions.items():
+            payload = {
+                **payload_base,
+                "recipient":      device.user_id,
+                "recipient_keys": {"ed25519": device.ed25519},
+            }
+
+            msg    = session.encrypt(e2e._canonical_json(payload))
+            cipher = Olm.Cipher(type=msg.message_type, body=msg.ciphertext)
+
+            olms[device] = Olm(
+                sender_curve25519 = self.current.curve25519,
+                ciphertext        = {device.curve25519: cipher},
+            )
+
+        await self.save()
+        return (olms, no_otks)
+
+
     async def send(self, contents: Dict[Device, EventContent]) -> None:
         m_type = next(iter(contents.values()), EventContent()).type
         assert m_type
@@ -262,6 +325,8 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
 
         if not contents:
             return
+
+        await self.ensure_tracked({device.user_id for device in contents})
 
         msgs: Dict[UserId, Dict[str, Dict[str, Any]]] = {}
 
@@ -327,62 +392,3 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
         self._data.setdefault(user_id, {})[device_id] = device
         self.by_curve[device.curve25519]              = device
         return device
-
-
-    async def _encrypt(
-        self, content: EventContent, *devices: Device,
-    ) -> Tuple[Dict[Device, Olm], Set[Device]]:
-
-        sessions:         Dict[Device, olm.Session] = {}
-        missing_sessions: Set[Device]               = set()
-        olms:             Dict[Device, Olm]         = {}
-        no_otks:          Set[Device]               = set()
-
-        e2e = self.client._e2e
-
-        for device in devices:
-            try:
-                sessions[device] = sorted(
-                    e2e.sessions[device.curve25519],
-                    key=lambda session: session.id,
-                )[0]
-            except (KeyError, IndexError):
-                missing_sessions.add(device)
-
-        new_otks = await e2e._claim_one_time_keys(*missing_sessions)
-
-        for device in missing_sessions:
-            if device not in new_otks:
-                no_otks.add(device)
-            else:
-                sessions[device] = olm.OutboundSession(
-                    e2e.account, device.curve25519, new_otks[device],
-                )
-                e2e.sessions.setdefault(
-                    device.curve25519, [],
-                ).append(sessions[device])
-
-        payload_base: Dict[str, Any] = {
-            "type":    content.type,
-            "content": content.dict,
-            "sender":  self.client.user_id,
-            "keys":    {"ed25519": self.current.ed25519},
-        }
-
-        for device, session in sessions.items():
-            payload = {
-                **payload_base,
-                "recipient":      device.user_id,
-                "recipient_keys": {"ed25519": device.ed25519},
-            }
-
-            msg    = session.encrypt(e2e._canonical_json(payload))
-            cipher = Olm.Cipher(type=msg.message_type, body=msg.ciphertext)
-
-            olms[device] = Olm(
-                sender_curve25519 = self.current.curve25519,
-                ciphertext        = {device.curve25519: cipher},
-            )
-
-        await self.save()
-        return (olms, no_otks)

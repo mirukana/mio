@@ -36,7 +36,13 @@ class NoCipherForUs(OlmDecryptionError):
 
 @dataclass
 class OlmSessionError(OlmDecryptionError):
-    code: str
+    code:            str
+    was_new_session: bool = False
+
+
+@dataclass
+class OlmExcpectedPrekey(OlmDecryptionError):
+    pass
 
 
 @dataclass

@@ -155,3 +155,8 @@ class ForwardedGroupSessionInfo(EventContent):
     @property
     def compare_key(self) -> Tuple[RoomId, str, str]:
         return (self.room_id, self.session_creator_curve25519, self.session_id)
+
+
+@dataclass
+class Dummy(EventContent):
+    type = "m.dummy"

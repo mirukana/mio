@@ -5,7 +5,8 @@ from datetime import datetime
 from functools import partial
 from pathlib import Path
 from typing import (
-    Any, Collection, Dict, List, Optional, Set, Tuple, Type, Union,
+    Any, ClassVar, Collection, Deque, Dict, List, Optional, Set, Tuple, Type,
+    Union,
 )
 
 import olm
@@ -22,8 +23,8 @@ from ..rooms.timeline import TimelineEvent
 from . import Algorithm, MegolmAlgorithm
 from . import errors as err
 from .contents import (
-    CancelGroupSessionRequest, ForwardedGroupSessionInfo, GroupSessionInfo,
-    GroupSessionRequest, Megolm, Olm,
+    CancelGroupSessionRequest, Dummy, ForwardedGroupSessionInfo,
+    GroupSessionInfo, GroupSessionRequest, Megolm, Olm,
 )
 
 # TODO: protect against concurrency and saving sessions before sharing
@@ -87,10 +88,12 @@ class E2E(JSONClientModule):
             partial(_olm_unpickle, obj_type=olm.OutboundGroupSession),
     }
 
+    max_sessions_per_device: ClassVar[Runtime[int]] = 5
+
     account: olm.Account = field(default_factory=olm.Account)
 
-    # key = peer device curve25519
-    sessions: Dict[str, List[olm.Session]] = field(default_factory=dict)
+    # key: peer device curve25519 - last session: last one that decrypted a msg
+    sessions: Dict[str, Deque[olm.Session]] = field(default_factory=dict)
 
     in_group_sessions:  InboundGroupSessionsType  = field(default_factory=dict)
     out_group_sessions: OutboundGroupSessionsType = field(default_factory=dict)
@@ -140,7 +143,7 @@ class E2E(JSONClientModule):
     async def decrypt_olm_payload(
         self, event: ToDeviceEvent[Olm],
     ) -> Tuple[Payload, Optional[err.OlmVerificationError]]:
-        # TODO: remove old sessions, unwedging, error handling?
+        # TODO: unwedge interval
 
         content      = event.content
         sender_curve = content.sender_curve25519
@@ -148,37 +151,55 @@ class E2E(JSONClientModule):
         cipher       = content.ciphertext.get(our_curve)
 
         if not cipher:
+            await self._recover_from_undecryptable_olm(event)
             raise err.NoCipherForUs(our_curve, content.ciphertext)
 
         is_prekey = cipher.type == Olm.Cipher.Type.prekey
         msg_class = olm.OlmPreKeyMessage if is_prekey else olm.OlmMessage
         message   = msg_class(cipher.body)
 
-        for session in self.sessions.get(sender_curve, []):
+        deque: Deque[olm.Session] = Deque(maxlen=self.max_sessions_per_device)
+        sessions                  = self.sessions.get(sender_curve, deque)
+
+        for i, session in enumerate(sessions):
             if is_prekey and not session.matches(message, sender_curve):
                 continue
 
             try:
-                payload = json.loads(session.decrypt(message))
+                decrypted = session.decrypt(message)
             except olm.OlmSessionError as e:
+                await self._recover_from_undecryptable_olm(event)
                 raise err.OlmSessionError(code=e.args[0])
 
+            # When sending olm messages, we'll want to use the last session
+            # for which a message has been successfully decrypted
+            del sessions[i]
+            sessions.append(session)
             await self.save()
+
+            payload = json.loads(decrypted)  # TODO catch json error
+
             try:
                 return (self._verify_olm_payload(event, payload), None)
             except err.OlmVerificationError as e:
                 return (payload, e)
 
         if not is_prekey:
-            raise err.OlmDecryptionError()  # TODO: unwedge
+            await self._recover_from_undecryptable_olm(event)
+            raise err.OlmExcpectedPrekey()
 
-        session = olm.InboundSession(self.account, message, sender_curve)
-        self.account.remove_one_time_keys(session)
+        try:
+            session = olm.InboundSession(self.account, message, sender_curve)
+            self.account.remove_one_time_keys(session)
+            decrypted = session.decrypt(message)
+        except olm.OlmSessionError as e:
+            await self._recover_from_undecryptable_olm(event)
+            raise err.OlmSessionError(code=e.args[0], was_new_session=True)
+
+        self.sessions.setdefault(sender_curve, deque).append(session)
         await self.save()
 
-        payload = json.loads(session.decrypt(message))
-        self.sessions.setdefault(sender_curve, []).append(session)
-        await self.save()
+        payload = json.loads(decrypted)  # TODO catch json error
 
         try:
             return (self._verify_olm_payload(event, payload), None)
@@ -341,7 +362,7 @@ class E2E(JSONClientModule):
             curve25519_forward_chain   = forward_chain,
         )
 
-        olms, no_otks = await devices._encrypt(info, dev)
+        olms, no_otks = await devices.encrypt(info, dev)
 
         if no_otks:
             LOG.warning("No one-time key for %r, can't send %r", no_otks, info)
@@ -418,6 +439,8 @@ class E2E(JSONClientModule):
         if result["failures"]:
             LOG.warning("Failed claiming some keys: %s", result["failures"])
 
+        await self.client.devices.ensure_tracked(set(result["one_time_keys"]))
+
         valided: Dict[Device, str] = {}
 
         for user_id, device_keys in result["one_time_keys"].items():
@@ -443,6 +466,26 @@ class E2E(JSONClientModule):
         return valided
 
 
+    async def _recover_from_undecryptable_olm(
+        self, event: ToDeviceEvent[Olm],
+    ) -> None:
+
+        await self.client.devices.ensure_tracked([event.sender])
+        device = self.client.devices.by_curve[event.content.sender_curve25519]
+
+        olms, no_otks = await self.client.devices.encrypt(
+            Dummy(), device, force_new_sessions=True,
+        )
+
+        if no_otks:
+            LOG.warning(
+                "Didn't get any one-time keys for %r, cannot send %r!",
+                no_otks, Dummy(),
+            )
+
+        await self.client.devices.send(olms)  # type: ignore
+
+
     async def _share_out_group_session(
         self,
         room_id: RoomId,
@@ -462,7 +505,7 @@ class E2E(JSONClientModule):
             session_key = session.session_key,
         )
 
-        olms, no_otks = await self.client.devices._encrypt(info, *to)
+        olms, no_otks = await self.client.devices.encrypt(info, *to)
 
         if no_otks:
             LOG.warning(
