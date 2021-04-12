@@ -33,7 +33,8 @@ Arguments that can be added to the pytest command include:
 - Paths to the files in *tests/* to run, instead of running everything
 - `--pdb` to disable parallel testing and let debugger calls work normally
 - `--capture=no`/`-s` to show logging output and prints in real time
-- `--cov` to generate test coverage info, terminal and HTML by default
+- `--cov` to generate test coverage info, terminal and HTML by default.  
+  Don't pass file paths when using this flag, or the results will be incorrect.
 
 Tests leave a Synapse server (which has a long startup time) running,
 use `synctl stop tests/synapse/homeserver.yaml` to stop it.
