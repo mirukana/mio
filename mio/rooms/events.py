@@ -9,7 +9,7 @@ from ..core.types import DictS, EventId, RoomId, UserId
 from ..core.utils import get_logger
 from ..devices.device import Device
 from ..e2e.contents import Megolm
-from ..e2e.errors import MegolmVerificationError
+from ..e2e.errors import MegolmDecryptionError, MegolmVerificationError
 
 if TYPE_CHECKING:
     from .room import Room
@@ -42,11 +42,20 @@ class TimelineEvent(Event[ContentT]):
         if not isinstance(self.content, Megolm):
             return self
 
-        decrypt                = self.room.client._e2e.decrypt_megolm_payload
-        payload, chain, errors = await decrypt(self)  # type: ignore
+        decrypt = self.room.client._e2e.decrypt_megolm_payload
+
+        try:
+            payload, chain, errors = await decrypt(self)  # type: ignore
+        except MegolmDecryptionError as e:
+            LOG.exception("Failed decrypting %r", self)
+            self.decryption = TimelineDecryptInfo(self, error=e)
+            return self
 
         clear = type(self).from_dict({**self.source, **payload}, self.room)
-        clear.decryption = TimelineDecryptInfo(self, payload, chain, errors)
+
+        clear.decryption = TimelineDecryptInfo(
+            self, payload, chain, verification_errors=errors,
+        )
 
         if errors:
             LOG.warning("Error verifying decrypted event %r\n", clear)
@@ -57,10 +66,11 @@ class TimelineEvent(Event[ContentT]):
 @dataclass
 class TimelineDecryptInfo:
     original:      "TimelineEvent"          = field(repr=False)
-    payload:       DictS                    = field(repr=False)
+    payload:       Optional[DictS]          = field(default=None, repr=False)
     forward_chain: List[Union[Device, str]] = field(default_factory=list)
 
-    verification_errors: List[MegolmVerificationError] = field(
+    error:               Optional[MegolmDecryptionError] = None
+    verification_errors: List[MegolmVerificationError]   = field(
         default_factory=list,
     )
 

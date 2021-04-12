@@ -14,7 +14,6 @@ from .core.types import RoomId, UserId
 from .core.utils import get_logger, log_errors, make_awaitable, remove_none
 from .devices.events import ToDeviceEvent
 from .e2e.contents import Megolm, Olm
-from .e2e.errors import DecryptionError
 from .module import JSONClientModule
 from .rooms.contents.users import Member
 from .rooms.events import (
@@ -130,9 +129,8 @@ class Sync(JSONClientModule):
                 with log_errors(InvalidEvent):
                     ev = evtype.from_dict(event, self.client)
 
-                    with log_errors(DecryptionError):
-                        if isinstance(ev, ToDeviceEvent):
-                            ev = await ev._decrypted()
+                    if isinstance(ev, ToDeviceEvent):
+                        ev = await ev._decrypted()
 
                     await coro(ev)
 
@@ -161,10 +159,9 @@ class Sync(JSONClientModule):
                     if key != "timeline":
                         continue
 
-                    ev: TimelineEvent = TimelineEvent.from_dict(event, room)
-
-                    with log_errors(DecryptionError):
-                        ev = await ev._decrypted()
+                    ev: TimelineEvent
+                    ev = TimelineEvent.from_dict(event, room)
+                    ev = await ev._decrypted()
 
                     await room.timeline._register_events(ev)
 
@@ -238,8 +235,7 @@ class Sync(JSONClientModule):
             for event in timeline.get("events", []):
                 with suppress(InvalidEvent):
                     after = TimelineEvent.from_dict(event, room)
-                    with suppress(DecryptionError):
-                        after = await after._decrypted()
+                    after = await after._decrypted()
                     break
 
             if limited and prev_batch and after:

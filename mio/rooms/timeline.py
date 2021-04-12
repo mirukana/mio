@@ -15,7 +15,6 @@ from ..core.events import InvalidEvent
 from ..core.types import EventId
 from ..core.utils import get_logger, log_errors, remove_none
 from ..e2e.contents import Megolm
-from ..e2e.errors import DecryptionError
 from .contents.settings import Creation
 from .events import TimelineEvent
 
@@ -83,13 +82,12 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
 
                     with log_errors(InvalidEvent, trace=True):
                         ev = TimelineEvent.from_dict(source, self.room)
-                        ev.historic = True
-
-                    with log_errors(DecryptionError):
                         ev = await ev._decrypted()
 
-                    disk_loaded.append(ev)
-                    loaded.append(ev)
+                        ev.historic = True
+
+                        disk_loaded.append(ev)
+                        loaded.append(ev)
 
                 if len(loaded) >= count:
                     break
@@ -199,11 +197,9 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
 
         for key in sessions:
             for event in self._undecrypted.get(key, []):
-                with log_errors(DecryptionError):
-                    event2 = await event._decrypted()
-
-                    if not isinstance(event2.content, Megolm):
-                        decrypted.append(event2)
+                event2 = await event._decrypted()
+                if not isinstance(event2.content, Megolm):
+                    decrypted.append(event2)
 
         await self._register_events(*decrypted)
 
@@ -254,12 +250,10 @@ class Gap(JSON):
 
             with log_errors(InvalidEvent):
                 ev = TimelineEvent.from_dict(source, self.room)
-                ev.historic = True
-
-            with log_errors(DecryptionError):
                 ev = await ev._decrypted()
 
-            evs.append(ev)
+                ev.historic = True
+                evs.append(ev)
 
         await self.room.timeline._register_events(*evs)
 

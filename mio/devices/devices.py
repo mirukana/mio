@@ -43,6 +43,7 @@ class MioDeviceCallbacks(CallbackGroup):
     ) -> None:
 
         assert event.decryption
+        assert event.decryption.payload
         assert isinstance(event.decryption.original.content, Olm)
 
         sender_curve25519 = event.decryption.original.content.sender_curve25519
