@@ -18,18 +18,23 @@ async def test_session_export(alice: Client, e2e_room: Room, bob: Client):
     alice_ses = alice._e2e.in_group_sessions
     bob_ses   = bob._e2e.in_group_sessions
 
+    # Alice won't auto-share her session to Bob since his device isn't trusted
+    await e2e_room.timeline.send(Text("undecryptable to bob"))
     await bob.rooms.join(e2e_room.id)
-    await alice.sync.once()
+    await bob.sync.once()
     await e2e_room.timeline.send(Text("make a session"))
+    await alice.sync.once()
     assert not bob_ses
     assert len(alice_ses) == 1
 
+    assert isinstance(bob.rooms[e2e_room.id].timeline[-2].content, Megolm)
     exported = await alice._e2e.export_sessions(passphrase="test")
 
-    # 100% successful import
+    # 100% successful import and previous message decrypted as a result
 
     await bob._e2e.import_sessions(exported, "test")
     assert alice_ses.keys() == bob_ses.keys()
+    assert isinstance(bob.rooms[e2e_room.id].timeline[-2].content, Text)
 
     for session1, sender_ed1, _, forward_chain1 in alice_ses.values():
         for session2, sender_ed2, _, forward_chain2 in bob_ses.values():

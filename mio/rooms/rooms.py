@@ -10,6 +10,7 @@ from ..core.contents import EventContent
 from ..core.data import IndexableMap, Parent, Runtime
 from ..core.types import RoomAlias, RoomId, UserId
 from ..core.utils import remove_none
+from ..e2e.e2e import InboundGroupSessionKey
 from ..module import ClientModule
 from .contents.actions import Typing
 from .contents.users import Member
@@ -152,6 +153,17 @@ class Rooms(ClientModule, IndexableMap[RoomId, Room]):
         )
 
         return RoomId(result["room_id"])
+
+
+    async def _retry_decrypt(self, *sessions: InboundGroupSessionKey) -> None:
+        by_room_id = DefaultDict(list)
+
+        for room_id, sender_curve, session_id in sessions:
+            by_room_id[room_id].append((sender_curve, session_id))
+
+        for room_id, session_details in by_room_id.items():
+            if room_id in self:
+                await self[room_id].timeline._retry_decrypt(*session_details)
 
 
 class CreationPreset(Enum):

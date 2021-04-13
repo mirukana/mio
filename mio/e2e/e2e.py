@@ -227,7 +227,7 @@ class E2E(JSONClientModule):
         if not isinstance(sessions, list):
             raise err.SessionFileInvalidJSON(json_sessions, "expected list")
 
-        imported = 0
+        imported: List[InboundGroupSessionKey] = []
 
         for session in sessions:
             try:
@@ -259,12 +259,13 @@ class E2E(JSONClientModule):
                     {},  # message_indices
                     session["forwarding_curve25519_key_chain"],
                 )
-                imported += 1
+                imported.append(storage_key)
             except (TypeError, KeyError, olm.OlmGroupSessionError):
                 LOG.exception("Skipping %r, import failure")
 
         if imported:
             await self.save()
+            await self.client.rooms._retry_decrypt(*imported)
 
 
     # Methods called from outside this module but shouldn't be used by users

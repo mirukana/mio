@@ -107,10 +107,7 @@ class MioDeviceCallbacks(CallbackGroup):
 
         requests.pop(content.compare_key)
         await devices.client._e2e.save()
-
-        if content.room_id in devices.client.rooms:
-            timeline = devices.client.rooms[content.room_id].timeline
-            await timeline._retry_decrypt(content.compare_key[1:])
+        await devices.client.rooms._retry_decrypt(content.compare_key)
 
         await devices.send({
             device: request.cancellation
