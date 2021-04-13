@@ -102,7 +102,7 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
         room = self.room
 
         if room.state.encryption and not isinstance(content, Megolm):
-            content = await room.client._e2e.encrypt_room_event(
+            content = await room.client.e2e._encrypt_room_event(
                 room_id   = room.id,
                 for_users = room.state.members,
                 settings  = room.state.encryption,

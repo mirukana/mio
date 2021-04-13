@@ -44,7 +44,7 @@ InboundGroupSessionKey = Tuple[RoomId, str, str]
 
 MessageIndice = Dict[int, Tuple[EventId, datetime]]
 
-InboundGroupSessionsType = Dict[
+InGroupSessionsType = Dict[
     InboundGroupSessionKey,
     # (session, sender_ed25519, message_indices, curve25519_forwarding_chain)
     Tuple[olm.InboundGroupSession, str, MessageIndice, List[str]],
@@ -54,7 +54,7 @@ InboundGroupSessionsType = Dict[
 SharedTo = Dict[UserId, Set[str]]
 
 # {room_id: (session, creation_date, encrypted_events_count, shared_to)}
-OutboundGroupSessionsType = Dict[
+OutGroupSessionsType = Dict[
     RoomId, Tuple[olm.OutboundGroupSession, datetime, int, SharedTo],
 ]
 
@@ -97,17 +97,17 @@ class E2E(JSONClientModule):
             partial(_olm_unpickle, obj_type=olm.OutboundGroupSession),
     }
 
-    max_sessions_per_device: ClassVar[Runtime[int]] = 5
+    _max_sessions_per_device: ClassVar[Runtime[int]] = 5
 
-    account: olm.Account = field(default_factory=olm.Account)
+    _account: olm.Account = field(default_factory=olm.Account)
 
     # key: peer device curve25519 - last session: last one that decrypted a msg
-    sessions: Dict[str, Deque[olm.Session]] = field(default_factory=dict)
+    _sessions: Dict[str, Deque[olm.Session]] = field(default_factory=dict)
 
-    in_group_sessions:  InboundGroupSessionsType  = field(default_factory=dict)
-    out_group_sessions: OutboundGroupSessionsType = field(default_factory=dict)
+    _in_group_sessions:  InGroupSessionsType  = field(default_factory=dict)
+    _out_group_sessions: OutGroupSessionsType = field(default_factory=dict)
 
-    sent_session_requests: SessionRequestsType = field(default_factory=dict)
+    _sent_session_requests: SessionRequestsType = field(default_factory=dict)
 
     _forward_tasks: Runtime[Dict[str, Future]] = field(
         init=False, default_factory=dict,
@@ -124,6 +124,8 @@ class E2E(JSONClientModule):
         return self.client.devices.current
 
 
+    # Public methods
+
     async def export_sessions(
         self,
         passphrase:     str,
@@ -131,7 +133,7 @@ class E2E(JSONClientModule):
     ) -> str:
         sessions = []
 
-        for key, value in self.in_group_sessions.items():
+        for key, value in self._in_group_sessions.items():
             room_id, sender_curve25519, session_id    = key
             session, sender_ed25519, _, forward_chain = value
 
@@ -241,7 +243,7 @@ class E2E(JSONClientModule):
                     session["session_id"],
                 )
 
-                existing        = self.in_group_sessions.get(storage_key)
+                existing        = self._in_group_sessions.get(storage_key)
                 skey            = session["session_key"]
                 rebuilt_session = olm.InboundGroupSession.import_session(skey)
 
@@ -253,7 +255,7 @@ class E2E(JSONClientModule):
                     LOG.warning("Skipping %r, older version of known session")
                     continue
 
-                self.in_group_sessions[storage_key] = (
+                self._in_group_sessions[storage_key] = (
                     rebuilt_session,
                     session["sender_claimed_keys"]["ed25519"],
                     {},  # message_indices
@@ -268,19 +270,20 @@ class E2E(JSONClientModule):
             await self.client.rooms._retry_decrypt(*imported)
 
 
-    # Methods called from outside this module but shouldn't be used by users
+    # Methods called from outside this module but not for users usage
 
-    async def upload_one_time_keys(self, currently_uploaded: int) -> None:
-        minimum = self.account.max_one_time_keys // 2
+    async def _upload_one_time_keys(self, currently_uploaded: int) -> None:
+        minimum = self._account.max_one_time_keys // 2
 
         if currently_uploaded >= minimum:
             return
 
-        self.account.generate_one_time_keys(minimum - currently_uploaded)
+        self._account.generate_one_time_keys(minimum - currently_uploaded)
 
         one_time_keys = {
             f"signed_curve25519:{key_id}": self._sign_dict({"key": key})
-            for key_id, key in self.account.one_time_keys["curve25519"].items()
+            for key_id, key in
+            self._account.one_time_keys["curve25519"].items()
         }
 
         await self.client.send_json(
@@ -289,11 +292,11 @@ class E2E(JSONClientModule):
             {"one_time_keys": one_time_keys},
         )
 
-        self.account.mark_keys_as_published()
+        self._account.mark_keys_as_published()
         await self.save()
 
 
-    async def decrypt_olm_payload(
+    async def _decrypt_olm_payload(
         self, event: ToDeviceEvent[Olm],
     ) -> Tuple[Payload, Optional[err.OlmVerificationError]]:
         # TODO: unwedge interval
@@ -311,8 +314,8 @@ class E2E(JSONClientModule):
         msg_class = olm.OlmPreKeyMessage if is_prekey else olm.OlmMessage
         message   = msg_class(cipher.body)
 
-        deque: Deque[olm.Session] = Deque(maxlen=self.max_sessions_per_device)
-        sessions                  = self.sessions.get(sender_curve, deque)
+        deque: Deque[olm.Session] = Deque(maxlen=self._max_sessions_per_device)
+        sessions                  = self._sessions.get(sender_curve, deque)
 
         for i, session in enumerate(sessions):
             if is_prekey and not session.matches(message, sender_curve):
@@ -342,14 +345,14 @@ class E2E(JSONClientModule):
             raise err.OlmExcpectedPrekey()
 
         try:
-            session = olm.InboundSession(self.account, message, sender_curve)
-            self.account.remove_one_time_keys(session)
+            session = olm.InboundSession(self._account, message, sender_curve)
+            self._account.remove_one_time_keys(session)
             decrypted = session.decrypt(message)
         except olm.OlmSessionError as e:
             await self._recover_from_undecryptable_olm(event)
             raise err.OlmSessionError(code=e.args[0], was_new_session=True)
 
-        self.sessions.setdefault(sender_curve, deque).append(session)
+        self._sessions.setdefault(sender_curve, deque).append(session)
         await self.save()
 
         payload = json.loads(decrypted)  # TODO catch json error
@@ -360,7 +363,7 @@ class E2E(JSONClientModule):
             return (payload, e)
 
 
-    async def decrypt_megolm_payload(
+    async def _decrypt_megolm_payload(
         self, event: TimelineEvent[Megolm],
     ) -> Tuple[Payload, DeviceChain, List[err.MegolmVerificationError]]:
 
@@ -370,7 +373,7 @@ class E2E(JSONClientModule):
 
         try:
             session, starter_ed25519, decrypted_indice, forward_chain = \
-                self.in_group_sessions[key]
+                self._in_group_sessions[key]
         except KeyError:
             await self._request_group_session(event)
             raise err.NoInboundGroupSessionToDecrypt(*key)
@@ -402,7 +405,7 @@ class E2E(JSONClientModule):
         return (json.loads(json_payload), device_chain, verrors)
 
 
-    async def encrypt_room_event(
+    async def _encrypt_room_event(
         self,
         room_id:   RoomId,
         for_users: Collection[UserId],
@@ -415,11 +418,11 @@ class E2E(JSONClientModule):
         default: tuple = (olm.OutboundGroupSession(), datetime.now(), 0, {})
 
         session, creation_date, encrypted_events_count, shared_to = \
-            self.out_group_sessions.get(room_id, default)
+            self._out_group_sessions.get(room_id, default)
 
         # If we have no existing non-expired OutbondGroupSession for this room:
         if (
-            room_id not in self.out_group_sessions or
+            room_id not in self._out_group_sessions or
             datetime.now() - creation_date > settings.sessions_max_age or
             encrypted_events_count > settings.sessions_max_messages
         ):
@@ -428,7 +431,7 @@ class E2E(JSONClientModule):
             our_ed     = self.device.ed25519
             in_session = olm.InboundGroupSession(session.session_key)
 
-            self.in_group_sessions[key] = (in_session, our_ed, {}, [])
+            self._in_group_sessions[key] = (in_session, our_ed, {}, [])
 
         # Make sure first we know about all the devices to send session to:
         await self.client.devices.ensure_tracked(for_users)
@@ -461,7 +464,7 @@ class E2E(JSONClientModule):
             ciphertext        = session.encrypt(self._canonical_json(payload)),
         )
 
-        self.out_group_sessions[room_id] = (
+        self._out_group_sessions[room_id] = (
             session, creation_date, encrypted_events_count + 1, shared_to,
         )
         await self.save()
@@ -469,17 +472,17 @@ class E2E(JSONClientModule):
         return encrypted
 
 
-    async def drop_outbound_group_session(self, room_id: RoomId) -> None:
-        self.out_group_sessions.pop(room_id, None)
+    async def _drop_outbound_group_session(self, room_id: RoomId) -> None:
+        self._out_group_sessions.pop(room_id, None)
         await self.save()
 
 
-    async def forward_group_session(
+    async def _forward_group_session(
         self, to_user_id: UserId, request: GroupSessionRequest,
     ) -> None:
 
         devices = self.client.devices
-        details = self.in_group_sessions.get(request.compare_key)
+        details = self._in_group_sessions.get(request.compare_key)
 
         if not details:
             LOG.info("Ignoring %r, no matching session to share", request)
@@ -529,7 +532,7 @@ class E2E(JSONClientModule):
             await devices.save()
 
 
-    async def cancel_forward_group_session(
+    async def _cancel_forward_group_session(
         self, for_user_id: UserId, request: CancelGroupSessionRequest,
     ) -> None:
 
@@ -554,7 +557,7 @@ class E2E(JSONClientModule):
             "algorithms": [Algorithm.olm_v1.value, Algorithm.megolm_v1.value],
             "keys": {
                 f"{kind}:{self.client.device_id}": key
-                for kind, key in self.account.identity_keys.items()
+                for kind, key in self._account.identity_keys.items()
             },
         }
 
@@ -567,7 +570,7 @@ class E2E(JSONClientModule):
         )
 
         uploaded = result["one_time_key_counts"].get("signed_curve25519", 0)
-        await self.upload_one_time_keys(uploaded)
+        await self._upload_one_time_keys(uploaded)
 
 
     async def _claim_one_time_keys(
@@ -647,7 +650,7 @@ class E2E(JSONClientModule):
         # this undecryptable event was probably supposed to be our response.
         # Now that we've established a new session, resend that request:
 
-        for request, sent_to in self.sent_session_requests.values():
+        for request, sent_to in self._sent_session_requests.values():
             if event.sender in sent_to:
                 await devices.send({device: request.cancellation})
                 await devices.send({device: request})
@@ -692,13 +695,13 @@ class E2E(JSONClientModule):
         session_id  = for_event.content.session_id
         request_key = (for_event.room.id, curve, session_id)
 
-        if request_key in self.sent_session_requests:
+        if request_key in self._sent_session_requests:
             return
 
         request = GroupSessionRequest.from_megolm(for_event)
         send_to = {self.client.user_id, for_event.sender}
 
-        self.sent_session_requests[request_key] = (request, send_to)
+        self._sent_session_requests[request_key] = (request, send_to)
 
         await self.client.devices.ensure_tracked([for_event.sender])
 
@@ -730,7 +733,7 @@ class E2E(JSONClientModule):
         signatures = dct.pop("signatures", {})
         unsigned   = dct.pop("unsigned", None)
 
-        signature = self.account.sign(self._canonical_json(dct))
+        signature = self._account.sign(self._canonical_json(dct))
         key       = f"ed25519:{self.client.device_id}"
 
         signatures.setdefault(self.client.user_id, {})[key] = signature

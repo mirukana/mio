@@ -42,7 +42,7 @@ class TimelineEvent(Event[ContentT]):
         if not isinstance(self.content, Megolm):
             return self
 
-        decrypt = self.room.client._e2e.decrypt_megolm_payload
+        decrypt = self.room.client.e2e._decrypt_megolm_payload
 
         try:
             payload, chain, errors = await decrypt(self)  # type: ignore

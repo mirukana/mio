@@ -30,7 +30,7 @@ class Device(JSON):
         self.trusted = True
         await self.devices.save()
 
-        forward = self.devices.client._e2e.forward_group_session
+        forward = self.devices.client.e2e._forward_group_session
 
         await asyncio.gather(*[
             forward(self.user_id, request)
@@ -41,11 +41,11 @@ class Device(JSON):
     async def block(self) -> None:
         self.trusted = False
 
-        e2e      = self.devices.client._e2e
-        sessions = e2e.out_group_sessions
+        e2e      = self.devices.client.e2e
+        sessions = e2e._out_group_sessions
 
         for room_id, (_s, _c, _e, shared_to) in sessions.copy().items():
             if self.device_id in shared_to.get(self.user_id, set()):
-                await e2e.drop_outbound_group_session(room_id)
+                await e2e._drop_outbound_group_session(room_id)
 
         await self.devices.save()

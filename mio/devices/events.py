@@ -28,7 +28,7 @@ class ToDeviceEvent(Event[ContentT]):
         if not isinstance(self.content, Olm):
             return self
 
-        decrypt = self.client._e2e.decrypt_olm_payload
+        decrypt = self.client.e2e._decrypt_olm_payload
 
         try:
             payload, verif_err = await decrypt(self)  # type: ignore

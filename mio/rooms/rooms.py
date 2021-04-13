@@ -54,7 +54,7 @@ class MioRoomCallbacks(CallbackGroup):
             room.state._display_names[content.display_name].add(user_id)
 
         if not event.from_disk and content.absent:
-            await room.client._e2e.drop_outbound_group_session(room.id)
+            await room.client.e2e._drop_outbound_group_session(room.id)
 
 
     async def typing(self, room: Room, event: EphemeralEvent[Typing]) -> None:

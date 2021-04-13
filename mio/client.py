@@ -33,7 +33,7 @@ class Client(JSONFile):
     profile: Runtime[Profile] = field(init=False, repr=False)
     rooms:   Runtime[Rooms]   = field(init=False, repr=False)
     sync:    Runtime[Sync]    = field(init=False, repr=False)
-    _e2e:    Runtime[E2E]     = field(init=False, repr=False)
+    e2e:     Runtime[E2E]     = field(init=False, repr=False)
     devices: Runtime[Devices] = field(init=False, repr=False)
 
     _session: Runtime[ClientSession] = field(
@@ -46,7 +46,7 @@ class Client(JSONFile):
         self.profile = Profile(self)
         self.rooms   = Rooms(self)
         self.sync    = Sync(self)
-        self._e2e    = E2E(self)
+        self.e2e     = E2E(self)
         self.devices = Devices(self)
         super().__post_init__()
 

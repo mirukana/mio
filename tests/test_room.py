@@ -43,12 +43,12 @@ async def test_invite(room: Room, bob: Client):
 
 async def test_leave(e2e_room: Room):
     await e2e_room.timeline.send(Text("make a session"))
-    assert e2e_room.id in e2e_room.client._e2e.out_group_sessions
+    assert e2e_room.id in e2e_room.client.e2e._out_group_sessions
 
     await e2e_room.leave(reason="bye")
     await e2e_room.client.sync.once()
     assert e2e_room.left
-    assert e2e_room.id not in e2e_room.client._e2e.out_group_sessions
+    assert e2e_room.id not in e2e_room.client.e2e._out_group_sessions
     assert e2e_room.state.me.membership_reason == "bye"
 
 

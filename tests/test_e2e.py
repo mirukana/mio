@@ -15,8 +15,8 @@ pytestmark = mark.asyncio
 
 
 async def test_session_export(alice: Client, e2e_room: Room, bob: Client):
-    alice_ses = alice._e2e.in_group_sessions
-    bob_ses   = bob._e2e.in_group_sessions
+    alice_ses = alice.e2e._in_group_sessions
+    bob_ses   = bob.e2e._in_group_sessions
 
     # Alice won't auto-share her session to Bob since his device isn't trusted
     await e2e_room.timeline.send(Text("undecryptable to bob"))
@@ -28,11 +28,11 @@ async def test_session_export(alice: Client, e2e_room: Room, bob: Client):
     assert len(alice_ses) == 1
 
     assert isinstance(bob.rooms[e2e_room.id].timeline[-2].content, Megolm)
-    exported = await alice._e2e.export_sessions(passphrase="test")
+    exported = await alice.e2e.export_sessions(passphrase="test")
 
     # 100% successful import and previous message decrypted as a result
 
-    await bob._e2e.import_sessions(exported, "test")
+    await bob.e2e.import_sessions(exported, "test")
     assert alice_ses.keys() == bob_ses.keys()
     assert isinstance(bob.rooms[e2e_room.id].timeline[-2].content, Text)
 
@@ -48,39 +48,39 @@ async def test_session_export(alice: Client, e2e_room: Room, bob: Client):
     # Total import failures
 
     with raises(err.SessionFileMissingHeader):
-        await bob._e2e.import_sessions(exported[1:], "test")
+        await bob.e2e.import_sessions(exported[1:], "test")
 
     with raises(err.SessionFileMissingFooter):
-        await bob._e2e.import_sessions(exported[:-1], "test")
+        await bob.e2e.import_sessions(exported[:-1], "test")
 
     with raises(err.SessionFileInvalidBase64):
         bad = SESSION_FILE_HEADER + "abcdE" + SESSION_FILE_FOOTER
-        await bob._e2e.import_sessions(bad, "test")
+        await bob.e2e.import_sessions(bad, "test")
 
     with raises(err.SessionFileInvalidDataSize):
         bad = SESSION_FILE_HEADER + "abcd" + SESSION_FILE_FOOTER
-        await bob._e2e.import_sessions(bad, "test")
+        await bob.e2e.import_sessions(bad, "test")
 
     with raises(err.SessionFileUnsupportedVersion):
         base64   = "aaab" * err.SessionFileInvalidDataSize.minimum
         bad      = SESSION_FILE_HEADER + base64 + SESSION_FILE_FOOTER
-        await bob._e2e.import_sessions(bad, "test")
+        await bob.e2e.import_sessions(bad, "test")
 
     with raises(err.SessionFileInvalidHMAC):
-        await bob._e2e.import_sessions(exported, "incorrect passphrase")
+        await bob.e2e.import_sessions(exported, "incorrect passphrase")
 
     with raises(err.SessionFileInvalidJSON):
-        bad = await alice._e2e.export_sessions("test", lambda j: j + "break")
-        await bob._e2e.import_sessions(bad, "test")
+        bad = await alice.e2e.export_sessions("test", lambda j: j + "break")
+        await bob.e2e.import_sessions(bad, "test")
 
     with raises(err.SessionFileInvalidJSON):
-        bad = await alice._e2e.export_sessions("test", lambda j: "{}")
-        await bob._e2e.import_sessions(bad, "test")
+        bad = await alice.e2e.export_sessions("test", lambda j: "{}")
+        await bob.e2e.import_sessions(bad, "test")
 
     # Skipped session due to older/same version of it already being present
 
     current = list(bob_ses.values())[0][0]
-    await bob._e2e.import_sessions(exported, "test")
+    await bob.e2e.import_sessions(exported, "test")
     assert list(bob_ses.values())[0][0] == current
 
     # Skipped session due to unsupported algo
@@ -90,9 +90,9 @@ async def test_session_export(alice: Client, e2e_room: Room, bob: Client):
         data[0]["algorithm"] = "123"
         return json.dumps(data)
 
-    bad = await alice._e2e.export_sessions("test", corrupt_session0_algo)
+    bad = await alice.e2e.export_sessions("test", corrupt_session0_algo)
     bob_ses.clear()
-    await bob._e2e.import_sessions(bad, "test")
+    await bob.e2e.import_sessions(bad, "test")
     assert not bob_ses
 
     # Skipped session due to general error, in this case a missing dict key
@@ -102,9 +102,9 @@ async def test_session_export(alice: Client, e2e_room: Room, bob: Client):
         del data[0]["algorithm"]
         return json.dumps(data)
 
-    bad = await alice._e2e.export_sessions("test", kill_session0_essential_key)
+    bad = await alice.e2e.export_sessions("test", kill_session0_essential_key)
     bob_ses.clear()
-    await bob._e2e.import_sessions(bad, "test")
+    await bob.e2e.import_sessions(bad, "test")
     assert not bob_ses
 
 
@@ -129,7 +129,7 @@ async def test_session_forwarding(alice: Client, e2e_room: Room, tmp_path):
         # Ensure session requests from untrusted or blocked device are pended
 
         assert alice.devices.own[other.device_id].pending_session_requests
-        assert len(other._e2e.sent_session_requests) == 1
+        assert len(other.e2e._sent_session_requests) == 1
 
         other_event = other.rooms[e2e_room.id].timeline[-1]
         assert isinstance(other_event.content, Megolm)
@@ -139,7 +139,7 @@ async def test_session_forwarding(alice: Client, e2e_room: Room, tmp_path):
         await alice.devices.own[other.device_id].trust()
         await other.sync.once()
         assert not alice.devices.own[other.device_id].pending_session_requests
-        assert not other._e2e.sent_session_requests
+        assert not other.e2e._sent_session_requests
 
         other_event = other.rooms[e2e_room.id].timeline[-1]
         assert isinstance(other_event.content, Text)
@@ -176,7 +176,7 @@ async def test_cancel_session_forward(alice: Client, e2e_room: Room, tmp_path):
         await other.rooms[e2e_room.id].timeline.load_history(1)
 
     sent_to = {alice.user_id, alice2.user_id}
-    assert next(iter(alice3._e2e.sent_session_requests.values()))[1] == sent_to
+    assert next(iter(alice3.e2e._sent_session_requests.values()))[1] == sent_to
 
     # Make alice respond to alice3's request before alice2
 
@@ -278,7 +278,7 @@ async def test_olm_recovery(alice: Client, bob: Client):
 
         # Remove sessions to make sure recovery process is creating a new one
         if clear_alice_sessions:
-            alice._e2e.sessions[bob_curve].clear()
+            alice.e2e._sessions[bob_curve].clear()
 
         return olms[target]
 
@@ -300,7 +300,7 @@ async def test_olm_recovery(alice: Client, bob: Client):
     # NoCipherForUs
 
     olmed = await prepare_dummy()
-    alice._e2e.sessions[bob_curve].clear()
+    alice.e2e._sessions[bob_curve].clear()
     olmed.ciphertext.clear()
     await send_check(olmed, err.NoCipherForUs)
     # this would fail is recovery didn't create a new session
@@ -328,7 +328,7 @@ async def test_olm_recovery(alice: Client, bob: Client):
 
     olmed = await prepare_dummy()
     olmed.ciphertext[bob_curve].type = Olm.Cipher.Type.normal
-    bob._e2e.sessions.clear()
+    bob.e2e._sessions.clear()
     await send_check(olmed, err.OlmExcpectedPrekey)
     await send_check(await prepare_dummy())
 
@@ -372,7 +372,7 @@ async def test_olm_session_reordering(alice: Client, bob: Client):
     olms, _ = await alice.devices.encrypt(Dummy(), bobdev)
     await alice.devices.send(olms)  # type: ignore
 
-    alice_sessions = alice._e2e.sessions[bobdev.curve25519]
+    alice_sessions = alice.e2e._sessions[bobdev.curve25519]
     oldest_session = alice_sessions[0]
     alice_sessions.clear()
 
@@ -387,7 +387,7 @@ async def test_olm_session_reordering(alice: Client, bob: Client):
 
     await bob.sync.once()
 
-    bob_sessions = bob._e2e.sessions[alice.devices.current.curve25519]
+    bob_sessions = bob.e2e._sessions[alice.devices.current.curve25519]
     del bob_sessions[-1]
 
     olms, _ = await bob.devices.encrypt(Dummy(), alice.devices.current)

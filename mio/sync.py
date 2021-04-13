@@ -269,7 +269,7 @@ class Sync(JSONClientModule):
 
         if "device_one_time_keys_count" in sync:
             up = sync["device_one_time_keys_count"].get("signed_curve25519", 0)
-            await self.client._e2e.upload_one_time_keys(currently_uploaded=up)
+            await self.client.e2e._upload_one_time_keys(currently_uploaded=up)
 
         await self.client.profile._update_on_sync(*state_member_events)
 
