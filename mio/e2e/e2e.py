@@ -5,11 +5,17 @@ from datetime import datetime
 from functools import partial
 from pathlib import Path
 from typing import (
-    Any, ClassVar, Collection, Deque, Dict, List, Optional, Set, Tuple, Type,
-    Union,
+    Any, Callable, ClassVar, Collection, Deque, Dict, List, Optional, Set,
+    Tuple, Type, Union,
 )
 
 import olm
+import unpaddedbase64
+from Cryptodome import Random
+from Cryptodome.Cipher import AES
+from Cryptodome.Hash import HMAC, SHA256, SHA512
+from Cryptodome.Protocol.KDF import PBKDF2
+from Cryptodome.Util import Counter
 
 from ..core.contents import EventContent
 from ..core.data import Runtime
@@ -33,7 +39,7 @@ LOG = get_logger()
 
 Payload = Dict[str, Any]
 
-# (room_id, undecrypable_megolm_sender_curve25519, session_id)
+# (room_id, sender_curve25519, session_id)
 InboundGroupSessionKey = Tuple[RoomId, str, str]
 
 MessageIndice = Dict[int, Tuple[EventId, datetime]]
@@ -58,6 +64,9 @@ SessionRequestsType = Dict[
 ]
 
 DeviceChain = List[Union[Device, str]]
+
+SESSION_FILE_HEADER = "-----BEGIN MEGOLM SESSION DATA-----"
+SESSION_FILE_FOOTER = "-----END MEGOLM SESSION DATA-----"
 
 
 def _olm_pickle(self, obj) -> str:
@@ -113,6 +122,149 @@ class E2E(JSONClientModule):
     @property
     def device(self) -> "Device":
         return self.client.devices.current
+
+
+    async def export_sessions(
+        self,
+        passphrase:     str,
+        _json_modifier: Optional[Callable[[str], str]] = None,
+    ) -> str:
+        sessions = []
+
+        for key, value in self.in_group_sessions.items():
+            room_id, sender_curve25519, session_id    = key
+            session, sender_ed25519, _, forward_chain = value
+
+            first_index = session.first_known_index
+
+            sessions.append({
+                "algorithm": Algorithm.megolm_v1.value,
+                "forwarding_curve25519_key_chain": forward_chain,
+                "room_id": room_id,
+                "sender_key": sender_curve25519,
+                "sender_claimed_keys": {"ed25519": sender_ed25519},
+                "session_id": session_id,
+                "session_key": session.export_session(first_index),
+            })
+
+        salt  = Random.new().read(16)  # 16 byte/128 bit salt
+        count = 100_000
+
+        derived_key = PBKDF2(  # 64 byte / 512 bit key
+            passphrase, salt, dkLen=64, count=count, hmac_hash_module=SHA512,
+        )
+        aes256_key = derived_key[:32]
+        hmac_key   = derived_key[32:]
+
+        init_vector    = int.from_bytes(Random.new().read(16), byteorder="big")
+        init_vector   &= ~(1 << 63)  # set bit 63 to 0
+        counter        = Counter.new(128, initial_value=init_vector)
+        cipher         = AES.new(aes256_key, AES.MODE_CTR, counter=counter)
+        json_modifier  = _json_modifier or (lambda data: data)
+
+        data = b"".join((
+            bytes([1]),  # Export format version
+            salt,
+            init_vector.to_bytes(length=16, byteorder="big"),
+            count.to_bytes(length=4, byteorder="big"),
+            cipher.encrypt(json_modifier(json.dumps(sessions)).encode()),
+        ))
+
+        base64 = unpaddedbase64.encode_base64(b"".join((
+            data, HMAC.new(hmac_key, data, SHA256).digest(),
+        )))
+
+        return "\n".join((SESSION_FILE_HEADER, base64, SESSION_FILE_FOOTER))
+
+
+    async def import_sessions(self, data: str, passphrase: str) -> None:
+        data = data.replace("\n", "")
+
+        if not data.startswith(SESSION_FILE_HEADER):
+            raise err.SessionFileMissingHeader()
+
+        if not data.endswith(SESSION_FILE_FOOTER):
+            raise err.SessionFileMissingFooter()
+
+        data = data[len(SESSION_FILE_HEADER): -len(SESSION_FILE_FOOTER)]
+
+        try:
+            decoded = unpaddedbase64.decode_base64(data)
+        except Exception as e:
+            raise err.SessionFileInvalidBase64(next(iter(e.args), ""))
+
+        if len(decoded) < err.SessionFileInvalidDataSize.minimum:
+            raise err.SessionFileInvalidDataSize(len(decoded))
+
+        version       = decoded[0]  # indexing single byte returns an int
+        salt          = decoded[1:17]
+        init_vector   = int.from_bytes(decoded[17:33], byteorder="big")
+        count         = int.from_bytes(decoded[33:37], byteorder="big")
+        session_data  = decoded[37:-32]
+        expected_hmac = decoded[-32:]
+
+        if version != 1:
+            raise err.SessionFileUnsupportedVersion(version)
+
+        derived_key = PBKDF2(
+            passphrase, salt, dkLen=64, count=count, hmac_hash_module=SHA512,
+        )
+        aes256_key = derived_key[:32]
+        hmac       = HMAC.new(derived_key[32:], decoded[:-32], SHA256).digest()
+
+        if expected_hmac != hmac:
+            raise err.SessionFileInvalidHMAC(expected_hmac, hmac)
+
+        counter       = Counter.new(128, initial_value=init_vector)
+        cipher        = AES.new(aes256_key, AES.MODE_CTR, counter=counter)
+        json_sessions = cipher.decrypt(session_data)
+
+        try:
+            sessions = json.loads(json_sessions)
+        except json.JSONDecodeError as e:
+            raise err.SessionFileInvalidJSON(json_sessions, e.args[0])
+
+        if not isinstance(sessions, list):
+            raise err.SessionFileInvalidJSON(json_sessions, "expected list")
+
+        imported = 0
+
+        for session in sessions:
+            try:
+                if session["algorithm"] != Algorithm.megolm_v1.value:
+                    LOG.warning("Skipping %r, unsupported algorithm", session)
+                    continue
+
+                storage_key = (
+                    session["room_id"],
+                    session["sender_key"],  # curve25519
+                    session["session_id"],
+                )
+
+                existing        = self.in_group_sessions.get(storage_key)
+                skey            = session["session_key"]
+                rebuilt_session = olm.InboundGroupSession.import_session(skey)
+
+                if (
+                    existing and
+                    rebuilt_session.first_known_index <=
+                    existing[0].first_known_index
+                ):
+                    LOG.warning("Skipping %r, older version of known session")
+                    continue
+
+                self.in_group_sessions[storage_key] = (
+                    rebuilt_session,
+                    session["sender_claimed_keys"]["ed25519"],
+                    {},  # message_indices
+                    session["forwarding_curve25519_key_chain"],
+                )
+                imported += 1
+            except (TypeError, KeyError, olm.OlmGroupSessionError):
+                LOG.exception("Skipping %r, import failure")
+
+        if imported:
+            await self.save()
 
 
     # Methods called from outside this module but shouldn't be used by users

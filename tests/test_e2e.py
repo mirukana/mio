@@ -1,16 +1,106 @@
+import json
+
 from conftest import new_device_from
 from mio.client import Client
 from mio.core.types import NoneType
 from mio.devices.events import ToDeviceEvent
 from mio.e2e import errors as err
 from mio.e2e.contents import Dummy, Megolm, Olm
+from mio.e2e.e2e import SESSION_FILE_FOOTER, SESSION_FILE_HEADER
 from mio.rooms.contents.messages import Text
 from mio.rooms.room import Room
 from pytest import mark, raises
 
 pytestmark = mark.asyncio
 
-# TODO forward_chain_verif
+
+async def test_session_export(alice: Client, e2e_room: Room, bob: Client):
+    alice_ses = alice._e2e.in_group_sessions
+    bob_ses   = bob._e2e.in_group_sessions
+
+    await bob.rooms.join(e2e_room.id)
+    await alice.sync.once()
+    await e2e_room.timeline.send(Text("make a session"))
+    assert not bob_ses
+    assert len(alice_ses) == 1
+
+    exported = await alice._e2e.export_sessions(passphrase="test")
+
+    # 100% successful import
+
+    await bob._e2e.import_sessions(exported, "test")
+    assert alice_ses.keys() == bob_ses.keys()
+
+    for session1, sender_ed1, _, forward_chain1 in alice_ses.values():
+        for session2, sender_ed2, _, forward_chain2 in bob_ses.values():
+            export1 = session1.export_session(session1.first_known_index)
+            export2 = session2.export_session(session2.first_known_index)
+
+            assert export1 == export2
+            assert sender_ed1 == sender_ed2
+            assert forward_chain1 == forward_chain2
+
+    # Total import failures
+
+    with raises(err.SessionFileMissingHeader):
+        await bob._e2e.import_sessions(exported[1:], "test")
+
+    with raises(err.SessionFileMissingFooter):
+        await bob._e2e.import_sessions(exported[:-1], "test")
+
+    with raises(err.SessionFileInvalidBase64):
+        bad = SESSION_FILE_HEADER + "abcdE" + SESSION_FILE_FOOTER
+        await bob._e2e.import_sessions(bad, "test")
+
+    with raises(err.SessionFileInvalidDataSize):
+        bad = SESSION_FILE_HEADER + "abcd" + SESSION_FILE_FOOTER
+        await bob._e2e.import_sessions(bad, "test")
+
+    with raises(err.SessionFileUnsupportedVersion):
+        base64   = "aaab" * err.SessionFileInvalidDataSize.minimum
+        bad      = SESSION_FILE_HEADER + base64 + SESSION_FILE_FOOTER
+        await bob._e2e.import_sessions(bad, "test")
+
+    with raises(err.SessionFileInvalidHMAC):
+        await bob._e2e.import_sessions(exported, "incorrect passphrase")
+
+    with raises(err.SessionFileInvalidJSON):
+        bad = await alice._e2e.export_sessions("test", lambda j: j + "break")
+        await bob._e2e.import_sessions(bad, "test")
+
+    with raises(err.SessionFileInvalidJSON):
+        bad = await alice._e2e.export_sessions("test", lambda j: "{}")
+        await bob._e2e.import_sessions(bad, "test")
+
+    # Skipped session due to older/same version of it already being present
+
+    current = list(bob_ses.values())[0][0]
+    await bob._e2e.import_sessions(exported, "test")
+    assert list(bob_ses.values())[0][0] == current
+
+    # Skipped session due to unsupported algo
+
+    def corrupt_session0_algo(json_data):
+        data                 = json.loads(json_data)
+        data[0]["algorithm"] = "123"
+        return json.dumps(data)
+
+    bad = await alice._e2e.export_sessions("test", corrupt_session0_algo)
+    bob_ses.clear()
+    await bob._e2e.import_sessions(bad, "test")
+    assert not bob_ses
+
+    # Skipped session due to general error, in this case a missing dict key
+
+    def kill_session0_essential_key(json_data):
+        data = json.loads(json_data)
+        del data[0]["algorithm"]
+        return json.dumps(data)
+
+    bad = await alice._e2e.export_sessions("test", kill_session0_essential_key)
+    bob_ses.clear()
+    await bob._e2e.import_sessions(bad, "test")
+    assert not bob_ses
 
 
 async def test_session_forwarding(alice: Client, e2e_room: Room, tmp_path):

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING, ClassVar, Dict, Optional
 
+from ..core.data import Runtime
 from ..core.errors import MioError
 
 if TYPE_CHECKING:
@@ -146,3 +147,48 @@ class SignedDictMissingKey(InvalidSignedDict):
 @dataclass
 class SignedDictVerificationError(InvalidSignedDict):
     code: str
+
+
+@dataclass
+class SessionFileImportError(E2EModuleError):
+    pass
+
+
+@dataclass
+class SessionFileMissingHeader(SessionFileImportError):
+    pass
+
+
+@dataclass
+class SessionFileMissingFooter(SessionFileImportError):
+    pass
+
+
+@dataclass
+class SessionFileInvalidBase64(SessionFileImportError):
+    error_message: str
+
+
+@dataclass
+class SessionFileInvalidDataSize(SessionFileImportError):
+    # Version, salt, init vector, counter, session data (variable length), HMAC
+    minimum: ClassVar[Runtime[int]] = 1 + 16 + 16 + 4 + 1 + 32
+    got:     int
+
+
+@dataclass
+class SessionFileUnsupportedVersion(SessionFileImportError):
+    expected: ClassVar[Runtime[int]] = 1
+    got:      int
+
+
+@dataclass
+class SessionFileInvalidHMAC(SessionFileImportError):
+    expected: bytes
+    got:      bytes
+
+
+@dataclass
+class SessionFileInvalidJSON(SessionFileImportError):
+    data:          bytes
+    error_message: str

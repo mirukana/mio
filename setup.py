@@ -26,10 +26,12 @@ setup(
     install_requires = requires("""
         aiofiles          >= 0.6.0,  < 0.7
         aiohttp           >= 3.7.3,  < 4
+        pycryptodomex     >= 3.10.1, < 4
         python-olm        >= 3.1.3,  < 4
         rich              >= 9.13.0, <10
         sortedcollections >= 1.2.1,  < 2
         typingplus        >= 2.2.3,  < 3
+        unpaddedbase64    >= 2.1.0,  < 3
         yarl              >= 1.6.3,  < 2
 
         dataclasses       >= 0.6,     < 0.7; python_version<'3.7'
