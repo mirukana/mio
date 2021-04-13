@@ -2,12 +2,8 @@ from conftest import new_device_from
 from mio.client import Client
 from mio.core.types import NoneType
 from mio.devices.events import ToDeviceEvent
+from mio.e2e import errors as err
 from mio.e2e.contents import Dummy, Megolm, Olm
-from mio.e2e.errors import (
-    MegolmBlockedDeviceInForwardChain, MegolmFromBlockedDevice,
-    MegolmFromUntrustedDevice, MegolmUntrustedDeviceInForwardChain,
-    NoCipherForUs, OlmExcpectedPrekey, OlmSessionError,
-)
 from mio.rooms.contents.messages import Text
 from mio.rooms.room import Room
 from pytest import mark, raises
@@ -154,8 +150,8 @@ async def test_forwarding_chains(alice: Client, e2e_room: Room, tmp_path):
     assert event.decryption.forward_chain == [alice.devices.current]
 
     assert event.decryption.verification_errors == [
-        MegolmFromBlockedDevice(alice.devices.current),
-        MegolmBlockedDeviceInForwardChain(alice.devices.current),
+        err.MegolmFromBlockedDevice(alice.devices.current),
+        err.MegolmBlockedDeviceInForwardChain(alice.devices.current),
     ]
 
     # [forward chain: alice/untrusted →] alice2/trusted → alice3
@@ -166,8 +162,8 @@ async def test_forwarding_chains(alice: Client, e2e_room: Room, tmp_path):
     assert event.decryption.forward_chain == [alice.devices.current]
 
     assert event.decryption.verification_errors == [
-        MegolmFromUntrustedDevice(alice.devices.current),
-        MegolmUntrustedDeviceInForwardChain(alice.devices.current),
+        err.MegolmFromUntrustedDevice(alice.devices.current),
+        err.MegolmUntrustedDeviceInForwardChain(alice.devices.current),
     ]
 
 
@@ -211,7 +207,7 @@ async def test_olm_recovery(alice: Client, bob: Client):
     olmed = await prepare_dummy()
     alice._e2e.sessions[bob_curve].clear()
     olmed.ciphertext.clear()
-    await send_check(olmed, NoCipherForUs)
+    await send_check(olmed, err.NoCipherForUs)
     # this would fail is recovery didn't create a new session
     await send_check(await prepare_dummy())
 
@@ -221,7 +217,7 @@ async def test_olm_recovery(alice: Client, bob: Client):
     olmed = await prepare_dummy()
     olmed.ciphertext[bob_curve].type = Olm.Cipher.Type.normal
     olmed.ciphertext[bob_curve].body = "invalid base64"
-    got = await send_check(olmed, OlmSessionError)
+    got = await send_check(olmed, err.OlmSessionError)
     assert not got.decryption.error.was_new_session
     await send_check(await prepare_dummy())
 
@@ -229,7 +225,7 @@ async def test_olm_recovery(alice: Client, bob: Client):
 
     olmed = await prepare_dummy()
     olmed.ciphertext[bob_curve].body = "invalid base64"
-    got = await send_check(olmed, OlmSessionError)
+    got = await send_check(olmed, err.OlmSessionError)
     assert got.decryption.error.was_new_session
     await send_check(await prepare_dummy())
 
@@ -238,7 +234,7 @@ async def test_olm_recovery(alice: Client, bob: Client):
     olmed = await prepare_dummy()
     olmed.ciphertext[bob_curve].type = Olm.Cipher.Type.normal
     bob._e2e.sessions.clear()
-    await send_check(olmed, OlmExcpectedPrekey)
+    await send_check(olmed, err.OlmExcpectedPrekey)
     await send_check(await prepare_dummy())
 
 
