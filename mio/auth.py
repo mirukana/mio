@@ -1,3 +1,4 @@
+import shutil
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict
 
@@ -36,10 +37,13 @@ class Auth(ClientModule):
             homeserver    = reply["well_known"]["m.homeserver"]
             client.server = URL(homeserver["base_url"])
 
-        client.base_dir = str(self.client.base_dir).format(
+        unexpanded_base_dir = str(self.client.base_dir)
+        client.base_dir     = unexpanded_base_dir.format(
             user_id   = fs_encode(reply["user_id"]),
             device_id = fs_encode(reply["device_id"]),
         )
+
+        shutil.move(unexpanded_base_dir, str(client.base_dir))
 
         client.user_id      = UserId(reply["user_id"])
         client.access_token = reply["access_token"]
