@@ -299,7 +299,6 @@ class E2E(JSONClientModule):
     async def _decrypt_olm_payload(
         self, event: ToDeviceEvent[Olm],
     ) -> Tuple[Payload, Optional[err.OlmVerificationError]]:
-        # TODO: unwedge interval
 
         content      = event.content
         sender_curve = content.sender_curve25519
@@ -415,7 +414,7 @@ class E2E(JSONClientModule):
 
         for_users = set(for_users)
 
-        default: tuple = (olm.OutboundGroupSession(), datetime.now(), 0, {})
+        default: tuple = (olm.OutboundGroupSession(), datetime.utcnow(), 0, {})
 
         session, creation_date, encrypted_events_count, shared_to = \
             self._out_group_sessions.get(room_id, default)
@@ -423,7 +422,7 @@ class E2E(JSONClientModule):
         # If we have no existing non-expired OutbondGroupSession for this room:
         if (
             room_id not in self._out_group_sessions or
-            datetime.now() - creation_date > settings.sessions_max_age or
+            datetime.utcnow() - creation_date > settings.sessions_max_age or
             encrypted_events_count > settings.sessions_max_messages
         ):
             # Create a corresponding InboundGroupSession:
