@@ -148,6 +148,7 @@ async def test_call_callbacks_history(alice: Client, room: Room, tmp_path):
 
     # Calling callbacks when loading timeline from server
 
+    await alice.sync.path.unlink()
     await room.state.path.unlink()
     await room.timeline.path.unlink()
     async for event_dir in room.path.parent.glob("????-??-??"):
@@ -158,6 +159,7 @@ async def test_call_callbacks_history(alice: Client, room: Room, tmp_path):
 
     alice4.rooms.callbacks[TimelineEvent].append(lambda *a: tline4.append(a))
 
+    await alice4.sync.once()
     await alice4.rooms[room.id].timeline.load_history(9999)
     assert len(tline2) == len(tline4)
 

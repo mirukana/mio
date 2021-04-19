@@ -47,7 +47,7 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
 
     @property
     def path(self) -> AsyncPath:
-        return self.room.client.path.parent / "timeline.json"
+        return self.room.path.parent / "timeline.json"
 
 
     @property

@@ -73,7 +73,7 @@ class RoomState(JSONFile, Map):
 
     @property
     def path(self) -> AsyncPath:
-        return self.room.client.path.parent / "state.json"
+        return self.room.path.parent / "state.json"
 
 
     @property
