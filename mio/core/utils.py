@@ -4,8 +4,13 @@ from inspect import iscoroutine
 from typing import (
     Generator, Iterator, Mapping, MutableMapping, Tuple, Type, Union,
 )
+from urllib.parse import quote, unquote
 
 from rich.logging import RichHandler
+
+# Characters that can't be in file/dir names on either windows, mac or linux -
+# Actual % must be encoded too to not conflict with % encoded chars
+FS_BAD_CHARS: str = r'"%*/:<>?\|'
 
 ErrorCatcher = Union[Type[Exception], Tuple[Type[Exception], ...]]
 
@@ -22,6 +27,8 @@ def get_logger(name: str = __name__) -> logging.Logger:
 
 
 LOG = get_logger()
+
+fs_decode = unquote
 
 
 def remove_none(from_dict: dict) -> dict:
@@ -57,6 +64,10 @@ def deep_merge_dict(dict1: MutableMapping, dict2: Mapping) -> None:
 
 async def make_awaitable(result):
     return await result if iscoroutine(result) else result
+
+
+def fs_encode(name: str) -> str:
+    return "".join(quote(c, safe="") if c in FS_BAD_CHARS else c for c in name)
 
 
 @contextmanager

@@ -5,6 +5,7 @@ from yarl import URL
 
 from .core.data import Runtime
 from .core.types import UserId
+from .core.utils import fs_encode
 from .module import ClientModule
 
 if TYPE_CHECKING:
@@ -35,7 +36,11 @@ class Auth(ClientModule):
             homeserver    = reply["well_known"]["m.homeserver"]
             client.server = URL(homeserver["base_url"])
 
-        client.base_dir     = str(self.client.base_dir).format(**reply)
+        client.base_dir = str(self.client.base_dir).format(
+            user_id   = fs_encode(reply["user_id"]),
+            device_id = fs_encode(reply["device_id"]),
+        )
+
         client.user_id      = UserId(reply["user_id"])
         client.access_token = reply["access_token"]
         client.device_id    = reply["device_id"]

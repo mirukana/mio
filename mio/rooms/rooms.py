@@ -9,7 +9,7 @@ from ..core.callbacks import CallbackGroup, Callbacks
 from ..core.contents import EventContent
 from ..core.data import IndexableMap, Parent, Runtime
 from ..core.types import RoomAlias, RoomId, UserId
-from ..core.utils import remove_none
+from ..core.utils import fs_decode, remove_none
 from ..e2e.e2e import InboundGroupSessionKey
 from ..module import ClientModule
 from .contents.actions import Typing
@@ -94,7 +94,7 @@ class Rooms(ClientModule, IndexableMap[RoomId, Room]):
 
     async def load(self) -> "Rooms":
         async for room_dir in (self.client.path.parent / "rooms").glob("!*"):
-            id             = RoomId(room_dir.name)
+            id             = RoomId(fs_decode(room_dir.name))
             self._data[id] = await Room(self.client, id=id).load()
 
         return self
