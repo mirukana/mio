@@ -26,6 +26,7 @@ setup(
     install_requires = requires("""
         aiofiles          >= 0.6.0,  < 0.7
         aiohttp           >= 3.7.3,  < 4
+        aiopath           >= 0.5.4,  < 0.6
         pycryptodomex     >= 3.10.1, < 4
         python-olm        >= 3.1.3,  < 4
         rich              >= 9.13.0, <10

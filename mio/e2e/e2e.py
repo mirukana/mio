@@ -3,7 +3,6 @@ from asyncio import Future, ensure_future
 from dataclasses import dataclass, field
 from datetime import datetime
 from functools import partial
-from pathlib import Path
 from typing import (
     Any, Callable, ClassVar, Collection, Deque, Dict, List, Optional, Set,
     Tuple, Type, Union,
@@ -11,6 +10,7 @@ from typing import (
 
 import olm
 import unpaddedbase64
+from aiopath import AsyncPath
 from Cryptodome import Random
 from Cryptodome.Cipher import AES
 from Cryptodome.Hash import HMAC, SHA256, SHA512
@@ -115,7 +115,7 @@ class E2E(JSONClientModule):
 
 
     @property
-    def path(self) -> Path:
+    def path(self) -> AsyncPath:
         return self.client.path.parent / "e2e.json"
 
 

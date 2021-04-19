@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Optional
+
+from aiopath import AsyncPath
 
 from .core.callbacks import MaybeCoro
 from .core.data import Parent, Runtime
@@ -25,7 +26,7 @@ class Profile(JSONClientModule):
 
 
     @property
-    def path(self) -> Path:
+    def path(self) -> AsyncPath:
         return self.client.path.parent / "profile.json"
 
 

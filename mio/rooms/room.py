@@ -1,7 +1,8 @@
 import shutil
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional, Set, Tuple
+
+from aiopath import AsyncPath
 
 from ..core.callbacks import CallbackGroup, Callbacks, EventCallbacks
 from ..core.data import JSONFile, Parent, Runtime
@@ -43,7 +44,7 @@ class Room(JSONFile, EventCallbacks):
 
 
     @property
-    def path(self) -> Path:
+    def path(self) -> AsyncPath:
         return self.client.path.parent / "rooms" / self.id / "room.json"
 
 

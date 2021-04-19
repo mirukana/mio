@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from conftest import new_device_from
 from mio.client import Client
 from mio.core.errors import MatrixError

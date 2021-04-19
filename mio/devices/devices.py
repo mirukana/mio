@@ -1,7 +1,6 @@
 from asyncio import Lock
 from contextlib import suppress
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import (
     TYPE_CHECKING, Any, Collection, DefaultDict, Deque, Dict, List, Optional,
     Set, Tuple,
@@ -9,6 +8,7 @@ from typing import (
 from uuid import uuid4
 
 import olm
+from aiopath import AsyncPath
 
 from ..core.callbacks import CallbackGroup, Callbacks, EventCallbacks
 from ..core.contents import EventContent
@@ -160,7 +160,7 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
 
 
     @property
-    def path(self) -> Path:
+    def path(self) -> AsyncPath:
         return self.client.path.parent / "devices.json"
 
 

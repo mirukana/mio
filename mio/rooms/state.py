@@ -1,9 +1,10 @@
 from collections import ChainMap
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import (
     TYPE_CHECKING, DefaultDict, Dict, List, Optional, Set, Tuple, Type, Union,
 )
+
+from aiopath import AsyncPath
 
 from ..core.contents import EventContent
 from ..core.data import JSONFile, Map, Parent, Runtime
@@ -71,7 +72,7 @@ class RoomState(JSONFile, Map):
 
 
     @property
-    def path(self) -> Path:
+    def path(self) -> AsyncPath:
         return self.room.client.path.parent / "state.json"
 
 

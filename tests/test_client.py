@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from aiopath import AsyncPath
 from conftest import compare_clients, read_json
 from mio.client import Client
 from pytest import mark, raises
@@ -16,7 +17,7 @@ async def test_bare_init(alice: Client, tmp_path: Path):
         alice.access_token,
     )
 
-    assert client.path == tmp_path / "client.json"
+    assert client.path == AsyncPath(tmp_path / "client.json")
 
     assert read_json(client.path) == {
         "server": alice.server,

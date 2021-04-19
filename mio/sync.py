@@ -2,11 +2,12 @@ import asyncio
 import json
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import (
     TYPE_CHECKING, Any, Awaitable, Callable, Dict, Iterator, List, Optional,
     Set, Type, Union,
 )
+
+from aiopath import AsyncPath
 
 from .core.data import Parent, Runtime
 from .core.events import Event, InvalidEvent
@@ -39,7 +40,7 @@ class Sync(JSONClientModule):
 
 
     @property
-    def path(self) -> Path:
+    def path(self) -> AsyncPath:
         return self.client.path.parent / "sync.json"
 
 

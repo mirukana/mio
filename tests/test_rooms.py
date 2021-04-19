@@ -148,9 +148,9 @@ async def test_call_callbacks_history(alice: Client, room: Room, tmp_path):
 
     # Calling callbacks when loading timeline from server
 
-    room.state.path.unlink()
-    room.timeline.path.unlink()
-    for event_dir in room.path.parent.glob("????-??-??"):
+    await room.state.path.unlink()
+    await room.timeline.path.unlink()
+    async for event_dir in room.path.parent.glob("????-??-??"):
         shutil.rmtree(event_dir)
 
     alice4 = await Client(alice.base_dir).load()

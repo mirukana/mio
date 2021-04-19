@@ -13,7 +13,7 @@ from typing import (
 from uuid import UUID
 
 import typingplus
-from aiofiles import open as aiopen
+from aiopath import AsyncPath
 from yarl import URL
 
 from .errors import MioError
@@ -398,27 +398,25 @@ class JSON(RichFix):
 
 @dataclass
 class JSONFile(JSON):
-    @property
-    def path(self) -> Path:
-        raise NotImplementedError()
-
-
     def __post_init__(self) -> None:
-        if not self.path.exists():
-            self.path.parent.mkdir(parents=True, exist_ok=True)
+        if not Path(self.path).exists():
+            Path(self.path).parent.mkdir(parents=True, exist_ok=True)
             data = self.json
 
             if data != "{}":
-                self.path.write_text(data)
+                Path(self.path).write_text(data)
+
+    @property
+    def path(self) -> AsyncPath:
+        raise NotImplementedError()
 
 
     async def save(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        await self.path.parent.mkdir(parents=True, exist_ok=True)
         data = self.json
 
         if data != "{}":
-            async with aiopen(self.path, "w") as file:
-                await file.write(data)
+            await self.path.write_text(data)
 
 
     async def load(self) -> "JSONFile":
@@ -431,9 +429,8 @@ class JSONFile(JSON):
 
 
     async def _read_file(self) -> DictS:
-        if self.path.exists():
-            async with aiopen(self.path) as file:
-                return json.loads(await file.read())
+        if await self.path.exists():
+            return json.loads(await self.path.read_text())
 
         return {}
 

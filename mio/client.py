@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
 from aiohttp import ClientResponseError, ClientSession
+from aiopath import AsyncPath
 from yarl import URL
 
 from .auth import Auth
@@ -57,8 +58,8 @@ class Client(JSONFile):
 
 
     @property
-    def path(self) -> Path:
-        return Path(self.base_dir) / "client.json"
+    def path(self) -> AsyncPath:
+        return AsyncPath(self.base_dir) / "client.json"
 
 
     async def load(self, **base_dir_placeholders: str) -> "Client":

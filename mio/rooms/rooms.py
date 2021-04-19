@@ -93,7 +93,7 @@ class Rooms(ClientModule, IndexableMap[RoomId, Room]):
 
 
     async def load(self) -> "Rooms":
-        for room_dir in (self.client.path.parent / "rooms").glob("!*"):
+        async for room_dir in (self.client.path.parent / "rooms").glob("!*"):
             id             = RoomId(room_dir.name)
             self._data[id] = await Room(self.client, id=id).load()
 

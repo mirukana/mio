@@ -2,11 +2,11 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from itertools import groupby
-from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 from uuid import uuid4
 
-from aiofiles import open as aiopen
+import aiofiles
+from aiopath import AsyncPath
 from sortedcollections import ValueSortedDict
 
 from ..core.contents import EventContent
@@ -40,11 +40,13 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
         init=False, repr=False, default_factory=dict,
     )
 
-    _loaded_files: Runtime[Set[Path]] = field(init=False, default_factory=set)
+    _loaded_files: Runtime[Set[AsyncPath]] = field(
+        init=False, default_factory=set,
+    )
 
 
     @property
-    def path(self) -> Path:
+    def path(self) -> AsyncPath:
         return self.room.client.path.parent / "timeline.json"
 
 
@@ -57,23 +59,26 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
         loaded:      List[TimelineEvent] = await self._fill_newest_gap(count)
         disk_loaded: List[TimelineEvent] = []
 
-        day_dirs = sorted(
-            self.path.parent.glob("????-??-??"), key=lambda d: d.name,
+        day_dirs = sorted(  # noqa
+            [path async for path in self.path.parent.glob("????-??-??")],
+            key = lambda d: d.name,
         )
 
         for day_dir in reversed(day_dirs):
             if len(loaded) >= count:
                 break
 
-            hour_files = sorted(day_dir.glob("??h.json"), key=lambda f: f.name)
+            hour_files = sorted(  # noqa
+                [path async for path in day_dir.glob("??h.json")],
+                key = lambda f: f.name,
+            )
 
             for hour_file in reversed(hour_files):
                 if hour_file in self._loaded_files:
                     continue
 
-                async with aiopen(hour_file) as file:
-                    LOG.debug("Loading events from %s", hour_file)
-                    events = json.loads(await file.read())
+                LOG.debug("Loading events from %s", hour_file)
+                events = json.loads(await hour_file.read_text())
 
                 self._loaded_files.add(hour_file)
 
@@ -117,7 +122,7 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
         return EventId(result["event_id"])
 
 
-    def _get_event_file(self, event: TimelineEvent) -> Path:
+    def _get_event_file(self, event: TimelineEvent) -> AsyncPath:
         return self.path.parent / event.date.strftime("%Y-%m-%d/%Hh.json")
 
 
@@ -160,13 +165,11 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
             sorted_group = sorted(event_group)
             event_dicts  = [e.dict for e in sorted_group]
 
-            if not path.exists():
-                path.parent.mkdir(parents=True, exist_ok=True)
+            if not await path.exists():
+                await path.parent.mkdir(parents=True, exist_ok=True)
+                await path.write_text("[]")
 
-                async with aiopen(path, "w") as file:
-                    await file.write("[]")
-
-            async with aiopen(path, "r+") as file:
+            async with aiofiles.open(path, "r+") as file:
                 evs  = json.loads(await file.read())
                 evs += event_dicts
                 await file.seek(0)
