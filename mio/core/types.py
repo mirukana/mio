@@ -24,7 +24,7 @@ class _Identifier(str):
 
 
     def __repr__(self) -> str:
-        return "%s(%s)" % (type(self).__name__, self)
+        return "%s(%r)" % (type(self).__name__, str(self))
 
 
     @classmethod
