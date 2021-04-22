@@ -1,21 +1,20 @@
 from dataclasses import dataclass
 
 from ..core.errors import MioError
-from .exchange import Reply, Request
+from .exchange import Reply
 
 
 @dataclass
 class ServerError(MioError):
-    request: Request
-    reply:   Reply
+    reply: Reply
 
     @classmethod
-    def from_reply(cls, request: "Request", reply: "Reply") -> "ServerError":
+    def from_reply(cls, reply: "Reply") -> "ServerError":
         if "errcode" in reply.json:
             message = reply.json.get("error") or ""
-            return MatrixError(request, reply, reply.json["errcode"], message)
+            return MatrixError(reply, reply.json["errcode"], message)
 
-        return cls(request, reply)
+        return cls(reply)
 
 
 @dataclass

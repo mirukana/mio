@@ -76,6 +76,7 @@ class Network(ClientModule):
         disp = resp.content_disposition
 
         reply = Reply(
+            request  = request,
             status   = resp.status,
             data     = resp.content,
             json     = await resp.json() if mime == "application/json" else {},
@@ -91,7 +92,7 @@ class Network(ClientModule):
             resp.raise_for_status()
             return reply
         except ClientResponseError:
-            raise ServerError.from_reply(request, reply)
+            raise ServerError.from_reply(reply)
 
 
     async def disconnect(self) -> None:

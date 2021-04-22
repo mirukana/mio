@@ -19,6 +19,7 @@ class Request:
 
 @dataclass
 class Reply:
+    request:  Request       = field(repr=False)
     status:   int
     data:     StreamReader  = field(repr=False)
     json:     DictS         = field(default_factory=dict)
