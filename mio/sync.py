@@ -12,7 +12,7 @@ from aiopath import AsyncPath
 from .core.data import Parent, Runtime
 from .core.events import Event, InvalidEvent
 from .core.ids import RoomId, UserId
-from .core.utils import get_logger, log_errors, make_awaitable, remove_none
+from .core.utils import get_logger, make_awaitable, remove_none, report
 from .devices.events import ToDeviceEvent
 from .e2e.contents import Megolm, Olm
 from .module import JSONClientModule
@@ -127,7 +127,7 @@ class Sync(JSONClientModule):
             data: dict, key: str, evtype: Type[Event], coro: Callable,
         ) -> None:
             for event in data.get(key, {}).get("events", ()):
-                with log_errors(InvalidEvent):
+                with report(InvalidEvent):
                     ev = evtype.from_dict(event, self.client)
 
                     if isinstance(ev, ToDeviceEvent):
@@ -143,7 +143,7 @@ class Sync(JSONClientModule):
                 InvitedRoomStateEvent if invited else StateEvent
 
             for event in data.get(key, {}).get("events", ()):
-                with log_errors(InvalidEvent):
+                with report(InvalidEvent):
                     if "state_key" in event:
                         state_ev = state.from_dict(event, room)
                         await room.state._register(state_ev)

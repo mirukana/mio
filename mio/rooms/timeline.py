@@ -13,7 +13,7 @@ from ..core.contents import EventContent
 from ..core.data import JSON, IndexableMap, JSONFile, Parent, Runtime
 from ..core.events import InvalidEvent
 from ..core.ids import EventId
-from ..core.utils import get_logger, log_errors, remove_none
+from ..core.utils import get_logger, remove_none, report
 from ..e2e.contents import Megolm
 from .contents.settings import Creation
 from .events import TimelineEvent
@@ -85,7 +85,7 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
                 for source in events:
                     ev: TimelineEvent
 
-                    with log_errors(InvalidEvent, trace=True):
+                    with report(InvalidEvent, trace=True):
                         ev = TimelineEvent.from_dict(source, self.room)
                         ev = await ev._decrypted()
 
@@ -249,7 +249,7 @@ class Gap(JSON):
         for source in reply.json["chunk"]:
             ev: TimelineEvent
 
-            with log_errors(InvalidEvent):
+            with report(InvalidEvent):
                 ev = TimelineEvent.from_dict(source, self.room)
                 ev = await ev._decrypted()
 

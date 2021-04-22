@@ -75,7 +75,7 @@ def fs_encode(name: str) -> str:
 
 
 @contextmanager
-def log_errors(
+def report(
     types: ErrorCatcher = Exception,
     level: int          = logging.WARNING,
     trace: bool         = False,
