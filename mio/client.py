@@ -47,12 +47,11 @@ class Client(JSONFile):
         self.sync    = Sync(self)
         self.e2e     = E2E(self)
         self.devices = Devices(self)
-        self._lock     = None
+        self._lock   = None
         super().__post_init__()
 
 
     def __del__(self) -> None:
-        # Release the lock
         if self._lock:
             self._lock.release()
 
@@ -67,7 +66,7 @@ class Client(JSONFile):
         await super().load()
 
         # Try acquiring the lock
-        self.lock()
+        self._acquire_lock()
 
         for attr in self.__dict__.values():
             if isinstance(attr, ClientModule):
@@ -76,6 +75,6 @@ class Client(JSONFile):
         return self
 
 
-    def lock(self) -> None:
+    def _acquire_lock(self) -> None:
         self._lock = FileLock(Path(self.base_dir) / ".lock")
         self._lock.acquire(timeout=1)

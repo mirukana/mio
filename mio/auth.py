@@ -2,7 +2,6 @@ import shutil
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict
 
-from filelock import FileLock
 from yarl import URL
 
 from .core.data import Runtime
@@ -51,7 +50,7 @@ class Auth(ClientModule):
         client.device_id    = reply.json["device_id"]
 
         # Try acquiring the lock
-        client.lock()
+        client._acquire_lock()
 
         await client.e2e._upload_keys()
         await client.devices.ensure_tracked([client.user_id])
