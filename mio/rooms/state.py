@@ -8,7 +8,7 @@ from aiopath import AsyncPath
 
 from ..core.contents import EventContent
 from ..core.data import JSONFile, Map, Parent, Runtime
-from ..core.types import MXC, EventId, RoomAlias, UserId
+from ..core.ids import MXC, EventId, RoomAlias, UserId
 from .contents.settings import (
     Avatar, CanonicalAlias, Creation, Encryption, GuestAccess,
     HistoryVisibility, JoinRules, Name, PinnedEvents, PowerLevels, ServerACL,

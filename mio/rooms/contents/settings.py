@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Type
 
 from ...core.contents import EventContent
 from ...core.data import AutoStrEnum
-from ...core.types import MXC, EventId, RoomAlias, RoomId, UserId
+from ...core.ids import MXC, EventId, RoomAlias, RoomId, UserId
 from ...e2e import Algorithm
 
 

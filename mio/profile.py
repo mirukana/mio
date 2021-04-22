@@ -5,7 +5,7 @@ from aiopath import AsyncPath
 
 from .core.callbacks import MaybeCoro
 from .core.data import Parent, Runtime
-from .core.types import MXC
+from .core.ids import MXC
 from .core.utils import make_awaitable
 from .module import JSONClientModule
 from .rooms.contents.users import Member

@@ -6,7 +6,7 @@ from aiopath import AsyncPath
 
 from ..core.callbacks import CallbackGroup, Callbacks, EventCallbacks
 from ..core.data import JSONFile, Parent, Runtime
-from ..core.types import RoomAlias, RoomId, UserId
+from ..core.ids import RoomAlias, RoomId, UserId
 from ..core.utils import fs_encode, remove_none
 from ..net.net import Network
 from .state import RoomState

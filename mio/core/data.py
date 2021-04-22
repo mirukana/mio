@@ -17,8 +17,7 @@ from aiopath import AsyncPath
 from yarl import URL
 
 from .errors import MioError
-from .types import DictS, NoneType, T
-from .utils import deep_find_parent_classes
+from .utils import DictS, NoneType, T, deep_find_parent_classes
 
 if sys.version_info <= (3, 9):
     from typing_extensions import Annotated, get_origin

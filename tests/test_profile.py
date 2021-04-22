@@ -1,6 +1,6 @@
 from conftest import new_device_from
 from mio.client import Client
-from mio.core.types import MXC
+from mio.core.ids import MXC
 from pytest import mark
 
 pytestmark = mark.asyncio

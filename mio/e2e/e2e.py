@@ -19,7 +19,7 @@ from Cryptodome.Util import Counter
 
 from ..core.contents import EventContent
 from ..core.data import Runtime
-from ..core.types import EventId, RoomId, UserId
+from ..core.ids import EventId, RoomId, UserId
 from ..core.utils import get_logger
 from ..devices.device import Device
 from ..devices.events import ToDeviceEvent

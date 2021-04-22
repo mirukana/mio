@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING, List, Optional, Type, TypeVar, Union
 from ..core.contents import ContentT
 from ..core.data import Parent, Runtime
 from ..core.events import Event
-from ..core.types import DictS, EventId, RoomId, UserId
-from ..core.utils import get_logger
+from ..core.ids import EventId, RoomId, UserId
+from ..core.utils import DictS, get_logger
 from ..devices.device import Device
 from ..e2e.contents import Megolm
 from ..e2e.errors import MegolmDecryptionError, MegolmVerificationError

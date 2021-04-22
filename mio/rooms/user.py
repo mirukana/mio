@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Optional
 
 from ..core.data import Parent
-from ..core.types import MXC, UserId
+from ..core.ids import MXC, UserId
 from ..core.utils import remove_none
 from .contents.users import Member
 from .events import StateBase

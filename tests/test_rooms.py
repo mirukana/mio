@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from conftest import new_device_from
 from mio.client import Client
-from mio.core.types import RoomAlias
+from mio.core.ids import RoomAlias
 from mio.rooms.contents.messages import Emote, Text
 from mio.rooms.contents.settings import CanonicalAlias, Name, Topic
 from mio.rooms.events import StateEvent, TimelineEvent

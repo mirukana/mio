@@ -6,8 +6,7 @@ from aiohttp import ClientResponseError, ClientSession
 from yarl import URL
 
 from ..core.data import Parent, Runtime
-from ..core.types import DictS
-from ..core.utils import get_logger
+from ..core.utils import DictS, get_logger
 from ..module import ClientModule
 from .errors import ServerError
 from .exchange import Reply, ReqData, Request

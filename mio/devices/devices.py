@@ -13,7 +13,7 @@ from aiopath import AsyncPath
 from ..core.callbacks import CallbackGroup, Callbacks, EventCallbacks
 from ..core.contents import EventContent
 from ..core.data import IndexableMap, Parent, Runtime
-from ..core.types import UserId
+from ..core.ids import UserId
 from ..core.utils import get_logger
 from ..e2e.contents import (
     CancelGroupSessionRequest, ForwardedGroupSessionInfo, GroupSessionInfo,

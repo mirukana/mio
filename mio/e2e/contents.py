@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Tuple
 from uuid import uuid4
 
 from ..core.contents import EventContent
-from ..core.types import RoomId
+from ..core.ids import RoomId
 from . import MegolmAlgorithm, OlmAlgorithm
 
 if TYPE_CHECKING:

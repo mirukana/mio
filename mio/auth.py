@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, Dict
 from yarl import URL
 
 from .core.data import Runtime
-from .core.types import UserId
+from .core.ids import UserId
 from .core.utils import fs_encode
 from .module import ClientModule
 

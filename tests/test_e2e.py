@@ -2,7 +2,7 @@ import json
 
 from conftest import new_device_from
 from mio.client import Client
-from mio.core.types import NoneType
+from mio.core.utils import NoneType
 from mio.devices.events import ToDeviceEvent
 from mio.e2e import errors as err
 from mio.e2e.contents import Dummy, Megolm, Olm

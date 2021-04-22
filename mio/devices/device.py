@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 from ..core.data import JSON, Parent
-from ..core.types import UserId
+from ..core.ids import UserId
 from ..e2e.contents import GroupSessionRequest
 
 if TYPE_CHECKING:

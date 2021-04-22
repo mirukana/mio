@@ -2,7 +2,7 @@ import asyncio
 from uuid import uuid4
 
 from mio.client import Client
-from mio.core.types import RoomAlias, RoomId
+from mio.core.ids import RoomAlias, RoomId
 from mio.rooms.contents.settings import (
     Avatar, CanonicalAlias, Creation, Encryption, GuestAccess,
     HistoryVisibility, JoinRules, Name, PinnedEvents, PowerLevels, ServerACL,

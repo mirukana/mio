@@ -3,8 +3,7 @@ from typing import ClassVar, Optional, Type, TypeVar, Union
 
 from .data import JSON, JSONLoadError, Runtime
 from .errors import MioError
-from .types import DictS
-from .utils import get_logger
+from .utils import DictS, get_logger
 
 LOG = get_logger()
 

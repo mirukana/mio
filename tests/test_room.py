@@ -1,7 +1,7 @@
 from uuid import uuid4
 
 from mio.client import Client
-from mio.core.types import RoomAlias
+from mio.core.ids import RoomAlias
 from mio.rooms.contents.messages import Text
 from mio.rooms.contents.settings import CanonicalAlias
 from mio.rooms.room import Room

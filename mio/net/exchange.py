@@ -4,7 +4,7 @@ from typing import Optional, Union
 from aiohttp import StreamReader
 from yarl import URL
 
-from ..core.types import DictS
+from ..core.utils import DictS
 
 ReqData = Union[None, bytes, DictS]
 

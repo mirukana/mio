@@ -8,7 +8,7 @@ from typing import (
 from ..core.callbacks import CallbackGroup, Callbacks
 from ..core.contents import EventContent
 from ..core.data import IndexableMap, Parent, Runtime
-from ..core.types import RoomAlias, RoomId, UserId
+from ..core.ids import RoomAlias, RoomId, UserId
 from ..core.utils import fs_decode, remove_none
 from ..e2e.e2e import InboundGroupSessionKey
 from ..module import ClientModule

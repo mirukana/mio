@@ -4,7 +4,7 @@ from typing import Optional
 
 from ...core.contents import EventContent
 from ...core.data import AutoStrEnum
-from ...core.types import MXC
+from ...core.ids import MXC
 
 # TODO: m.room.third_party_invite
 

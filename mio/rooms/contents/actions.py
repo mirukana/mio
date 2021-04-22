@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Optional, Set
 
 from ...core.contents import EventContent
-from ...core.types import UserId
+from ...core.ids import UserId
 
 
 @dataclass

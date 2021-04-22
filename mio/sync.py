@@ -11,7 +11,7 @@ from aiopath import AsyncPath
 
 from .core.data import Parent, Runtime
 from .core.events import Event, InvalidEvent
-from .core.types import RoomId, UserId
+from .core.ids import RoomId, UserId
 from .core.utils import get_logger, log_errors, make_awaitable, remove_none
 from .devices.events import ToDeviceEvent
 from .e2e.contents import Megolm, Olm

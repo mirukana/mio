@@ -3,8 +3,7 @@ from typing import Generic, Optional, Type, TypeVar
 
 from .contents import ContentT, EventContent, InvalidContent, NoMatchingType
 from .data import JSON, JSONLoadError, Runtime
-from .types import DictS
-from .utils import deep_find_subclasses, deep_merge_dict, get_logger
+from .utils import DictS, deep_find_subclasses, deep_merge_dict, get_logger
 
 LOG = get_logger()
 

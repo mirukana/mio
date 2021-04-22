@@ -12,7 +12,7 @@ from sortedcollections import ValueSortedDict
 from ..core.contents import EventContent
 from ..core.data import JSON, IndexableMap, JSONFile, Parent, Runtime
 from ..core.events import InvalidEvent
-from ..core.types import EventId
+from ..core.ids import EventId
 from ..core.utils import get_logger, log_errors, remove_none
 from ..e2e.contents import Megolm
 from .contents.settings import Creation

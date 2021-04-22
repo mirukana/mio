@@ -1,11 +1,7 @@
 import re
-from typing import Any, Dict, Optional, TypeVar
+from typing import Optional
 
 from yarl import URL
-
-DictS    = Dict[str, Any]
-T        = TypeVar("T")
-NoneType = type(None)
 
 MXC = URL
 

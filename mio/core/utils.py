@@ -2,7 +2,8 @@ import logging
 from contextlib import contextmanager
 from inspect import iscoroutine
 from typing import (
-    Generator, Iterator, Mapping, MutableMapping, Tuple, Type, Union,
+    Any, Dict, Generator, Iterator, Mapping, MutableMapping, Tuple, Type,
+    TypeVar, Union,
 )
 from urllib.parse import quote, unquote
 
@@ -12,6 +13,9 @@ from rich.logging import RichHandler
 # Actual % must be encoded too to not conflict with % encoded chars
 FS_BAD_CHARS: str = r'"%*/:<>?\|'
 
+DictS        = Dict[str, Any]
+T            = TypeVar("T")
+NoneType     = type(None)
 ErrorCatcher = Union[Type[Exception], Tuple[Type[Exception], ...]]
 
 logging.basicConfig(

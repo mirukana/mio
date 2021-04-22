@@ -1,6 +1,6 @@
 from mio.client import Client
+from mio.core.ids import MXC
 from mio.net.errors import MatrixError
-from mio.core.types import MXC
 from mio.rooms.room import Room
 from pytest import mark, raises
 from yarl import URL

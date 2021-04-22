@@ -7,7 +7,7 @@ from yarl import URL
 
 from .auth import Auth
 from .core.data import JSONFile, Runtime
-from .core.types import UserId
+from .core.ids import UserId
 from .core.utils import get_logger
 from .devices.devices import Devices
 from .e2e.e2e import E2E

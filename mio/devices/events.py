@@ -4,8 +4,8 @@ from typing import TYPE_CHECKING, Optional
 from ..core.contents import ContentT
 from ..core.data import Parent, Runtime
 from ..core.events import Event
-from ..core.types import DictS, UserId
-from ..core.utils import get_logger
+from ..core.ids import UserId
+from ..core.utils import DictS, get_logger
 from ..e2e.contents import Olm
 from ..e2e.errors import OlmDecryptionError, OlmVerificationError
 
