@@ -8,6 +8,7 @@ from ..core.callbacks import CallbackGroup, Callbacks, EventCallbacks
 from ..core.data import JSONFile, Parent, Runtime
 from ..core.types import RoomAlias, RoomId, UserId
 from ..core.utils import fs_encode, remove_none
+from ..net.net import Network
 from .state import RoomState
 from .timeline import Timeline
 
@@ -49,6 +50,11 @@ class Room(JSONFile, EventCallbacks):
         return self.client.path.parent / "rooms" / room_id / "room.json"
 
 
+    @property
+    def net(self) -> Network:
+        return self.client.net
+
+
     async def load(self) -> "Room":
         await super().load()
         await self.timeline.load()
@@ -57,42 +63,36 @@ class Room(JSONFile, EventCallbacks):
 
 
     async def start_typing(self, timeout: int = 5) -> None:
-        await self.client.send_json(
-            "PUT",
-            self.client.api / "rooms" / self.id / "typing" /
-            self.client.user_id,
+        await self.net.put(
+            self.net.api / "rooms" / self.id / "typing" / self.client.user_id,
             {"typing": True, "timeout": int(timeout * 1000)},
         )
 
 
     async def stop_typing(self) -> None:
-        user_id = self.client.user_id
-        url     = self.client.api / "rooms" / self.id / "typing" / user_id
-        await self.client.send_json("PUT", url, {"typing": False})
+        await self.net.put(
+            self.net.api / "rooms" / self.id / "typing" / self.client.user_id,
+            {"typing": False},
+        )
 
 
     async def create_alias(self, alias: RoomAlias) -> None:
-        await self.client.send_json(
-            "PUT",
-            self.client.api / "directory" / "room" / alias,
-            {"room_id": self.id},
-        )
+        data = {"room_id": self.id}
+        await self.net.put(self.net.api / "directory" / "room" / alias, data)
 
 
     async def invite(
         self, user_id: UserId, reason: Optional[str] = None,
     ) -> None:
-        await self.client.send_json(
-            "POST",
-            self.client.api / "rooms" / self.id / "invite",
+        await self.net.post(
+            self.net.api / "rooms" / self.id / "invite",
             remove_none({"user_id": user_id, "reason": reason}),
         )
 
 
     async def leave(self, reason: Optional[str] = None) -> None:
-        await self.client.send_json(
-            "POST",
-            self.client.api / "rooms" / self.id / "leave",
+        await self.net.post(
+            self.net.api / "rooms" / self.id / "leave",
             remove_none({"reason": reason}),
         )
 
@@ -105,8 +105,7 @@ class Room(JSONFile, EventCallbacks):
             if not self.left:
                 await self.leave(leave_reason)
 
-            url = self.client.api / "rooms" / self.id / "forget"
-            await self.client.send_json("POST", url)
+            await self.net.post(self.net.api / "rooms" / self.id / "forget")
 
             self.left = True
             self.client.rooms._data.pop(self.id, None)

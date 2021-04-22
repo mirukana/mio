@@ -202,9 +202,8 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
         async with self._query_lock:
             LOG.info("Querying devices for %r", set(self.outdated))
 
-            result = await self.client.send_json(
-                "POST",
-                self.client.api / "keys" / "query",
+            reply = await self.net.post(
+                self.net.api / "keys" / "query",
                 {
                     # [] means "get all devices of the user" to the server
                     "device_keys": {user_id: [] for user_id in self.outdated},
@@ -213,14 +212,14 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
                 },
             )
 
-            if result["failures"]:
+            if reply.json["failures"]:
                 LOG.warning(
                     "Failed querying devices of some users for %r: %r",
                     set(self.outdated),
-                    result["failures"],
+                    reply.json["failures"],
                 )
 
-            for user_id, queried_devices in result["device_keys"].items():
+            for user_id, queried_devices in reply.json["device_keys"].items():
                 user_id = UserId(user_id)
 
                 if self.outdated[user_id] == sync_token:
@@ -341,9 +340,8 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
             if all_devices and same_events:
                 msgs[user_id] = {"*": device_events[0]}
 
-        await self.client.send_json(
-            "PUT",
-            self.client.api / "sendToDevice" / m_type / str(uuid4()),
+        await self.net.put(
+            self.net.api / "sendToDevice" / m_type / str(uuid4()),
             {"messages": msgs},
         )
 

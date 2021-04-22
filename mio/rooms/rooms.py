@@ -117,7 +117,7 @@ class Rooms(ClientModule, IndexableMap[RoomId, Room]):
         if alias and isinstance(alias, str):
             alias = RoomAlias(alias).localpart
 
-        body = {
+        data = remove_none({
             "visibility": "public" if public else "private",
             "creation_content": {"m.federate": federate},
             "is_direct": direct_chat,
@@ -131,13 +131,10 @@ class Rooms(ClientModule, IndexableMap[RoomId, Room]):
                 {"type": cnt.type, "state_key": state_key, "content": cnt.dict}
                 for state_key, cnt in additional_states
             ],
-        }
+        })
 
-        result = await self.client.send_json(
-            "POST", self.client.api / "createRoom", remove_none(body),
-        )
-
-        return RoomId(result["room_id"])
+        reply = await self.net.post(self.net.api / "createRoom", data)
+        return RoomId(reply.json["room_id"])
 
 
     async def join(
@@ -146,13 +143,12 @@ class Rooms(ClientModule, IndexableMap[RoomId, Room]):
         reason:      Optional[str] = None,
     ) -> RoomId:
 
-        result = await self.client.send_json(
-            "POST",
-            self.client.api / "join" / id_or_alias,
+        reply = await self.net.post(
+            self.net.api / "join" / id_or_alias,
             remove_none({"reason": reason}),
         )
 
-        return RoomId(result["room_id"])
+        return RoomId(reply.json["room_id"])
 
 
     async def _retry_decrypt(self, *sessions: InboundGroupSessionKey) -> None:

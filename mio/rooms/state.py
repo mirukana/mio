@@ -185,13 +185,13 @@ class RoomState(JSONFile, Map):
 
         assert content.type
         room = self.room
-        url  = room.client.api / "rooms" / room.id / "state" / content.type
+        url  = room.net.api / "rooms" / room.id / "state" / content.type
 
         if state_key:
             url = url / state_key
 
-        result = await room.client.send_json("PUT", url, content.dict)
-        return EventId(result["event_id"])
+        reply = await room.net.put(url, content.dict)
+        return EventId(reply.json["event_id"])
 
 
     async def _register(self, *events: StateBase) -> None:

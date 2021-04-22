@@ -280,18 +280,15 @@ class E2E(JSONClientModule):
 
         self._account.generate_one_time_keys(minimum - currently_uploaded)
 
-        one_time_keys = {
-            f"signed_curve25519:{key_id}": self._sign_dict({"key": key})
-            for key_id, key in
-            self._account.one_time_keys["curve25519"].items()
+        data = {
+            "one_time_keys": {
+                f"signed_curve25519:{key_id}": self._sign_dict({"key": key})
+                for key_id, key in
+                self._account.one_time_keys["curve25519"].items()
+            },
         }
 
-        await self.client.send_json(
-            "POST",
-            self.client.api / "keys" / "upload",
-            {"one_time_keys": one_time_keys},
-        )
-
+        await self.net.post(self.net.api / "keys" / "upload", data)
         self._account.mark_keys_as_published()
         await self.save()
 
@@ -560,16 +557,10 @@ class E2E(JSONClientModule):
             },
         }
 
-        device_keys = self._sign_dict(device_keys)
-
-        result = await self.client.send_json(
-            "POST",
-            self.client.api / "keys" / "upload",
-            {"device_keys": device_keys},
-        )
-
-        uploaded = result["one_time_key_counts"].get("signed_curve25519", 0)
-        await self._upload_one_time_keys(uploaded)
+        data     = {"device_keys": self._sign_dict(device_keys)}
+        reply    = await self.net.post(self.net.api / "keys" / "upload", data)
+        uploaded = reply.json["one_time_key_counts"].get("signed_curve25519")
+        await self._upload_one_time_keys(uploaded or 0)
 
 
     async def _claim_one_time_keys(
@@ -585,20 +576,19 @@ class E2E(JSONClientModule):
         for d in devices:
             otk.setdefault(d.user_id, {})[d.device_id] = "signed_curve25519"
 
-        result = await self.client.send_json(
-            "POST",
-            self.client.api / "keys" / "claim",
-            {"timeout": int(timeout * 1000), "one_time_keys": otk},
+        data  = {"timeout": int(timeout * 1000), "one_time_keys": otk}
+        reply = await self.net.post(self.net.api / "keys" / "claim", data)
+
+        if reply.json["failures"]:
+            LOG.warning("Failed claiming: %s", reply.json["failures"])
+
+        await self.client.devices.ensure_tracked(
+            set(reply.json["one_time_keys"]),
         )
-
-        if result["failures"]:
-            LOG.warning("Failed claiming some keys: %s", result["failures"])
-
-        await self.client.devices.ensure_tracked(set(result["one_time_keys"]))
 
         valided: Dict[Device, str] = {}
 
-        for user_id, device_keys in result["one_time_keys"].items():
+        for user_id, device_keys in reply.json["one_time_keys"].items():
             for device_id, keys in device_keys.items():
                 for key_dict in keys.copy().values():
                     dev = self.client.devices[user_id][device_id]

@@ -1,8 +1,9 @@
 from pathlib import Path
 
+from aiohttp import ClientSession
 from conftest import compare_clients, new_device_from
 from mio.client import Client
-from mio.core.errors import MatrixError
+from mio.net.errors import MatrixError
 from pytest import mark, raises
 
 pytestmark = mark.asyncio
@@ -23,6 +24,8 @@ async def test_logout(alice: Client):
     await alice.auth.logout()
     assert not alice.access_token
 
+    alice.net._session = ClientSession()
+
     with raises(MatrixError):
         await alice.sync.once()
 
@@ -36,6 +39,8 @@ async def test_logout_all(alice: Client, tmp_path: Path):
 
     await alice.auth.logout_all_devices()
     assert not alice.access_token
+
+    alice.net._session = ClientSession()
 
     with raises(MatrixError):
         await alice.sync.once()

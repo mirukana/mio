@@ -104,10 +104,11 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
     async def send(
         self, content: EventContent, transaction_id: Optional[str] = None,
     ) -> EventId:
-        room = self.room
+        room   = self.room
+        client = room.client
 
         if room.state.encryption and not isinstance(content, Megolm):
-            content = await room.client.e2e._encrypt_room_event(
+            content = await client.e2e._encrypt_room_event(
                 room_id   = room.id,
                 for_users = room.state.members,
                 settings  = room.state.encryption,
@@ -116,10 +117,10 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
 
         assert content.type
         tx  = transaction_id if transaction_id else str(uuid4())
-        url = room.client.api / "rooms" / room.id / "send" / content.type / tx
+        url = client.net.api / "rooms" / room.id / "send" / content.type / tx
 
-        result = await room.client.send_json("PUT", url, content.dict)
-        return EventId(result["event_id"])
+        reply = await client.net.put(url, content.dict)
+        return EventId(reply.json["event_id"])
 
 
     def _get_event_file(self, event: TimelineEvent) -> AsyncPath:
@@ -228,19 +229,16 @@ class Gap(JSON):
         if self.event_after not in self.room.timeline.gaps:
             return []
 
-        client = self.room.client
-        result = await client.send_json(
-            "GET",
-            client.api / "rooms" / self.room.id / "messages" % remove_none({
-                "from":  self.fill_token,
-                "dir":   "b",  # direction: backwards
-                "limit": max_events,
-            }),
-        )
+        url   = self.room.net.api / "rooms" / self.room.id / "messages"
+        reply = await self.room.net.get(url % remove_none({
+            "from":  self.fill_token,
+            "dir":   "b",  # direction: backwards
+            "limit": max_events,
+        }))
 
-        # for event in result.get("state", [])  # TODO (for lazy loading)
+        # for event in reply.get("state", [])  # TODO (for lazy loading)
 
-        if not result.get("chunk"):
+        if not reply.json.get("chunk"):
             self.filled = True
             self.room.timeline.gaps.pop(self.event_after, None)
             await self.room.timeline.save()
@@ -248,7 +246,7 @@ class Gap(JSON):
 
         evs: List[TimelineEvent] = []
 
-        for source in result["chunk"]:
+        for source in reply.json["chunk"]:
             ev: TimelineEvent
 
             with log_errors(InvalidEvent):
@@ -267,8 +265,8 @@ class Gap(JSON):
             self.filled = True
             self.room.timeline.gaps.pop(self.event_after, None)
         else:
-            self.event_after = result["chunk"][-1]
+            self.event_after = reply.json["chunk"][-1]
 
-        self.fill_token = result["end"]
+        self.fill_token = reply.json["end"]
         await self.room.timeline.save()
         return evs

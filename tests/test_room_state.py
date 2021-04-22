@@ -2,7 +2,7 @@ import asyncio
 from uuid import uuid4
 
 from mio.client import Client
-from mio.core.types import RoomAlias
+from mio.core.types import RoomAlias, RoomId
 from mio.rooms.contents.settings import (
     Avatar, CanonicalAlias, Creation, Encryption, GuestAccess,
     HistoryVisibility, JoinRules, Name, PinnedEvents, PowerLevels, ServerACL,
@@ -79,7 +79,7 @@ async def test_settings_properties(room: Room):
 
     await asyncio.gather(*[room.create_alias(a) for a in (alias, alt_alias)])
     await asyncio.gather(*[state.send(c) for c in to_send])  # type: ignore
-    await state.send(Tombstone("dead", "!n:localhost"))
+    await state.send(Tombstone("dead", RoomId("!n:localhost")))
     await room.client.sync.once()
 
     assert state.encryption == Encryption()

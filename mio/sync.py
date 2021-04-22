@@ -59,23 +59,20 @@ class Sync(JSONClientModule):
         if sync_filter:
             filter_param = json.dumps(sync_filter, ensure_ascii=False)
 
-        url = self.client.api / "sync" % remove_none({
+        reply = await self.net.get(self.net.api / "sync" % remove_none({
             "timeout":      int(timeout * 1000),
             "filter":       filter_param,
             "since":        since or self.next_batch,
             "full_state":   full_state,
             "set_presence": set_presence,
             # or self.client.presence.to_set TODO
-        })
+        }))
 
-        # TODO: client-side timeout
-        result = await self.client.send_json("GET", url)
-
-        if self.next_batch != result["next_batch"]:
+        if self.next_batch != reply.json["next_batch"]:
             if _handle:
-                await self._handle_sync(result)
+                await self._handle_sync(reply.json)
 
-            return result
+            return reply.json
 
         return None
 

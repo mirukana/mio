@@ -88,24 +88,21 @@ class RoomUser:
 
 
     async def kick(self, reason: Optional[str] = None) -> None:
-        await self.room.client.send_json(
-            "POST",
-            self.room.client.api / "rooms" / self.room.id / "kick",
+        await self.room.client.net.post(
+            self.room.client.net.api / "rooms" / self.room.id / "kick",
             remove_none({"user_id": self.user_id, "reason": reason}),
         )
 
 
     async def ban(self, reason: Optional[str] = None) -> None:
-        await self.room.client.send_json(
-            "POST",
-            self.room.client.api / "rooms" / self.room.id / "ban",
+        await self.room.client.net.post(
+            self.room.client.net.api / "rooms" / self.room.id / "ban",
             remove_none({"user_id": self.user_id, "reason": reason}),
         )
 
 
     async def unban(self, reason: Optional[str] = None) -> None:
-        await self.room.client.send_json(
-            "POST",
-            self.room.client.api / "rooms" / self.room.id / "unban",
+        await self.room.client.net.post(
+            self.room.client.net.api / "rooms" / self.room.id / "unban",
             remove_none({"user_id": self.user_id, "reason": reason}),
         )

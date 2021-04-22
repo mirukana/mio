@@ -31,23 +31,23 @@ class Auth(ClientModule):
         if "initial_device_display_name" not in auth:
             auth["initial_device_display_name"]  = self.default_device_name
 
-        reply = await client.send_json("POST", client.api / "login", auth)
+        reply = await self.net.post(self.net.api / "login", auth)
 
-        if "well_known" in reply:
-            homeserver    = reply["well_known"]["m.homeserver"]
+        if "well_known" in reply.json:
+            homeserver    = reply.json["well_known"]["m.homeserver"]
             client.server = URL(homeserver["base_url"])
 
-        unexpanded_base_dir = str(self.client.base_dir)
+        unexpanded_base_dir = str(client.base_dir)
         client.base_dir     = unexpanded_base_dir.format(
-            user_id   = fs_encode(reply["user_id"]),
-            device_id = fs_encode(reply["device_id"]),
+            user_id   = fs_encode(reply.json["user_id"]),
+            device_id = fs_encode(reply.json["device_id"]),
         )
 
         shutil.move(unexpanded_base_dir, str(client.base_dir))
 
-        client.user_id      = UserId(reply["user_id"])
-        client.access_token = reply["access_token"]
-        client.device_id    = reply["device_id"]
+        client.user_id      = UserId(reply.json["user_id"])
+        client.access_token = reply.json["access_token"]
+        client.device_id    = reply.json["device_id"]
 
         await client.e2e._upload_keys()
         await client.devices.ensure_tracked([client.user_id])
@@ -73,14 +73,16 @@ class Auth(ClientModule):
 
 
     async def logout(self) -> None:
-        await self.client.send_json("POST", self.client.api / "logout")
+        await self.net.post(self.net.api / "logout")
         self.client.access_token = ""
         self.was_logged_out      = True
         await self.client.save()
+        await self.net.disconnect()
 
 
     async def logout_all_devices(self) -> None:
-        await self.client.send_json("POST", self.client.api / "logout" / "all")
+        await self.net.post(self.net.api / "logout" / "all")
         self.client.access_token = ""
         self.was_logged_out      = True
         await self.client.save()
+        await self.net.disconnect()

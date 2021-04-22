@@ -31,22 +31,22 @@ class Profile(JSONClientModule):
 
 
     async def set_name(self, name: str) -> None:
-        url = self.client.api / "profile" / self.client.user_id / "displayname"
-        await self.client.send_json("PUT", url, {"displayname": name})
+        url = self.net.api / "profile" / self.client.user_id / "displayname"
+        await self.net.put(url, {"displayname": name})
 
 
     async def set_avatar(self, avatar: MXC) -> None:
-        url = self.client.api / "profile" / self.client.user_id / "avatar_url"
-        await self.client.send_json("PUT", url, {"avatar_url": str(avatar)})
+        url = self.net.api / "profile" / self.client.user_id / "avatar_url"
+        await self.net.put(url, {"avatar_url": str(avatar)})
 
 
     async def _query(self) -> None:
-        url    = self.client.api / "profile" / self.client.user_id
-        result = await self.client.send_json("GET", url)
+        url   = self.net.api / "profile" / self.client.user_id
+        reply = await self.net.get(url)
 
         previous    = (self.name, self.avatar)
-        self.name   = result.get("displayname")
-        avatar      = result.get("avatar_url")
+        self.name   = reply.json.get("displayname")
+        avatar      = reply.json.get("avatar_url")
         self.avatar = MXC(avatar) if avatar else None
 
         if (self.name, self.avatar) != previous:

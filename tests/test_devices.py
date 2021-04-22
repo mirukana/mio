@@ -1,6 +1,6 @@
 from conftest import new_device_from
 from mio.client import Client
-from mio.core.errors import MatrixError
+from mio.net.errors import MatrixError
 from mio.rooms.contents.messages import Text
 from mio.rooms.room import Room
 from pytest import mark, raises
