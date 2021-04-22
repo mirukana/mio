@@ -2,7 +2,9 @@ import shutil
 from dataclasses import dataclass, field
 from uuid import uuid4
 
-from conftest import new_device_from
+from conftest import clone_client, new_device_from
+from pytest import mark
+
 from mio.client import Client
 from mio.core.ids import RoomAlias
 from mio.rooms.contents.messages import Emote, Text
@@ -10,7 +12,6 @@ from mio.rooms.contents.settings import CanonicalAlias, Name, Topic
 from mio.rooms.events import StateEvent, TimelineEvent
 from mio.rooms.room import Room
 from mio.rooms.rooms import CallbackGroup
-from pytest import mark
 
 pytestmark = mark.asyncio
 
@@ -134,7 +135,8 @@ async def test_call_callbacks_history(alice: Client, room: Room, tmp_path):
 
     # Calling callbacks when loading state and timeline from disk
 
-    alice3 = Client(alice.base_dir)
+    # Clone alice, so FileLock does not raise Timeout
+    alice3 = clone_client(alice)
     tline3 = []
     state3 = []
 
@@ -154,7 +156,7 @@ async def test_call_callbacks_history(alice: Client, room: Room, tmp_path):
     async for event_dir in room.path.parent.glob("????-??-??"):
         shutil.rmtree(event_dir)
 
-    alice4 = await Client(alice.base_dir).load()
+    alice4 = await clone_client(alice).load()
     tline4 = []
 
     alice4.rooms.callbacks[TimelineEvent].append(lambda *a: tline4.append(a))

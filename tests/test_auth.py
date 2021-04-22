@@ -1,16 +1,18 @@
 from pathlib import Path
 
 from aiohttp import ClientSession
-from conftest import compare_clients, new_device_from
+from conftest import clone_client, compare_clients, new_device_from
+from pytest import mark, raises
+
 from mio.client import Client
 from mio.net.errors import MatrixError
-from pytest import mark, raises
 
 pytestmark = mark.asyncio
 
 
-async def test_login_password(alice: Client):
-    client = Client(alice.base_dir, alice.server, alice.device_id)
+async def test_login_password(alice: Client, tmp_path: Path):
+    # Clone alice, so FileLock does not raise Timeout
+    client = clone_client(alice, alice.server, alice.device_id)
     await client.auth.login_password(alice.user_id.localpart, "test")
     compare_clients(client, alice)
 
