@@ -65,7 +65,6 @@ class Client(JSONFile):
         self.base_dir = str(self.base_dir).format(**base_dir_placeholders)
         await super().load()
 
-        # Try acquiring the lock
         self._acquire_lock()
 
         for attr in self.__dict__.values():

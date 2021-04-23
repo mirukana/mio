@@ -49,7 +49,6 @@ class Auth(ClientModule):
         client.access_token = reply.json["access_token"]
         client.device_id    = reply.json["device_id"]
 
-        # Try acquiring the lock
         client._acquire_lock()
 
         await client.e2e._upload_keys()
