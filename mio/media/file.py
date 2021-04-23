@@ -178,13 +178,14 @@ class Media:
         # Create everything
 
         await mxc_file.parent.mkdir(parents=True, exist_ok=True)
-        await named_file.parent.mkdir(parents=True, exist_ok=True)
-
         await mxc_file.symlink_to(self.content)
+
+        await named_file.parent.mkdir(parents=True, exist_ok=True)
         await named_file.symlink_to(mxc_file)
         await named_link.symlink_to(named_file)
 
         if name_conflict:
+            await name_conflict.parent.mkdir(parents=True, exist_ok=True)
             await name_conflict.symlink_to(named_file_0)
 
         return Reference(named_link, named_file, mxc_file, mxc, filename)

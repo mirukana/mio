@@ -184,7 +184,7 @@ class MediaStore(ClientModule):
 
 
     def _named_conflict_marker(self, named_path: AsyncPath) -> AsyncPath:
-        return named_path.with_name(f".{named_path.name}.conflict")
+        return named_path.parent / ".conflicts" / named_path.name
 
 
     def _named_link(self, sha256: str, counter: int = 0) -> AsyncPath:
