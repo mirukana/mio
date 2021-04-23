@@ -1,12 +1,15 @@
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable, Optional
+from pathlib import Path
+from typing import TYPE_CHECKING, Callable, Optional, Union
 
 from aiopath import AsyncPath
 
-from .core.callbacks import MaybeCoro
 from .core.data import Parent, Runtime
+from .core.files import SeekableIO
 from .core.ids import MXC
-from .core.utils import make_awaitable
+from .core.transfer import TransferUpdateCallback
+from .core.utils import MaybeCoro, make_awaitable
+from .media.file import Media
 from .module import JSONClientModule
 from .rooms.contents.users import Member
 from .rooms.events import StateBase
@@ -38,6 +41,35 @@ class Profile(JSONClientModule):
     async def set_avatar(self, avatar: MXC) -> None:
         url = self.net.api / "profile" / self.client.user_id / "avatar_url"
         await self.net.put(url, {"avatar_url": str(avatar)})
+
+
+    async def set_avatar_from_data(
+        self,
+        data:      SeekableIO,
+        size:      int,
+        filename:  Optional[str]          = None,
+        on_update: TransferUpdateCallback = None,
+        mime:      Optional[str]          = None,
+    ) -> Media:
+
+        args  = (data, size, filename, on_update, mime)
+        media = await self.client.media.upload(*args)
+        await self.set_avatar(await media.last_mxc)
+        return media
+
+
+    async def set_avatar_from_path(
+        self,
+        path:      Union[Path, str],
+        on_update: TransferUpdateCallback = None,
+        mime:      Optional[str]          = None,
+        binary:    Optional[bool]         = None,
+    ) -> Media:
+
+        args  = (path, on_update, mime, binary)
+        media = await self.client.media.upload_from_path(*args)
+        await self.set_avatar((await media.last_reference).mxc)
+        return media
 
 
     async def _query(self) -> None:
