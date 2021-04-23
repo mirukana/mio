@@ -58,6 +58,7 @@ setup(
             pytest                >= 6.2.1,   < 7
             pytest-cov            >= 2.11.1,  < 3
             pytest-asyncio        >= 0.14.0,  < 0.15
+            pytest-sugar          >= 0.9.4,   < 0.10
             pytest-xdist[psutil]  >= 2.2.1,   < 3
             ruamel.yaml           >= 0.16.13, < 0.17
         """),
