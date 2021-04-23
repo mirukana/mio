@@ -49,6 +49,8 @@ class Auth(ClientModule):
         client.access_token = reply.json["access_token"]
         client.device_id    = reply.json["device_id"]
 
+        client._acquire_lock()
+
         await client.e2e._upload_keys()
         await client.devices.ensure_tracked([client.user_id])
         await client.profile._query()

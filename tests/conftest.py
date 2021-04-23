@@ -1,12 +1,14 @@
 import json
 from pathlib import Path
+from shutil import copytree
 from typing import Union
 from uuid import uuid4
 
-from mio.client import Client
-from mio.rooms.contents.settings import Encryption
 from pytest import fixture
 from synapse import SynapseHandle
+
+from mio.client import Client
+from mio.rooms.contents.settings import Encryption
 
 
 def pytest_configure(config):
@@ -14,13 +16,22 @@ def pytest_configure(config):
 
 
 def compare_clients(client1: Client, client2: Client, token: bool = False):
-    assert client1.base_dir == client2.base_dir
     assert client1.server == client2.server
     assert client1.user_id == client2.user_id
     assert client1.device_id == client2.device_id
 
     if token:
         assert client1.access_token == client2.access_token
+
+
+def clone_client(client: Client, *args, **kwargs) -> Client:
+    dest_dir     = Path(client.base_dir).parent / str(uuid4())
+    new_base_dir = dest_dir / Path(client.base_dir).name
+    dest_dir.mkdir()
+
+    copytree(client.base_dir, new_base_dir)
+
+    return Client(new_base_dir, *args, **kwargs)
 
 
 async def get_client(synapse: SynapseHandle, path: Path, name: str) -> Client:

@@ -34,6 +34,7 @@ setup(
         typingplus        >= 2.2.3,  < 3
         unpaddedbase64    >= 2.1.0,  < 3
         yarl              >= 1.6.3,  < 2
+        filelock          >= 3.0.12, < 4
 
         dataclasses       >= 0.6,     < 0.7; python_version<'3.7'
         typing-extensions >= 3.7.4.3, < 4;   python_version<'3.9'

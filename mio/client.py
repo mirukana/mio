@@ -1,8 +1,9 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Union
+from typing import Optional, Union
 
 from aiopath import AsyncPath
+from filelock import FileLock
 from yarl import URL
 
 from .auth import Auth
@@ -36,6 +37,7 @@ class Client(JSONFile):
     e2e:     Runtime[E2E]     = field(init=False, repr=False)
     devices: Runtime[Devices] = field(init=False, repr=False)
 
+    _lock: Runtime[Optional[FileLock]] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.net     = Network(self)
@@ -45,7 +47,13 @@ class Client(JSONFile):
         self.sync    = Sync(self)
         self.e2e     = E2E(self)
         self.devices = Devices(self)
+        self._lock   = None
         super().__post_init__()
+
+
+    def __del__(self) -> None:
+        if self._lock:
+            self._lock.release()
 
 
     @property
@@ -57,8 +65,15 @@ class Client(JSONFile):
         self.base_dir = str(self.base_dir).format(**base_dir_placeholders)
         await super().load()
 
+        self._acquire_lock()
+
         for attr in self.__dict__.values():
             if isinstance(attr, ClientModule):
                 await attr.load()
 
         return self
+
+
+    def _acquire_lock(self) -> None:
+        self._lock = FileLock(Path(self.base_dir) / ".lock")
+        self._lock.acquire(timeout=1)
