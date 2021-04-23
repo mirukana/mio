@@ -481,7 +481,7 @@ class E2E(JSONClientModule):
         details = self._in_group_sessions.get(request.compare_key)
 
         if not details:
-            LOG.info("Ignoring %r, no matching session to share", request)
+            LOG.debug("Ignoring %r, no matching session to share", request)
             return
 
         dev = devices.get(to_user_id, {}).get(request.requesting_device_id)
@@ -570,7 +570,7 @@ class E2E(JSONClientModule):
         if not devices:
             return {}
 
-        LOG.info("Claiming keys for devices %r", devices)
+        LOG.debug("Claiming keys for devices %r", devices)
 
         otk: Dict[str, Dict[str, str]] = {}
         for d in devices:

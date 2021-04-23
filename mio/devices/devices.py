@@ -56,7 +56,7 @@ class MioDeviceCallbacks(CallbackGroup):
         if key not in ses:
             session  = olm.InboundGroupSession(content.session_key)
             ses[key] = (session, sender_ed25519, {}, [])
-            LOG.info("Added group session from %r", event)
+            LOG.debug("Added group session from %r", event)
 
             devices.client.e2e._sent_session_requests.pop(key, None)
             await devices.client.e2e.save()
@@ -103,7 +103,7 @@ class MioDeviceCallbacks(CallbackGroup):
             {},
             content.curve25519_forward_chain + [sender_curve],
         )
-        LOG.info("Imported group session from %r", event)
+        LOG.debug("Imported group session from %r", event)
 
         requests.pop(content.compare_key)
         await devices.client.e2e.save()
@@ -200,7 +200,7 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
         await self.save()
 
         async with self._query_lock:
-            LOG.info("Querying devices for %r", set(self.outdated))
+            LOG.debug("Querying devices for %r", set(self.outdated))
 
             reply = await self.net.post(
                 self.net.api / "keys" / "query",
@@ -233,7 +233,7 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
                 for device_id, info in queried_devices.items():
                     try:
                         added = self._handle_queried(user_id, device_id, info)
-                        LOG.info("Registered %r", added)
+                        LOG.debug("Registered %r", added)
                     except (errors.QueriedDeviceError, InvalidSignedDict) as e:
                         LOG.warning("Rejected queried device %r: %r", info, e)
 
