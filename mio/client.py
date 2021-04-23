@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Union
+from typing import Optional, Union
 
 from aiopath import AsyncPath
 from filelock import FileLock
@@ -37,7 +37,7 @@ class Client(JSONFile):
     e2e:     Runtime[E2E]     = field(init=False, repr=False)
     devices: Runtime[Devices] = field(init=False, repr=False)
 
-    _lock: Runtime[Union[FileLock, None]] = field(init=False, repr=False)
+    _lock: Runtime[Optional[FileLock]] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.net     = Network(self)
