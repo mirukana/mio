@@ -7,8 +7,8 @@ from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
 from typing import (
-    Any, Callable, ClassVar, Collection, Dict, ForwardRef, Iterator, Mapping,
-    Optional, Sequence, Tuple, Type, TypeVar, Union,
+    Any, Callable, ClassVar, Collection, Counter, Dict, ForwardRef, Iterator,
+    Mapping, Optional, Sequence, Tuple, Type, TypeVar, Union,
 )
 from uuid import UUID
 
@@ -279,8 +279,13 @@ class JSON(RichFix):
             return value
 
         if is_subclass(typo, Mapping) and isinstance(value, Mapping):
-            key_type, value_type = getattr(typ, "__args__", (Any, Any))
-            key_type_origin      = getattr(key_type, "__origin__", key_type)
+            if is_subclass(typo, Counter):
+                key_type   = getattr(typ, "__args__", (Any,))[0]
+                value_type = int
+            else:
+                key_type, value_type = getattr(typ, "__args__", (Any, Any))
+
+            key_type_origin = getattr(key_type, "__origin__", key_type)
 
             dct = {
                 cls._load(
