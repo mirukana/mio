@@ -6,6 +6,7 @@ from aiohttp import ClientResponseError, ClientSession
 from yarl import URL
 
 from ..core.data import Parent, Runtime
+from ..core.files import AsyncReadable, Readable, read_chunked_binary
 from ..core.utils import DictS, get_logger
 from ..module import ClientModule
 from .errors import ServerError
@@ -35,6 +36,11 @@ class Network(ClientModule):
         return URL(self.client.server) / "_matrix" / "client" / "r0"
 
 
+    @property
+    def media_api(self) -> URL:
+        return URL(self.client.server) / "_matrix" / "media" / "r0"
+
+
     async def get(
         self, url: URL, data: ReqData = None, headers: MethHeaders = None,
     ) -> Reply:
@@ -56,16 +62,22 @@ class Network(ClientModule):
     async def send(self, request: Request) -> Reply:
         user_id = self.client.user_id
         token   = self.client.access_token
+        data    = request.data
 
         if token:
             request.headers["Authorization"] = f"Bearer {token}"
+
+        if isinstance(data, (Readable, AsyncReadable)):
+            data = read_chunked_binary(data)
+        elif isinstance(data, dict):
+            data = None
 
         start = time.time()
 
         resp = await self._session.request(
             method  = request.method,
             url     = str(request.url),
-            data    = None if isinstance(request.data, dict) else request.data,
+            data    = data,
             json    = request.data if isinstance(request.data, dict) else None,
             headers = request.headers,
         )

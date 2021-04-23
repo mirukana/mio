@@ -6,8 +6,9 @@ from aiopath import AsyncPath
 
 from ..core.callbacks import CallbackGroup, Callbacks, EventCallbacks
 from ..core.data import JSONFile, Parent, Runtime
+from ..core.files import encode_name
 from ..core.ids import RoomAlias, RoomId, UserId
-from ..core.utils import fs_encode, remove_none
+from ..core.utils import remove_none
 from ..net.net import Network
 from .state import RoomState
 from .timeline import Timeline
@@ -46,7 +47,7 @@ class Room(JSONFile, EventCallbacks):
 
     @property
     def path(self) -> AsyncPath:
-        room_id = fs_encode(self.id)
+        room_id = encode_name(self.id)
         return self.client.path.parent / "rooms" / room_id / "room.json"
 
 

@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING, Any, Dict
 from yarl import URL
 
 from .core.data import Runtime
+from .core.files import encode_name
 from .core.ids import UserId
-from .core.utils import fs_encode
 from .module import ClientModule
 
 if TYPE_CHECKING:
@@ -39,8 +39,8 @@ class Auth(ClientModule):
 
         unexpanded_base_dir = str(client.base_dir)
         client.base_dir     = unexpanded_base_dir.format(
-            user_id   = fs_encode(reply.json["user_id"]),
-            device_id = fs_encode(reply.json["device_id"]),
+            user_id   = encode_name(reply.json["user_id"]),
+            device_id = encode_name(reply.json["device_id"]),
         )
 
         shutil.move(unexpanded_base_dir, str(client.base_dir))

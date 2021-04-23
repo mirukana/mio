@@ -88,3 +88,18 @@ async def e2e_room(room):
     await room.state.send(Encryption())
     await room.client.sync.once()
     return room
+
+
+@fixture
+async def image():
+    return Path("tests/data/1x1-blue.bmp")
+
+
+@fixture
+async def image_symlink():
+    return Path("tests/data/1x1-blue.link.bmp")
+
+
+@fixture
+async def utf8_file():
+    return Path("tests/data/utf8")

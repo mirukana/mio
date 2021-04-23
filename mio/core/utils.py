@@ -1,11 +1,10 @@
 import logging
 from contextlib import contextmanager
-from inspect import iscoroutine
+from inspect import isawaitable
 from typing import (
-    Any, Dict, Generator, Iterator, Mapping, MutableMapping, Tuple, Type,
-    TypeVar, Union,
+    Any, Awaitable, Dict, Generator, Iterator, Mapping, MutableMapping,
+    Optional, Tuple, Type, TypeVar, Union,
 )
-from urllib.parse import quote, unquote
 
 from rich.logging import RichHandler
 
@@ -13,9 +12,11 @@ from rich.logging import RichHandler
 # Actual % must be encoded too to not conflict with % encoded chars
 FS_BAD_CHARS: str = r'"%*/:<>?\|'
 
+StrBytes     = Union[str, bytes]
 DictS        = Dict[str, Any]
-T            = TypeVar("T")
 NoneType     = type(None)
+T            = TypeVar("T")
+MaybeCoro    = Optional[Awaitable[None]]
 ErrorCatcher = Union[Type[Exception], Tuple[Type[Exception], ...]]
 
 logging.basicConfig(
@@ -31,8 +32,6 @@ def get_logger(name: str = __name__) -> logging.Logger:
 
 
 LOG = get_logger()
-
-fs_decode = unquote
 
 
 def remove_none(from_dict: dict) -> dict:
@@ -67,11 +66,7 @@ def deep_merge_dict(dict1: MutableMapping, dict2: Mapping) -> None:
 
 
 async def make_awaitable(result):
-    return await result if iscoroutine(result) else result
-
-
-def fs_encode(name: str) -> str:
-    return "".join(quote(c, safe="") if c in FS_BAD_CHARS else c for c in name)
+    return await result if isawaitable(result) else result
 
 
 @contextmanager

@@ -1,12 +1,11 @@
 import inspect
-from typing import Awaitable, Callable, Dict, List, Optional, Type, Union
+from typing import Callable, Dict, List, Type, Union
 
 from .contents import EventContent
 from .events import Event
-from .utils import make_awaitable
+from .utils import MaybeCoro, make_awaitable
 
 EventKey     = Union[Type[Event], Type[EventContent]]
-MaybeCoro    = Optional[Awaitable[None]]
 CallbackList = List[Callable[["EventCallbacks", Event], MaybeCoro]]
 Callbacks    = Dict[EventKey, CallbackList]
 

@@ -12,6 +12,7 @@ from .core.ids import UserId
 from .core.utils import get_logger
 from .devices.devices import Devices
 from .e2e.e2e import E2E
+from .media.store import MediaStore
 from .module import ClientModule
 from .net.net import Network
 from .profile import Profile
@@ -29,13 +30,14 @@ class Client(JSONFile):
     user_id:      UserId          = ""  # type: ignore
     access_token: str             = ""
 
-    net:     Runtime[Network] = field(init=False, repr=False)
-    auth:    Runtime[Auth]    = field(init=False, repr=False)
-    profile: Runtime[Profile] = field(init=False, repr=False)
-    rooms:   Runtime[Rooms]   = field(init=False, repr=False)
-    sync:    Runtime[Sync]    = field(init=False, repr=False)
-    e2e:     Runtime[E2E]     = field(init=False, repr=False)
-    devices: Runtime[Devices] = field(init=False, repr=False)
+    net:     Runtime[Network]    = field(init=False, repr=False)
+    auth:    Runtime[Auth]       = field(init=False, repr=False)
+    profile: Runtime[Profile]    = field(init=False, repr=False)
+    rooms:   Runtime[Rooms]      = field(init=False, repr=False)
+    sync:    Runtime[Sync]       = field(init=False, repr=False)
+    e2e:     Runtime[E2E]        = field(init=False, repr=False)
+    devices: Runtime[Devices]    = field(init=False, repr=False)
+    media:   Runtime[MediaStore] = field(init=False, repr=False)
 
     _lock: Runtime[Optional[FileLock]] = field(init=False, repr=False)
 
@@ -47,6 +49,7 @@ class Client(JSONFile):
         self.sync    = Sync(self)
         self.e2e     = E2E(self)
         self.devices = Devices(self)
+        self.media   = MediaStore(self)
         self._lock   = None
         super().__post_init__()
 

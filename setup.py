@@ -27,6 +27,8 @@ setup(
         aiofiles          >= 0.6.0,  < 0.7
         aiohttp           >= 3.7.3,  < 4
         aiopath           >= 0.5.4,  < 0.6
+        binaryornot       >= 0.4.4,  < 0.5
+        filetype          >= 1.0.7,  < 2
         pycryptodomex     >= 3.10.1, < 4
         python-olm        >= 3.1.3,  < 4
         rich              >= 9.13.0, <10
@@ -37,6 +39,7 @@ setup(
         filelock          >= 3.0.12, < 4
 
         dataclasses       >= 0.6,     < 0.7; python_version<'3.7'
+        pyfastcopy        >= 1.0.3,   < 2;   python_version<'3.8'
         typing-extensions >= 3.7.4.3, < 4;   python_version<'3.9'
     """),
     extras_require = {
