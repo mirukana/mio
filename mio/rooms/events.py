@@ -38,7 +38,7 @@ class TimelineEvent(Event[ContentT]):
     def __lt__(self, other: "TimelineEvent") -> bool:
         return self.date < other.date
 
-    async def _decrypted(self) -> "TimelineEvent":
+    async def _decrypted(self, log: bool = True) -> "TimelineEvent":
         if not isinstance(self.content, Megolm):
             return self
 
@@ -47,7 +47,9 @@ class TimelineEvent(Event[ContentT]):
         try:
             payload, chain, errors = await decrypt(self)  # type: ignore
         except MegolmDecryptionError as e:
-            LOG.exception("Failed decrypting %r", self)
+            if log:
+                LOG.exception("Failed decrypting %r", self)
+
             self.decryption = TimelineDecryptInfo(self, error=e)
             return self
 
@@ -57,7 +59,7 @@ class TimelineEvent(Event[ContentT]):
             self, payload, chain, verification_errors=errors,
         )
 
-        if errors:
+        if errors and log:
             LOG.warning("Error verifying decrypted event %r\n", clear)
 
         return clear

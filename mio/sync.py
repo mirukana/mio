@@ -236,7 +236,7 @@ class Sync(JSONClientModule):
             for event in timeline.get("events", []):
                 with suppress(InvalidEvent):
                     after = TimelineEvent.from_dict(event, room)
-                    after = await after._decrypted()
+                    after = await after._decrypted(log=False)
                     break
 
             if limited and prev_batch and after:
