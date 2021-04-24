@@ -4,9 +4,9 @@ from typing import List
 
 import aiofiles
 from mio.client import Client
-from mio.core.ids import MXC
 from mio.core.transfer import Transfer
 from mio.media.file import Media
+from mio.media.thumbnail import ThumbnailForm, ThumbnailMode
 from pytest import mark
 
 pytestmark = mark.asyncio
@@ -89,6 +89,46 @@ async def test_partial_download(alice: Client, image: Path):
     assert not await partial.exists()
 
 
+async def test_get_thumbnail(alice: Client, large_image: Path):
+    media = await alice.media.upload_from_path(large_image)
+    ref   = await media.last_reference
+    assert not [t async for t in ref.thumbnails]
+
+    form  = ThumbnailForm.tiny
+    thumb = await alice.media.get_thumbnail(await media.last_mxc, form)
+    assert len([t async for t in ref.thumbnails]) == 1
+
+    assert await thumb.file.exists()
+    assert thumb.for_mxc == await media.last_mxc
+    assert thumb.form is form
+    assert not await thumb._partial_file().exists()
+
+    thumb2 = await alice.media.get_thumbnail(await media.last_mxc, form)
+    assert thumb2.file == thumb.file
+    assert len([t async for t in ref.thumbnails]) == 1
+
+    await thumb.remove()
+    assert not await thumb.file.exists()
+
+
+async def test_thumbnail_best_match():
+    scale = ThumbnailMode.scale
+    crop  = ThumbnailMode.crop
+
+    assert ThumbnailForm.best_match(1024, 768) is ThumbnailForm.huge
+    assert ThumbnailForm.best_match(1024, 768, scale) is ThumbnailForm.huge
+    assert ThumbnailForm.best_match(1024, 768, crop) is ThumbnailForm.small
+    assert ThumbnailForm.best_match(900, 1) is ThumbnailForm.huge
+    assert ThumbnailForm.best_match(1, 600) is ThumbnailForm.huge
+    assert ThumbnailForm.best_match(799, 599) is ThumbnailForm.large
+    assert ThumbnailForm.best_match(320, 240) is ThumbnailForm.medium
+    assert ThumbnailForm.best_match(96, 96) is ThumbnailForm.small
+    assert ThumbnailForm.best_match(96, 96, scale) is ThumbnailForm.medium
+    assert ThumbnailForm.best_match(32, 32) is ThumbnailForm.tiny
+    assert ThumbnailForm.best_match(1, 1, crop) is ThumbnailForm.tiny
+    assert ThumbnailForm.best_match(1, 1, scale) is ThumbnailForm.medium
+
+
 async def test_multiple_refs(alice: Client, image: Path, image_symlink: Path):
     media1 = await alice.media.upload_from_path(image)
     media2 = await alice.media.upload_from_path(image_symlink)
@@ -112,21 +152,3 @@ async def test_named_file_clash(alice: Client, image: Path, utf8_file: Path):
     solved_clash = image.with_suffix(f".001{image.suffix}").name
     assert (await media2.last_reference).named_file.name == solved_clash
     assert (await media2.last_reference).server_filename == image.name
-
-
-async def test_adding_existing_ref(alice: Client, image: Path):
-    media = await alice.media.upload_from_path(image)
-    assert len([r async for r in media.references]) == 1
-
-    added = await media.add_reference(await media.last_mxc)
-    assert len([r async for r in media.references]) == 1
-    assert await media.last_reference == added
-
-
-async def test_removing_non_existent_ref(alice: Client, image: Path):
-    media = await alice.media.upload_from_path(image)
-    assert len([r async for r in media.references]) == 1
-
-    removed = await media.remove_reference(MXC("mxc://fake/fake"))
-    assert removed is None
-    assert len([r async for r in media.references]) == 1

@@ -3,10 +3,11 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 import aiofiles
 from aiopath import AsyncPath
+from yarl import URL
 
 from ..core.data import Parent
 from ..core.files import (
@@ -16,7 +17,9 @@ from ..core.ids import MXC
 from ..core.transfer import Transfer, TransferUpdateCallback
 from ..module import ClientModule
 from ..net.errors import RangeNotSatisfiable
-from .file import Media
+from ..net.exchange import Reply
+from .file import Media, Reference
+from .thumbnail import Thumbnail, ThumbnailForm
 
 if TYPE_CHECKING:
     from ..client import Client
@@ -67,7 +70,7 @@ class MediaStore(ClientModule):
             reply = await self.net.post(url, data, headers)
             mxc   = MXC(reply.json["content_uri"])
 
-            await media.add_reference(mxc, filename)
+            await Reference.create(media, mxc, filename)
             media._reply = reply
             return media
 
@@ -106,38 +109,15 @@ class MediaStore(ClientModule):
             with suppress(FileNotFoundError):
                 return await Media.from_mxc(self, mxc)
 
-            path  = self._partial_path(mxc)
-            start = 0
-
-            if await path.exists():
-                start = (await path.stat()).st_size + 1
-            else:
-                await path.parent.mkdir(parents=True, exist_ok=True)
-
-            try:
-                reply = await self.net.get(
-                    self.net.media_api / "download" / mxc.host / mxc.path[1:],
-                    headers = {"Range": f"bytes={start}-"} if start else None,
-                )
-            except RangeNotSatisfiable:
-                media = await Media.from_file_to_move(self, path)
-                await media.add_reference(mxc, reply.filename)
-                return media
-
-            transfer.data = reply.data
-            transfer.read = max(start - 1, 0)
-            transfer.size = reply.size
-
-            # 206 means we requested a range of bytes and the server complied
-            mode = "ab" if reply.status == 206 else "wb"
-
-            async with aiofiles.open(path, mode) as output:  # type: ignore
-                async for chunk in transfer:
-                    await output.write(chunk)
+            reply, path = await self._download_file(
+                self.net.media_api / "download" / mxc.host / mxc.path[1:],
+                self._partial_path(mxc),
+                transfer,
+            )
 
             media        = await Media.from_file_to_move(self, path)
             media._reply = reply
-            await media.add_reference(mxc, reply.filename)
+            await Reference.create(media, mxc, reply.filename)
             return media
 
         transfer.task = asyncio.ensure_future(_download())
@@ -154,20 +134,58 @@ class MediaStore(ClientModule):
         return await (await self.download(mxc, on_update)).save_as(path)
 
 
+    def get_thumbnail(
+        self,
+        for_mxc:   MXC,
+        form:      ThumbnailForm,
+        on_update: TransferUpdateCallback = None,
+    ) -> Transfer[Thumbnail]:
+
+        transfer: Transfer[Thumbnail] = Transfer(on_update=on_update)
+
+        async def _get_thumb() -> Thumbnail:
+            assert for_mxc.host
+            host = for_mxc.host
+            mxid = for_mxc.path[1:]
+
+            thumbnail = Thumbnail(self, for_mxc, form)
+
+            if await thumbnail.file.exists():
+                return thumbnail
+
+            reply, path = await self._download_file(
+                self.net.media_api / "thumbnail" / host / mxid % {
+                    "width": form.width,
+                    "height": form.height,
+                    "method": form.mode.value,
+                },
+                thumbnail._partial_file(),
+                transfer,
+            )
+
+            await thumbnail._adopt_file(thumbnail._partial_file())
+            return thumbnail
+
+        transfer.task = asyncio.ensure_future(_get_thumb())
+        return transfer
+
+
     def _content_path(self, sha256: str) -> AsyncPath:
         return self.path / "sha256" / sha256[:2] / sha256 / "content"
 
 
     def _mxc_path(self, mxc: MXC) -> AsyncPath:
         assert mxc.host
+        host = encode_name(mxc.host)
         mxid = encode_name(mxc.path[1:])  # strip leading /
-        return self.path / "mxc" / encode_name(mxc.host) / mxid[:2] / mxid
+        return self.path / "mxc" / host / mxid[:2] / mxid / "original"
 
 
     def _partial_path(self, mxc: MXC) -> AsyncPath:
         assert mxc.host
+        host = encode_name(mxc.host)
         mxid = encode_name(mxc.path[1:])  # strip leading /
-        return self.path / "partial" / encode_name(mxc.host) / mxid
+        return self.path / "partial" / host / mxid / "original"
 
 
     def _named_path(
@@ -189,3 +207,34 @@ class MediaStore(ClientModule):
 
     def _named_link(self, sha256: str, counter: int = 0) -> AsyncPath:
         return self._content_path(sha256).parent / f"ref.{counter:03d}"
+
+
+    async def _download_file(
+        self, source: URL, path: AsyncPath, transfer: Transfer,
+    ) -> Tuple[Reply, AsyncPath]:
+
+        start = 0
+
+        if await path.exists():
+            start = (await path.stat()).st_size + 1
+        else:
+            await path.parent.mkdir(parents=True, exist_ok=True)
+
+        try:
+            headers = {"Range": f"bytes={start}-"} if start else None
+            reply   = await self.net.get(source, headers=headers)
+        except RangeNotSatisfiable as e:
+            return (e.reply, path)
+
+        transfer.data = reply.data
+        transfer.read = max(start - 1, 0)
+        transfer.size = reply.size
+
+        # 206 means we requested a range of bytes and the server complied
+        mode = "ab" if reply.status == 206 else "wb"
+
+        async with aiofiles.open(path, mode) as output:  # type: ignore
+            async for chunk in transfer:
+                await output.write(chunk)
+
+        return (reply, path)

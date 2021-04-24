@@ -101,5 +101,10 @@ async def image_symlink():
 
 
 @fixture
+async def large_image():
+    return Path("tests/data/1024x768-blue.png")
+
+
+@fixture
 async def utf8_file():
     return Path("tests/data/utf8")

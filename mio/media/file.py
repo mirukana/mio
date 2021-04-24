@@ -2,7 +2,7 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, AsyncIterator, NamedTuple, Optional, Union
+from typing import TYPE_CHECKING, AsyncIterator, Optional, Union
 
 import aiofiles
 from aiopath import AsyncPath
@@ -14,17 +14,10 @@ from ..core.files import (
 )
 from ..core.ids import MXC
 from ..net.exchange import Reply
+from .thumbnail import Thumbnail, ThumbnailForm, ThumbnailMode
 
 if TYPE_CHECKING:
     from .store import MediaStore
-
-
-class Reference(NamedTuple):
-    named_link:      AsyncPath
-    named_file:      AsyncPath
-    mxc_file:        AsyncPath
-    mxc:             MXC
-    server_filename: str
 
 
 @dataclass
@@ -105,24 +98,24 @@ class Media:
 
 
     @property
-    async def references(self) -> AsyncIterator[Reference]:
+    async def references(self) -> AsyncIterator["Reference"]:
         async for named_link in self.content.parent.glob("ref.*"):
             named_file = await named_link.readlink()
             conflict   = self.store._named_conflict_marker(named_file)
-            filename   = named_file.name
+            fname      = named_file.name
 
             with suppress(FileNotFoundError):
-                filename = (await conflict.readlink()).name
+                fname = (await conflict.readlink()).name
 
             mxc_file = await named_file.readlink()
-            host     = decode_name(mxc_file.parent.parent.name)
-            mxc      = MXC(f"mxc://{host}/{decode_name(mxc_file.name)}")
+            host     = decode_name(mxc_file.parent.parent.parent.name)
+            mxc      = MXC(f"mxc://{host}/{decode_name(mxc_file.parent.name)}")
 
-            yield Reference(named_link, named_file, mxc_file, mxc, filename)
+            yield Reference(self, named_link, named_file, mxc_file, mxc, fname)
 
 
     @property
-    async def last_reference(self) -> Reference:
+    async def last_reference(self) -> "Reference":
         refs = [r async for r in self.references]
         return max(
             refs,
@@ -134,77 +127,9 @@ class Media:
         return (await self.last_reference).mxc
 
 
-    async def add_reference(
-        self, mxc: MXC, filename: Optional[str] = None,
-    ) -> Reference:
-
-        async for ref in self.references:
-            if ref.mxc == mxc:
-                return ref
-
-        # MXC file
-
-        assert mxc.host
-        mxc_file = self.store._mxc_path(mxc)
-
-        # Named file
-
-        if not filename:
-            filename = mxc.path[1:]
-
-        counter      = 0
-        date         = datetime.utcnow()
-        named_file_0 = self.store._named_path(filename, date, counter)
-        named_file   = named_file_0
-
-        while await named_file.exists():
-            counter    += 1
-            named_file  = self.store._named_path(filename, date, counter)
-
-        if counter:
-            name_conflict = self.store._named_conflict_marker(named_file)
-        else:
-            name_conflict = None
-
-        # Named link
-
-        counter    = 0
-        named_link = self.store._named_link(self.sha256, counter)
-
-        while await named_link.exists():
-            counter    += 1
-            named_link  = self.store._named_link(self.sha256, counter)
-
-        # Create everything
-
-        await mxc_file.parent.mkdir(parents=True, exist_ok=True)
-        await mxc_file.symlink_to(self.content)
-
-        await named_file.parent.mkdir(parents=True, exist_ok=True)
-        await named_file.symlink_to(mxc_file)
-        await named_link.symlink_to(named_file)
-
-        if name_conflict:
-            await name_conflict.parent.mkdir(parents=True, exist_ok=True)
-            await name_conflict.symlink_to(named_file_0)
-
-        return Reference(named_link, named_file, mxc_file, mxc, filename)
-
-
-    async def remove_reference(self, mxc: MXC) -> Optional[Reference]:
-        async for ref in self.references:
-            if ref.mxc == mxc:
-                await ref.named_link.unlink()
-                await ref.named_file.unlink()
-                await ref.mxc_file.unlink()
-                return ref
-
-        return None
-
-
     async def remove(self) -> None:
         async for ref in self.references:
-            await self.remove_reference(ref.mxc)
+            await ref.remove()
 
         await self.content.unlink()
         await self.content.parent.rmdir()
@@ -215,3 +140,89 @@ class Media:
         await copy_file_with_metadata(self.content, target)
         await add_write_permissions(target)
         return self
+
+
+@dataclass
+class Reference:
+    media:           Parent[Media] = field(repr=False)
+    named_link:      AsyncPath
+    named_file:      AsyncPath
+    mxc_file:        AsyncPath
+    mxc:             MXC
+    server_filename: str
+
+
+    @classmethod
+    async def create(
+        cls, media: Media, mxc: MXC, filename: Optional[str] = None,
+    ) -> "Reference":
+
+        # MXC file
+
+        assert mxc.host
+        mxc_file = media.store._mxc_path(mxc)
+
+        # Named file
+
+        if not filename:
+            filename = mxc.path[1:]
+
+        counter      = 0
+        date         = datetime.utcnow()
+        named_file_0 = media.store._named_path(filename, date, counter)
+        named_file   = named_file_0
+
+        while await named_file.exists():
+            counter    += 1
+            named_file  = media.store._named_path(filename, date, counter)
+
+        if counter:
+            name_conflict = media.store._named_conflict_marker(named_file)
+        else:
+            name_conflict = None
+
+        # Named link
+
+        counter    = 0
+        named_link = media.store._named_link(media.sha256, counter)
+
+        while await named_link.exists():
+            counter    += 1
+            named_link  = media.store._named_link(media.sha256, counter)
+
+        # Create everything
+
+        await mxc_file.parent.mkdir(parents=True, exist_ok=True)
+        await mxc_file.symlink_to(media.content)
+
+        await named_file.parent.mkdir(parents=True, exist_ok=True)
+        await named_file.symlink_to(mxc_file)
+        await named_link.symlink_to(named_file)
+
+        if name_conflict:
+            await name_conflict.parent.mkdir(parents=True, exist_ok=True)
+            await name_conflict.symlink_to(named_file_0)
+
+        return cls(media, named_link, named_file, mxc_file, mxc, filename)
+
+
+    @property
+    async def thumbnails(self) -> AsyncIterator[Thumbnail]:
+        async for file in self.mxc_file.parent.glob("*x*-*"):
+            size, mode    = file.name.split("-")
+            width, height = size.split("x")
+
+            form = ThumbnailForm.best_match(
+                int(width), int(height), ThumbnailMode(mode),
+            )
+
+            yield Thumbnail(self.media.store, self.mxc, form)
+
+
+    async def remove(self) -> None:
+        await self.named_link.unlink()
+        await self.named_file.unlink()
+        await self.mxc_file.unlink()
+
+        async for thumb in self.thumbnails:
+            await thumb.remove()
