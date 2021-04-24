@@ -78,5 +78,5 @@ class Client(JSONFile):
 
 
     def _acquire_lock(self) -> None:
-        self._lock = FileLock(Path(self.base_dir) / ".lock")
+        self._lock = FileLock(str(Path(self.base_dir) / ".lock"))
         self._lock.acquire(timeout=1)
