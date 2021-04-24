@@ -1,11 +1,10 @@
 from pathlib import Path
 
+import filelock
 from aiopath import AsyncPath
 from conftest import clone_client, compare_clients, read_json
-from filelock import Timeout
-from pytest import mark
-
 from mio.client import Client
+from pytest import mark, raises
 
 pytestmark = mark.asyncio
 
@@ -30,22 +29,31 @@ async def test_bare_init(alice: Client, tmp_path: Path):
 
 
 async def test_file_lock(alice: Client, tmp_path: Path):
-    success = True
-    alice2  = Client(alice.base_dir)
-
+    alice2 = Client(alice.base_dir)
     assert alice2._lock is None
 
-    try:
+    with raises(filelock.Timeout):
         # Try creating another client with same base_dir
         await alice2.load(user_id=alice.user_id, device_id=alice.device_id)
-    except Timeout:
-        success = False
 
-    assert not alice2._lock.is_locked
-    assert not success
+    assert alice2._lock and not alice2._lock.is_locked  # type: ignore
 
 
 async def test_load_from_dir(alice: Client, tmp_path: Path):
     new = clone_client(alice)
     await new.load(user_id=alice.user_id, device_id=alice.device_id)
     compare_clients(new, alice, token=True)
+
+
+async def test_terminate(alice: Client):
+    assert alice._lock
+    assert alice._lock.is_locked
+    assert alice.access_token
+    assert not alice.net._session.closed
+    assert not alice._terminated
+
+    await alice.terminate()
+    assert not alice._lock.is_locked
+    assert not alice.access_token
+    assert alice.net._session.closed
+    assert alice._terminated

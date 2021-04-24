@@ -39,7 +39,8 @@ class Client(JSONFile):
     devices: Runtime[Devices]    = field(init=False, repr=False)
     media:   Runtime[MediaStore] = field(init=False, repr=False)
 
-    _lock: Runtime[Optional[FileLock]] = field(init=False, repr=False)
+    _lock:       Runtime[Optional[FileLock]] = field(init=False, repr=False)
+    _terminated: Runtime[bool]               = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.net     = Network(self)
@@ -50,7 +51,10 @@ class Client(JSONFile):
         self.e2e     = E2E(self)
         self.devices = Devices(self)
         self.media   = MediaStore(self)
-        self._lock   = None
+
+        self._lock       = None
+        self._terminated = False
+
         super().__post_init__()
 
 
@@ -75,6 +79,16 @@ class Client(JSONFile):
                 await attr.load()
 
         return self
+
+
+    async def terminate(self) -> None:
+        self.__del__()  # release lock
+
+        if self.net:
+            await self.net.disconnect()
+
+        self.access_token = ""
+        self._terminated  = True
 
 
     def _acquire_lock(self) -> None:

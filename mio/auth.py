@@ -1,5 +1,5 @@
 import shutil
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict
 
 from yarl import URL
@@ -15,15 +15,14 @@ if TYPE_CHECKING:
 
 @dataclass
 class Auth(ClientModule):
-    default_device_name: Runtime[str]  = "mio"
-    was_logged_out:      Runtime[bool] = field(default=False, init=False)
+    default_device_name: Runtime[str] = "mio"
 
 
     async def login(self, auth: Dict[str, Any]) -> "Client":
         client = self.client
 
-        if self.was_logged_out:
-            raise RuntimeError(f"{client} was logged out, create a new client")
+        if client._terminated:
+            raise RuntimeError(f"{client} was terminated, create a new client")
 
         if "device_id" not in auth and client.device_id:
             auth["device_id"] = client.device_id
@@ -76,15 +75,11 @@ class Auth(ClientModule):
 
     async def logout(self) -> None:
         await self.net.post(self.net.api / "logout")
-        self.client.access_token = ""
-        self.was_logged_out      = True
-        await self.client.save()
-        await self.net.disconnect()
+        await self.client.terminate()
+        await self.client.save()  # save lack of access_token
 
 
     async def logout_all_devices(self) -> None:
         await self.net.post(self.net.api / "logout" / "all")
-        self.client.access_token = ""
-        self.was_logged_out      = True
-        await self.client.save()
-        await self.net.disconnect()
+        await self.client.terminate()
+        await self.client.save()  # save lack of access_token

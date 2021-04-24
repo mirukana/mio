@@ -59,14 +59,14 @@ def synapse():
 async def alice(synapse, tmp_path):
     client = await get_client(synapse, tmp_path, "alice")
     yield client
-    await client.net.disconnect()
+    await client.terminate()
 
 
 @fixture
 async def bob(synapse, tmp_path):
     client = await get_client(synapse, tmp_path, "bob")
     yield client
-    await client.net.disconnect()
+    await client.terminate()
 
 
 @fixture
