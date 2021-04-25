@@ -57,3 +57,10 @@ async def test_terminate(alice: Client):
     assert not alice.access_token
     assert alice.net._session.closed
     assert alice._terminated
+
+
+async def test_context_manager(alice: Client):
+    async with alice as client:
+        assert not client._terminated
+
+    assert alice._terminated

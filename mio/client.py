@@ -58,6 +58,14 @@ class Client(JSONFile):
         super().__post_init__()
 
 
+    async def __aenter__(self) -> "Client":
+        return self
+
+
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        await self.terminate()
+
+
     def __del__(self) -> None:
         if self._lock:
             self._lock.release()
