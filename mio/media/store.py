@@ -222,7 +222,7 @@ class MediaStore(ClientModule):
 
         try:
             headers = {"Range": f"bytes={start}-"} if start else None
-            reply   = await self.net.get(source, headers=headers)
+            reply   = await self.net.get(source, headers)
         except RangeNotSatisfiable as e:
             return (e.reply, path)
 

@@ -60,10 +60,8 @@ class Network(ClientModule):
         return URL(self.client.server) / "_matrix" / "media" / "r0"
 
 
-    async def get(
-        self, url: URL, data: ReqData = None, headers: MethHeaders = None,
-    ) -> Reply:
-        return await self.send(Request("GET", url, data, headers or {}))
+    async def get(self, url: URL, headers: MethHeaders = None) -> Reply:
+        return await self.send(Request("GET", url, None, headers or {}))
 
 
     async def post(
