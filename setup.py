@@ -44,6 +44,7 @@ setup(
     """),
     extras_require = {
         "dev": requires("""
+            diff-cover            >= 5.0.1,   < 6
             flake8                >= 3.8.4,   < 4
             flake8-bugbear        >= 20.1.4,  < 21
             flake8-colors         >= 0.1.6,   < 0.2

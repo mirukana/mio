@@ -1,4 +1,5 @@
 import json
+import sys
 from pathlib import Path
 from shutil import copytree
 from typing import Union
@@ -13,6 +14,22 @@ from mio.rooms.contents.settings import Encryption
 
 def pytest_configure(config):
     SynapseHandle()
+
+
+def pytest_unconfigure(config):
+    if config.option.cov_source:
+        print()
+        from diff_cover.diff_cover_tool import main  # type: ignore
+
+        cov_dir = Path(__file__).parent / "coverage"
+        xml     = str(cov_dir / "output.xml")
+        html    = str(cov_dir / "diff.html")
+        exit    = main(["", xml, "--html-report", html, "--fail-under", "100"])
+
+        print(f"\nHTML diff coverage showing missing lines written to {html}")
+
+        if exit != 0:
+            sys.exit(exit)
 
 
 def compare_clients(client1: Client, client2: Client, token: bool = False):
