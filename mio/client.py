@@ -42,6 +42,7 @@ class Client(JSONFile):
     _lock:       Runtime[Optional[FileLock]] = field(init=False, repr=False)
     _terminated: Runtime[bool]               = field(init=False, repr=False)
 
+
     def __post_init__(self) -> None:
         self.net     = Network(self)
         self.auth    = Auth(self)
@@ -91,12 +92,8 @@ class Client(JSONFile):
 
     async def terminate(self) -> None:
         self.__del__()  # release lock
-
-        if self.net:
-            await self.net.disconnect()
-
-        self.access_token = ""
-        self._terminated  = True
+        await self.net.disconnect()
+        self._terminated = True
 
 
     def _acquire_lock(self) -> None:

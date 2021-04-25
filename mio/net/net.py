@@ -60,6 +60,9 @@ class Network(ClientModule):
 
 
     async def send(self, request: Request) -> Reply:
+        if self.client._terminated:
+            raise RuntimeError(f"{self.client} terminated, create a new one")
+
         user_id = self.client.user_id
         token   = self.client.access_token
         data    = request.data

@@ -5,7 +5,6 @@ from conftest import clone_client, compare_clients, new_device_from
 from pytest import mark, raises
 
 from mio.client import Client
-from mio.net.errors import MatrixError
 
 pytestmark = mark.asyncio
 
@@ -28,7 +27,7 @@ async def test_logout(alice: Client):
 
     alice.net._session = ClientSession()
 
-    with raises(MatrixError):
+    with raises(RuntimeError):
         await alice.sync.once()
 
     with raises(RuntimeError):
@@ -42,13 +41,8 @@ async def test_logout_all(alice: Client, tmp_path: Path):
     await alice.auth.logout_all_devices()
     assert not alice.access_token
 
-    alice.net._session = ClientSession()
-
-    with raises(MatrixError):
+    with raises(RuntimeError):
         await alice.sync.once()
 
     with raises(RuntimeError):
         await alice.auth.login_password(alice.user_id, "test")
-
-    with raises(MatrixError):
-        await alice2.sync.once()

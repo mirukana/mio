@@ -4,7 +4,9 @@ import filelock
 from aiopath import AsyncPath
 from conftest import clone_client, compare_clients, read_json
 from mio.client import Client
+from mio.net.exchange import Request
 from pytest import mark, raises
+from yarl import URL
 
 pytestmark = mark.asyncio
 
@@ -48,15 +50,16 @@ async def test_load_from_dir(alice: Client, tmp_path: Path):
 async def test_terminate(alice: Client):
     assert alice._lock
     assert alice._lock.is_locked
-    assert alice.access_token
     assert not alice.net._session.closed
     assert not alice._terminated
 
     await alice.terminate()
     assert not alice._lock.is_locked
-    assert not alice.access_token
     assert alice.net._session.closed
     assert alice._terminated
+
+    with raises(RuntimeError):
+        await alice.net.send(Request("GET", URL("http://example.com"), None))
 
 
 async def test_context_manager(alice: Client):

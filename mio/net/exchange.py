@@ -14,7 +14,7 @@ ReqData = Union[None, bytes, DictS, ReadableIO, IOChunks]
 class Request:
     method:  str
     url:     URL
-    data:    ReqData
+    data:    ReqData        = None
     headers: Dict[str, str] = field(default_factory=dict, repr=False)
 
 

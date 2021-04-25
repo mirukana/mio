@@ -21,9 +21,6 @@ class Auth(ClientModule):
     async def login(self, auth: Dict[str, Any]) -> "Client":
         client = self.client
 
-        if client._terminated:
-            raise RuntimeError(f"{client} was terminated, create a new client")
-
         if "device_id" not in auth and client.device_id:
             auth["device_id"] = client.device_id
 
@@ -75,11 +72,13 @@ class Auth(ClientModule):
 
     async def logout(self) -> None:
         await self.net.post(self.net.api / "logout")
+        self.client.access_token = ""
+        await self.client.save()
         await self.client.terminate()
-        await self.client.save()  # save lack of access_token
 
 
     async def logout_all_devices(self) -> None:
         await self.net.post(self.net.api / "logout" / "all")
+        self.client.access_token = ""
+        await self.client.save()
         await self.client.terminate()
-        await self.client.save()  # save lack of access_token
