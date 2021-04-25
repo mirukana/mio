@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from http import HTTPStatus
 from typing import Any, Dict, Optional, Union
 
@@ -19,6 +20,7 @@ class Request:
     data:       ReqData        = None
     headers:    Dict[str, str] = field(default_factory=dict, repr=False)
     identifier: Any            = None
+    sent_at:    datetime       = field(default_factory=datetime.now)
 
 
     def __str__(self) -> str:
@@ -29,14 +31,15 @@ class Request:
 
 @dataclass
 class Reply:
-    request:  Request
-    status:   int
-    data:     StreamReader          = field(repr=False)
-    json:     DictS                 = field(default_factory=dict)
-    mime:     str                   = "application/octet-stream"
-    size:     Optional[int]         = None
-    filename: Optional[str]         = None
-    error:    Optional[ServerError] = None
+    request:     Request
+    status:      int
+    data:        StreamReader          = field(repr=False)
+    json:        DictS                 = field(default_factory=dict)
+    mime:        str                   = "application/octet-stream"
+    size:        Optional[int]         = None
+    filename:    Optional[str]         = None
+    error:       Optional[ServerError] = None
+    received_at: datetime              = field(default_factory=datetime.now)
 
 
     def __str__(self) -> str:
@@ -57,3 +60,8 @@ class Reply:
             self.size,
             self.filename,
         )
+
+
+    @property
+    def ping(self) -> timedelta:
+        return self.received_at - self.request.sent_at

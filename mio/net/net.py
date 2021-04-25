@@ -1,7 +1,6 @@
 import asyncio
 import math
 import sys
-import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Deque, Optional
 
@@ -41,8 +40,6 @@ def _on_giveup(info: DictS) -> None:
 @dataclass
 class Network(ClientModule):
     client: Parent["Client"] = field(repr=False)
-
-    ping: float = field(init=False, default=0)  # in seconds
 
     last_replies: Runtime[Deque[Reply]] = field(
         init=False, repr=False, default_factory=lambda: Deque(maxlen=256),
@@ -105,8 +102,6 @@ class Network(ClientModule):
         elif isinstance(data, dict):
             data = None
 
-        start = time.time()
-
         resp = await self._session.request(
             method  = request.method,
             url     = str(request.url),
@@ -114,8 +109,6 @@ class Network(ClientModule):
             json    = request.data if isinstance(request.data, dict) else None,
             headers = request.headers,
         )
-
-        self.ping = time.time() - start
 
         mime = resp.content_type
         disp = resp.content_disposition
