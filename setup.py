@@ -44,6 +44,7 @@ setup(
     """),
     extras_require = {
         "dev": requires("""
+            aioresponses          >= 0.7.2,   < 0.8
             diff-cover            >= 5.0.1,   < 6
             flake8                >= 3.8.4,   < 4
             flake8-bugbear        >= 20.1.4,  < 21

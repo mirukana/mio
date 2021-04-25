@@ -5,11 +5,11 @@ from shutil import copytree
 from typing import Union
 from uuid import uuid4
 
-from pytest import fixture
-from synapse import SynapseHandle
-
+from aioresponses import aioresponses
 from mio.client import Client
 from mio.rooms.contents.settings import Encryption
+from pytest import fixture
+from synapse import SynapseHandle
 
 
 def pytest_configure(config):
@@ -65,6 +65,12 @@ async def new_device_from(client: Client, path: Path) -> Client:
 
 def read_json(path: Union[Path, str]) -> dict:
     return json.loads(Path(path).read_text())
+
+
+@fixture
+def mock_responses():
+    with aioresponses() as mock:
+        yield mock
 
 
 @fixture
