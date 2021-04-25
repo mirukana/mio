@@ -1,8 +1,12 @@
+import asyncio
+import math
+import sys
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Deque, Optional
 
-from aiohttp import ClientResponseError, ClientSession
+import aiohttp
+import backoff
 from yarl import URL
 
 from ..core.data import Parent, Runtime
@@ -20,14 +24,32 @@ MethHeaders = Optional[DictS]
 LOG = get_logger()
 
 
+def _on_backoff(info: DictS) -> None:
+    # https://github.com/litl/backoff#event-handlers
+    lines  = str(sys.exc_info()[1]).splitlines()
+    wait   = math.ceil(info["wait"])
+    first  = f"{lines[0]} (retry {info['tries']}, next in {wait} seconds)"
+    LOG.warning("\n".join((first, *lines[1:])), stacklevel=7)
+
+
+def _on_giveup(info: DictS) -> None:
+    lines  = str(sys.exc_info()[1]).splitlines()
+    first  = f"{lines[0]} (no retry possible)"
+    LOG.warning("\n".join((first, *lines[1:])), stacklevel=7)
+
+
 @dataclass
 class Network(ClientModule):
     client: Parent["Client"] = field(repr=False)
 
     ping: float = field(init=False, default=0)  # in seconds
 
-    _session: Runtime[ClientSession] = field(
-        init=False, repr=False, default_factory=ClientSession,
+    last_replies: Runtime[Deque[Reply]] = field(
+        init=False, repr=False, default_factory=lambda: Deque(maxlen=256),
+    )
+
+    _session: Runtime[aiohttp.ClientSession] = field(
+        init=False, repr=False, default_factory=aiohttp.ClientSession,
     )
 
 
@@ -59,13 +81,21 @@ class Network(ClientModule):
         return await self.send(Request("PUT", url, data, headers or {}))
 
 
+    @backoff.on_exception(
+        lambda: backoff.fibo(max_value=60),
+        (ServerError, TimeoutError, asyncio.TimeoutError, aiohttp.ClientError),
+        giveup     = lambda e: isinstance(e, ServerError) and not e.can_retry,
+        on_backoff = _on_backoff,
+        on_giveup  = _on_giveup,
+        logger     = None,
+    )
     async def send(self, request: Request) -> Reply:
         if self.client._terminated:
             raise RuntimeError(f"{self.client} terminated, create a new one")
 
-        user_id = self.client.user_id
-        token   = self.client.access_token
-        data    = request.data
+        request.identifier = self.client.user_id
+        token              = self.client.access_token
+        data               = request.data
 
         if token:
             request.headers["Authorization"] = f"Bearer {token}"
@@ -100,14 +130,17 @@ class Network(ClientModule):
             filename = disp.filename if disp else None,
         )
 
-        who = str(user_id) if user_id else None
-        LOG.debug("%r\n→ %r\n← %r\n", who, request, reply, stacklevel=3)
-
         try:
             resp.raise_for_status()
+        except aiohttp.ClientResponseError:
+            error       = ServerError.from_reply(reply)
+            reply.error = error
+            raise error
+        else:
+            LOG.debug("%s", reply, stacklevel=5)
             return reply
-        except ClientResponseError:
-            raise ServerError.from_reply(reply)
+        finally:
+            self.last_replies.appendleft(reply)
 
 
     async def disconnect(self) -> None:

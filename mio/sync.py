@@ -3,8 +3,8 @@ import json
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from typing import (
-    TYPE_CHECKING, Any, Awaitable, Callable, Dict, Iterator, List, Optional,
-    Set, Type, Union,
+    TYPE_CHECKING, Any, Callable, Dict, Iterator, List, Optional, Set, Type,
+    Union,
 )
 
 from aiopath import AsyncPath
@@ -12,7 +12,7 @@ from aiopath import AsyncPath
 from .core.data import Parent, Runtime
 from .core.events import Event, InvalidEvent
 from .core.ids import RoomId, UserId
-from .core.utils import get_logger, make_awaitable, remove_none, report
+from .core.utils import get_logger, remove_none, report
 from .devices.events import ToDeviceEvent
 from .e2e.contents import Megolm, Olm
 from .module import JSONClientModule
@@ -28,8 +28,7 @@ if TYPE_CHECKING:
 
 LOG = get_logger()
 
-FilterType       = Union[None, str, Dict[str, Any]]
-ExceptionHandler = Callable[[Exception], Optional[Awaitable[None]]]
+FilterType = Union[None, str, Dict[str, Any]]
 
 
 @dataclass
@@ -85,24 +84,15 @@ class Sync(JSONClientModule):
         since:               Optional[str]              = None,
         full_state:          Optional[bool]             = None,
         set_presence:        Optional[str]              = None,
-        sleep_between_syncs: float                      = 1,
-        exception_handler:   Optional[ExceptionHandler] = None,
+        sleep_between_syncs: float                      = 0.5,
     ) -> None:
 
-        first_run         = True
-        exception_handler = exception_handler or (lambda _: None)
+        first_run = True
 
         while True:
             use_filter = first_sync_filter if first_run else sync_filter
-
-            try:
-                await self.once(timeout, use_filter, None, None, set_presence)
-            except Exception as e:
-                LOG.exception("Error in server sync loop")
-                await make_awaitable(exception_handler(e))
-            else:
-                first_run = False
-
+            await self.once(timeout, use_filter, None, None, set_presence)
+            first_run = False
             await asyncio.sleep(sleep_between_syncs)
 
 

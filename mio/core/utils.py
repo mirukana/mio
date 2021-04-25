@@ -1,12 +1,15 @@
 import logging
 from contextlib import contextmanager
 from inspect import isawaitable
+from io import StringIO
 from typing import (
     Any, Awaitable, Dict, Generator, Iterator, Mapping, MutableMapping,
     Optional, Tuple, Type, TypeVar, Union,
 )
 
+from rich.console import Console
 from rich.logging import RichHandler
+from rich.text import Text as RichText
 
 # Characters that can't be in file/dir names on either windows, mac or linux -
 # Actual % must be encoded too to not conflict with % encoded chars
@@ -19,11 +22,33 @@ T            = TypeVar("T")
 MaybeCoro    = Optional[Awaitable[None]]
 ErrorCatcher = Union[Type[Exception], Tuple[Type[Exception], ...]]
 
+
+class LogHandler(RichHandler):
+    short_names = {
+        "DEBUG":    "~",
+        "INFO":     "i",
+        "WARNING":  "!",
+        "ERROR":    "X",
+        "CRITICAL": "F",
+    }
+
+
+    def get_level_text(self, record):
+        return RichText.styled(
+            self.short_names[record.levelname],
+            f"logging.level.{record.levelname.lower()}",
+        )
+
+
 logging.basicConfig(
     level    = logging.INFO,
-    format   = "%(message)s",
+    format   = "%(message)s\n",
     datefmt  = "%T",
-    handlers = [RichHandler(rich_tracebacks=True, log_time_format="%F %T")],
+    handlers = [LogHandler(
+        rich_tracebacks     = True,
+        omit_repeated_times = False,
+        log_time_format     = "%F %T",
+    )],
 )
 
 
@@ -32,6 +57,16 @@ def get_logger(name: str = __name__) -> logging.Logger:
 
 
 LOG = get_logger()
+
+
+def rich_repr(*objects: Any, sep: str = " ", color: bool = False) -> str:
+    out = StringIO()
+    Console(file=out, force_terminal=color).print(*objects, sep=sep, end=" ")
+    return out.getvalue().rstrip()
+
+
+def rich_thruthies(*args, sep: str = " ") -> str:
+    return rich_repr(*[a for a in args if a], sep=sep)
 
 
 def remove_none(from_dict: dict) -> dict:
