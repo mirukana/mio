@@ -9,8 +9,8 @@ import backoff
 from yarl import URL
 
 from ..core.data import Parent, Runtime
-from ..core.files import AsyncReadable, Readable, read_chunked_binary
-from ..core.utils import DictS, get_logger
+from ..core.files import AsyncSeekable, Seekable, read_chunked_binary, rewind
+from ..core.utils import DictS, get_logger, make_awaitable
 from ..module import ClientModule
 from .errors import ServerError
 from .exchange import Reply, ReqData, Request
@@ -78,6 +78,15 @@ class Network(ClientModule):
         return await self.send(Request("PUT", url, data, headers or {}))
 
 
+    async def send(self, request: Request) -> Reply:
+        data_seek_at = 0
+
+        if isinstance(request.data, (Seekable, AsyncSeekable)):
+            data_seek_at = await make_awaitable(request.data.tell())
+
+        return await self._send(request, data_seek_at)
+
+
     @backoff.on_exception(
         lambda: backoff.fibo(max_value=60),
         (ServerError, TimeoutError, asyncio.TimeoutError, aiohttp.ClientError),
@@ -86,7 +95,7 @@ class Network(ClientModule):
         on_giveup  = _on_giveup,
         logger     = None,
     )
-    async def send(self, request: Request) -> Reply:
+    async def _send(self, request: Request, data_seek_at: int = 0) -> Reply:
         if self.client._terminated:
             raise RuntimeError(f"{self.client} terminated, create a new one")
 
@@ -97,8 +106,8 @@ class Network(ClientModule):
         if token:
             request.headers["Authorization"] = f"Bearer {token}"
 
-        if isinstance(data, (Readable, AsyncReadable)):
-            data = read_chunked_binary(data)
+        if isinstance(data, (Seekable, AsyncSeekable)):
+            data = read_chunked_binary(await rewind(data, data_seek_at))
         elif isinstance(data, dict):
             data = None
 

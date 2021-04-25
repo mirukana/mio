@@ -58,12 +58,18 @@ class AsyncReadable(Protocol):
 
 @runtime_checkable
 class Seekable(Readable, Protocol):
+    def tell(self) -> int:
+        pass
+
     def seek(self, pos: int, whence: int = 0) -> int:
         pass
 
 
 @runtime_checkable
 class AsyncSeekable(AsyncReadable, Protocol):
+    async def tell(self) -> int:
+        pass
+
     async def seek(self, pos: int, whence: int = 0) -> int:
         pass
 
@@ -101,8 +107,8 @@ async def read_chunked_binary(data: ReadableIO) -> AsyncIterator[bytes]:
         yield chunk.encode() if isinstance(chunk, str) else chunk
 
 
-async def rewind(data: SeekableIO) -> SeekableIO:
-    await make_awaitable(data.seek(0, 0))
+async def rewind(data: SeekableIO, position: int = 0) -> SeekableIO:
+    await make_awaitable(data.seek(position, 0))
     return data
 
 

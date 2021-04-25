@@ -3,14 +3,13 @@ from datetime import datetime, timedelta
 from http import HTTPStatus
 from typing import Any, Dict, Optional, Union
 
-from aiohttp import StreamReader
 from yarl import URL
 
-from ..core.files import IOChunks, ReadableIO
+from ..core.files import IOChunks, ReadableIO, SeekableIO
 from ..core.utils import DictS, rich_thruthies
 from .errors import NonStandardRetriableStatus, ServerError
 
-ReqData = Union[None, bytes, DictS, ReadableIO, IOChunks]
+ReqData = Union[None, bytes, DictS, SeekableIO, IOChunks]
 
 
 @dataclass
@@ -33,7 +32,7 @@ class Request:
 class Reply:
     request:     Request
     status:      int
-    data:        StreamReader          = field(repr=False)
+    data:        ReadableIO            = field(repr=False)
     json:        DictS                 = field(default_factory=dict)
     mime:        str                   = "application/octet-stream"
     size:        Optional[int]         = None
