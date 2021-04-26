@@ -5,7 +5,7 @@ encryption and persistence.
 
 ## Installation
 
-Requires Python 3.6 or later and olm 3 development headers.
+Requires Python 3.7 or later and olm 3 development headers.
 
 ```sh
 pip3 install -U --user .

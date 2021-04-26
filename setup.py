@@ -22,7 +22,7 @@ setup(
     long_description              = Path("README.md").read_text(),
     long_description_content_type = "text/markdown",
 
-    python_requires  = ">=3.6, <4",
+    python_requires  = ">=3.7, <4",
     install_requires = requires("""
         aiofiles          >= 0.6.0,  < 0.7
         aiohttp           >= 3.7.3,  < 4
@@ -39,9 +39,8 @@ setup(
         yarl              >= 1.6.3,  < 2
         filelock          >= 3.0.12, < 4
 
-        dataclasses       >= 0.6,     < 0.7; python_version<'3.7'
-        pyfastcopy        >= 1.0.3,   < 2;   python_version<'3.8'
-        typing-extensions >= 3.7.4.3, < 4;   python_version<'3.9'
+        pyfastcopy        >= 1.0.3,   < 2; python_version<'3.8'
+        typing-extensions >= 3.7.4.3, < 4; python_version<'3.9'
     """),
     extras_require = {
         "dev": requires("""
@@ -82,7 +81,6 @@ setup(
 
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3 :: Only",
-        "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
