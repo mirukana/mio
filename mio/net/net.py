@@ -9,8 +9,10 @@ import backoff
 from yarl import URL
 
 from ..core.data import Parent, Runtime
-from ..core.files import AsyncSeekable, Seekable, read_chunked_binary, rewind
-from ..core.utils import DictS, get_logger, make_awaitable
+from ..core.files import (
+    AsyncSeekable, Seekable, read_chunked_binary, try_rewind,
+)
+from ..core.utils import DictS, get_logger
 from ..module import ClientModule
 from .errors import ServerError
 from .exchange import Reply, ReqData, Request
@@ -76,15 +78,6 @@ class Network(ClientModule):
         return await self.send(Request("PUT", url, data, headers or {}))
 
 
-    async def send(self, request: Request) -> Reply:
-        data_seek_at = 0
-
-        if isinstance(request.data, (Seekable, AsyncSeekable)):
-            data_seek_at = await make_awaitable(request.data.tell())
-
-        return await self._send(request, data_seek_at)
-
-
     @backoff.on_exception(
         lambda: backoff.fibo(max_value=60),
         (ServerError, TimeoutError, asyncio.TimeoutError, aiohttp.ClientError),
@@ -93,7 +86,12 @@ class Network(ClientModule):
         on_giveup  = _on_giveup,
         logger     = None,
     )
-    async def _send(self, request: Request, data_seek_at: int = 0) -> Reply:
+    async def send(self, request: Request) -> Reply:
+        async with try_rewind(request.data):
+            return await self._send_once(request)
+
+
+    async def _send_once(self, request: Request) -> Reply:
         if self.client._terminated:
             raise RuntimeError(f"{self.client} terminated, create a new one")
 
@@ -105,7 +103,7 @@ class Network(ClientModule):
             request.headers["Authorization"] = f"Bearer {token}"
 
         if isinstance(data, (Seekable, AsyncSeekable)):
-            data = read_chunked_binary(await rewind(data, data_seek_at))
+            data = read_chunked_binary(data)
         elif isinstance(data, dict):
             data = None
 

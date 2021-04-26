@@ -11,7 +11,7 @@ from yarl import URL
 
 from ..core.data import Parent
 from ..core.files import (
-    SeekableIO, encode_name, guess_mime, is_probably_binary, measure, rewind,
+    SeekableIO, encode_name, guess_mime, is_probably_binary, measure,
 )
 from ..core.ids import MXC
 from ..core.transfer import Transfer, TransferUpdateCallback
@@ -56,11 +56,8 @@ class MediaStore(ClientModule):
                     # TODO: check if mxc still exists on server & is accessible
                     return media
 
-            await rewind(data)
-
             if mime is None:
                 mime = await guess_mime(data)
-                await rewind(data)
 
             url     = self.net.media_api / "upload"
             headers = {"Content-Type": mime, "Content-Length": str(size)}

@@ -5,8 +5,9 @@ import re
 import shutil
 import stat
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import AsyncIterator, Optional, Union
+from typing import Any, AsyncIterator, Optional, Union
 from urllib.parse import quote, unquote
 
 import aiofiles
@@ -95,30 +96,44 @@ async def add_write_permissions(path: Union[Path, str]) -> AsyncPath:
     return apath
 
 
+@asynccontextmanager
+async def rewind(data: SeekableIO) -> AsyncIterator[None]:
+    initial_position = await make_awaitable(data.tell())
+    try:
+        yield
+    finally:
+        await make_awaitable(data.seek(initial_position, 0))
+
+
+@asynccontextmanager
+async def try_rewind(data: Any) -> AsyncIterator[None]:
+    if isinstance(data, (Seekable, AsyncSeekable)):
+        async with rewind(data):
+            yield
+    else:
+        yield
+
+
+async def measure(data: SeekableIO) -> int:
+    async with rewind(data):
+        start = await make_awaitable(data.tell())
+        await make_awaitable(data.seek(0, os.SEEK_END))
+        end = await make_awaitable(data.tell())
+        return end - start
+
+
 async def read_chunked(data: ReadableIO) -> IOChunks:
-    while True:
-        chunk = await make_awaitable(data.read(4096))
-        if not chunk:
-            break
-        yield chunk
+    async with rewind(data):
+        while True:
+            chunk = await make_awaitable(data.read(4096))
+            if not chunk:
+                break
+            yield chunk
 
 
 async def read_chunked_binary(data: ReadableIO) -> AsyncIterator[bytes]:
     async for chunk in read_chunked(data):
         yield chunk.encode() if isinstance(chunk, str) else chunk
-
-
-async def measure(data: SeekableIO) -> int:
-    start = await make_awaitable(data.tell())
-    await make_awaitable(data.seek(0, os.SEEK_END))
-    end = await make_awaitable(data.tell())
-    await make_awaitable(data.seek(start))
-    return end - start
-
-
-async def rewind(data: SeekableIO, position: int = 0) -> SeekableIO:
-    await make_awaitable(data.seek(position, 0))
-    return data
 
 
 async def guess_mime(data: ReadableIO, filename: Optional[str] = None) -> str:

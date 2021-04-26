@@ -10,7 +10,7 @@ from aiopath import AsyncPath
 from ..core.data import Parent
 from ..core.files import (
     SeekableIO, add_write_permissions, copy_file_with_metadata, decode_name,
-    read_chunked, remove_write_permissions, rewind, sha256_chunked,
+    read_chunked_binary, remove_write_permissions, sha256_chunked,
 )
 from ..core.ids import MXC
 from ..net.exchange import Reply
@@ -40,7 +40,6 @@ class Media:
 
         if not sha256:
             sha256 = await sha256_chunked(data)
-            await rewind(data)
 
         content = store._content_path(sha256)
 
@@ -48,10 +47,7 @@ class Media:
             await content.parent.mkdir(parents=True, exist_ok=True)
 
             async with aiofiles.open(content, "wb") as output:
-                async for chunk in read_chunked(data):
-                    if isinstance(chunk, str):
-                        chunk = chunk.encode()
-
+                async for chunk in read_chunked_binary(data):
                     await output.write(chunk)
 
             await remove_write_permissions(content)
