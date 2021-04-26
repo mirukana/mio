@@ -18,6 +18,9 @@ async def test_up_download_path(alice: Client, image: Path, tmp_path: Path):
 
     first = await alice.media.upload_from_path(image, on_update=got.append)
     assert got
+    assert first._reply
+    assert first._reply.request.headers["Content-Type"] == "image/bmp"
+    assert first._reply.request.headers["Content-Length"] == "58"
 
     media = await alice.media.download_to_path(
         await first.last_mxc, tmp_path / "download.bmp", on_update=got2.append,
@@ -25,7 +28,7 @@ async def test_up_download_path(alice: Client, image: Path, tmp_path: Path):
     assert media.sha256 == first.sha256
     assert got2
 
-    # Upload file who's sha256 matches one we've uploaded before
+    # "Upload" file who's sha256 matches one we've uploaded before
 
     media = await alice.media.upload_from_path(tmp_path / "download.bmp")
     assert media.sha256 == first.sha256
@@ -34,8 +37,7 @@ async def test_up_download_path(alice: Client, image: Path, tmp_path: Path):
 
 async def test_upload_no_name_manual_mime(alice: Client, image: Path):
     async with aiofiles.open(image, "rb") as file:
-        size  = image.stat().st_size
-        media = await alice.media.upload(file, size, mime="application/fake")
+        media = await alice.media.upload(file, mime="application/fake")
         mxc   = await media.last_mxc
         await media.remove()
         assert not await media.content.exists()
@@ -50,12 +52,14 @@ async def test_upload_manual_binary(alice: Client, utf8_file: Path):
     media = await alice.media.upload_from_path(utf8_file)
     assert media._reply
     assert media._reply.request.headers["Content-Type"] == "text/plain"
+    assert media._reply.request.headers["Content-Length"] == "15"
     await media.remove()
 
     media = await alice.media.upload_from_path(utf8_file, binary=True)
     octet = "application/octet-stream"
     assert media._reply
     assert media._reply.request.headers["Content-Type"] == octet
+    assert media._reply.request.headers["Content-Length"] == "15"
 
 
 async def test_partial_download(alice: Client, image: Path):
@@ -142,8 +146,7 @@ async def test_named_file_clash(alice: Client, image: Path, utf8_file: Path):
     media1 = await alice.media.upload_from_path(image)
 
     async with aiofiles.open(utf8_file) as file:
-        size   = utf8_file.stat().st_size
-        media2 = await alice.media.upload(file, size, image.name)
+        media2 = await alice.media.upload(file, image.name)
 
     assert media1 != media2
     assert (await media1.last_reference).named_file.name == image.name

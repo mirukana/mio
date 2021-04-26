@@ -62,8 +62,7 @@ async def test_set_avatar_from_data(alice: Client, room: Room, image: Path):
     assert not alice.profile.avatar
 
     async with aiofiles.open(image, "rb") as file:
-        size  = image.stat().st_size
-        media = await alice.profile.set_avatar_from_data(file, size)
+        media = await alice.profile.set_avatar_from_data(file)
 
     await alice.sync.once()
     assert alice.profile.avatar == await media.last_mxc

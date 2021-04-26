@@ -11,7 +11,7 @@ from yarl import URL
 
 from ..core.data import Parent
 from ..core.files import (
-    SeekableIO, encode_name, guess_mime, is_probably_binary, rewind,
+    SeekableIO, encode_name, guess_mime, is_probably_binary, measure, rewind,
 )
 from ..core.ids import MXC
 from ..core.transfer import Transfer, TransferUpdateCallback
@@ -38,17 +38,18 @@ class MediaStore(ClientModule):
     def upload(
         self,
         data:      SeekableIO,
-        size:      int,
         filename:  Optional[str]          = None,
         on_update: TransferUpdateCallback = None,
         mime:      Optional[str]          = None,
     ) -> Transfer[Media]:
         # TODO: check server max allowed size
 
-        transfer: Transfer[Media] = Transfer(data, size, on_update)
+        transfer: Transfer[Media] = Transfer(data, on_update=on_update)
 
         async def _upload(mime=mime) -> Media:
-            media = await Media.from_data(self, data)
+            size          = await measure(data)
+            transfer.size = size
+            media         = await Media.from_data(self, data)
 
             async for ref in media.references:
                 if ref.server_filename == filename:
@@ -90,11 +91,10 @@ class MediaStore(ClientModule):
             binary = await is_probably_binary(path)
 
         path = Path(path)
-        size = (await AsyncPath(path).stat()).st_size
         mode = "rb" if binary else "rt"
 
         async with aiofiles.open(path, mode) as file:  # type: ignore
-            return await self.upload(file, size, path.name, on_update, mime)
+            return await self.upload(file, path.name, on_update, mime)
 
 
     def download(

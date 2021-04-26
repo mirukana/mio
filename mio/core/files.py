@@ -1,5 +1,6 @@
 import hashlib
 import mimetypes
+import os
 import re
 import shutil
 import stat
@@ -105,6 +106,14 @@ async def read_chunked(data: ReadableIO) -> IOChunks:
 async def read_chunked_binary(data: ReadableIO) -> AsyncIterator[bytes]:
     async for chunk in read_chunked(data):
         yield chunk.encode() if isinstance(chunk, str) else chunk
+
+
+async def measure(data: SeekableIO) -> int:
+    start = await make_awaitable(data.tell())
+    await make_awaitable(data.seek(0, os.SEEK_END))
+    end = await make_awaitable(data.tell())
+    await make_awaitable(data.seek(start))
+    return end - start
 
 
 async def rewind(data: SeekableIO, position: int = 0) -> SeekableIO:

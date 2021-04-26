@@ -46,13 +46,12 @@ class Profile(JSONClientModule):
     async def set_avatar_from_data(
         self,
         data:      SeekableIO,
-        size:      int,
         filename:  Optional[str]          = None,
         on_update: TransferUpdateCallback = None,
         mime:      Optional[str]          = None,
     ) -> Media:
 
-        args  = (data, size, filename, on_update, mime)
+        args  = (data, filename, on_update, mime)
         media = await self.client.media.upload(*args)
         await self.set_avatar(await media.last_mxc)
         return media
