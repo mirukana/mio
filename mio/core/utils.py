@@ -106,12 +106,10 @@ async def make_awaitable(result):
 
 @contextmanager
 def report(
-    types: ErrorCatcher = Exception,
-    level: int          = logging.WARNING,
-    trace: bool         = False,
+    *types: Type[Exception], level: int = logging.WARNING, trace: bool = False,
 ) -> Iterator[None]:
     try:
-        yield None
+        yield
     except types as e:
         if trace:
             LOG.exception("Caught exception", stacklevel=3)
