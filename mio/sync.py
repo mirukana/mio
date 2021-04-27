@@ -11,7 +11,7 @@ from aiopath import AsyncPath
 
 from .core.data import Parent, Runtime
 from .core.events import Event, InvalidEvent
-from .core.ids import RoomId, UserId
+from .core.ids import InvalidId, RoomId, UserId
 from .core.utils import get_logger, remove_none, report
 from .devices.events import ToDeviceEvent
 from .e2e.contents import Megolm, Olm
@@ -161,19 +161,26 @@ class Sync(JSONClientModule):
         for event in sync.get("to_device", {}).get("events", ()):
             if Olm.matches(event):
                 with suppress(InvalidEvent):
-                    e2e_senders.add(UserId(event["sender"]))
+                    with report(InvalidId):
+                        e2e_senders.add(UserId(event["sender"]))
 
         for kind in ("invite", "join"):
             for data in sync.get("rooms", {}).get(kind, {}).values():
                 for event in data.get("timeline", {}).get("events", ()):
                     if Megolm.matches(event):
                         with suppress(InvalidEvent):
-                            e2e_senders.add(UserId(event["sender"]))
+                            with report(InvalidId):
+                                e2e_senders.add(UserId(event["sender"]))
 
         await self.client.devices.ensure_tracked(e2e_senders)
 
-        changed = sync.get("device_lists", {}).get("changed", [])
-        await self.client.devices.update({UserId(c) for c in changed})
+        changed = set()
+
+        for user_id in sync.get("device_lists", {}).get("changed", []):
+            with report(InvalidId):
+                changed.add(UserId(user_id))
+
+        await self.client.devices.update(changed)
 
         to_call = self.client.devices._call_callbacks
         await events_call(sync, "to_device", ToDeviceEvent, to_call)
@@ -188,13 +195,21 @@ class Sync(JSONClientModule):
             return rooms._data[room_id]
 
         for room_id, data in sync.get("rooms", {}).get("invite", {}).items():
-            room         = await set_room(RoomId(room_id))
-            room.invited = True
-            room.left    = False
-            await room_events_call(data, "invite_state", room)
+            with report(InvalidId) as caught:
+                room = await set_room(RoomId(room_id))
+
+            if not caught:
+                room.invited = True
+                room.left    = False
+                await room_events_call(data, "invite_state", room)
 
         for room_id, data in sync.get("rooms", {}).get("join", {}).items():
-            room         = await set_room(RoomId(room_id))
+            with report(InvalidEvent) as caught:
+                room = await set_room(RoomId(room_id))
+
+            if caught:
+                continue
+
             # TODO: save when changing invited/left
             room.invited = False
             room.left    = False
@@ -246,14 +261,22 @@ class Sync(JSONClientModule):
             if room_id in self.client.rooms.forgotten:
                 continue
 
-            room      = await set_room(RoomId(room_id))
-            room.left = True
-            # await events_call(data, "account_data", room.handle_event)
-            await room_events_call(data, "state", room)
-            await room_events_call(data, "timeline", room)
+            with report(InvalidId) as caught:
+                room = await set_room(RoomId(room_id))
 
-        no_more_shared_e2e_room = sync.get("device_lists", {}).get("left", [])
-        self.client.devices.drop(*[UserId(u) for u in no_more_shared_e2e_room])
+            if not caught:
+                room.left = True
+                # await events_call(data, "account_data", room.handle_event)
+                await room_events_call(data, "state", room)
+                await room_events_call(data, "timeline", room)
+
+        no_more_shared_e2e_room = set()
+
+        for user_id in sync.get("device_lists", {}).get("left", []):
+            with report(InvalidId):
+                no_more_shared_e2e_room.add(user_id)
+
+        self.client.devices.drop(*no_more_shared_e2e_room)
 
         if "device_one_time_keys_count" in sync:
             up = sync["device_one_time_keys_count"].get("signed_curve25519", 0)

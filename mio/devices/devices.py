@@ -13,8 +13,8 @@ from aiopath import AsyncPath
 from ..core.callbacks import CallbackGroup, Callbacks, EventCallbacks
 from ..core.contents import EventContent
 from ..core.data import IndexableMap, Parent, Runtime
-from ..core.ids import UserId
-from ..core.utils import get_logger
+from ..core.ids import InvalidId, UserId
+from ..core.utils import get_logger, report
 from ..e2e.contents import (
     CancelGroupSessionRequest, ForwardedGroupSessionInfo, GroupSessionInfo,
     GroupSessionRequest, Olm,
@@ -220,7 +220,10 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
                 )
 
             for user_id, queried_devices in reply.json["device_keys"].items():
-                user_id = UserId(user_id)
+                with report(InvalidId) as caught:
+                    user_id = UserId(user_id)
+                if caught:
+                    continue
 
                 if self.outdated[user_id] == sync_token:
                     del self.outdated[user_id]

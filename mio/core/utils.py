@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from inspect import isawaitable
 from io import StringIO
 from typing import (
-    Any, Awaitable, Dict, Generator, Iterator, Mapping, MutableMapping,
+    Any, Awaitable, Dict, Generator, Iterator, List, Mapping, MutableMapping,
     Optional, Tuple, Type, TypeVar, Union,
 )
 
@@ -107,10 +107,15 @@ async def make_awaitable(result):
 @contextmanager
 def report(
     *types: Type[Exception], level: int = logging.WARNING, trace: bool = False,
-) -> Iterator[None]:
+) -> Iterator[List[Exception]]:
+
+    caught: List[Exception] = []
+
     try:
-        yield
+        yield caught
     except types as e:
+        caught.append(e)
+
         if trace:
             LOG.exception("Caught exception", stacklevel=3)
         else:

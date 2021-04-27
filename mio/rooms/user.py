@@ -17,6 +17,10 @@ class RoomUser:
     state: StateBase[Member] = field(repr=False)
 
 
+    def __post_init__(self) -> None:
+        self.user_id  # fail early if user ID is invalid
+
+
     @property
     def user_id(self) -> UserId:
         return UserId(self.state.state_key)

@@ -1,20 +1,29 @@
 import re
-from typing import Optional
+from dataclasses import dataclass
+from typing import Optional, Type
 
 from yarl import URL
 
 MXC = URL
 
 
+@dataclass
+class InvalidId(TypeError):
+    type:            Type["_Identifier"]
+    expected_format: str
+    max_length:      int
+    got_value:       str
+
+
 class _Identifier(str):
     sigil           = r"one character, set me in subclasses"
-    localpart_regex = r".+"
+    localpart_regex = r"[^:]+"
     server_regex    = r"[a-zA-Z\d.:-]*[a-zA-Z\d]"
 
 
     def __new__(cls, content: str) -> "_Identifier":
         if not re.match(cls.regex(), content) or len(content) > 255:
-            raise TypeError(f"{content}: incorrect format or >255 characters")
+            raise InvalidId(cls, cls.regex(), 255, content)
 
         return str.__new__(cls, content)
 
@@ -25,7 +34,8 @@ class _Identifier(str):
 
     @classmethod
     def regex(cls) -> str:
-        return rf"^{cls.sigil}{cls.localpart_regex}(:{cls.server_regex})?"
+        sigil = re.escape(cls.sigil)
+        return rf"^{sigil}{cls.localpart_regex}(:{cls.server_regex})?$"
 
 
     @property
@@ -43,7 +53,8 @@ class _Identifier(str):
 class _DomainIdentifier(_Identifier):
     @classmethod
     def regex(cls) -> str:
-        return rf"^{cls.sigil}{cls.localpart_regex}:{cls.server_regex}"
+        sigil = re.escape(cls.sigil)
+        return rf"^{sigil}{cls.localpart_regex}:{cls.server_regex}"
 
 
     @property
@@ -52,22 +63,22 @@ class _DomainIdentifier(_Identifier):
 
 
 class GroupId(_DomainIdentifier):
-    sigil           = r"+"
+    sigil           = "+"
     localpart_regex = r"[a-z\d._=/-]+"
 
 
 class RoomId(_DomainIdentifier):
-    sigil = r"!"
+    sigil = "!"
 
 
 class RoomAlias(_DomainIdentifier):
-    sigil = r"#"
+    sigil = "#"
 
 
 class UserId(_DomainIdentifier):
-    sigil           = r"@"
+    sigil           = "@"
     localpart_regex = r"[\x21-\x39\x3B-\x7E]+"
 
 
 class EventId(_Identifier):
-    sigil = r"\$"
+    sigil = "$"

@@ -9,8 +9,8 @@ from ..core.callbacks import CallbackGroup, Callbacks
 from ..core.contents import EventContent
 from ..core.data import IndexableMap, Parent, Runtime
 from ..core.files import decode_name
-from ..core.ids import RoomAlias, RoomId, UserId
-from ..core.utils import remove_none
+from ..core.ids import InvalidId, RoomAlias, RoomId, UserId
+from ..core.utils import remove_none, report
 from ..e2e.e2e import InboundGroupSessionKey
 from ..module import ClientModule
 from .contents.actions import Typing
@@ -25,8 +25,13 @@ if TYPE_CHECKING:
 
 class MioRoomCallbacks(CallbackGroup):
     async def member(self, room: Room, event: StateBase[Member]) -> None:
-        content  = event.content
-        user_id  = UserId(event.state_key)
+        content = event.content
+
+        with report(InvalidId) as caught:
+            user_id  = UserId(event.state_key)
+        if caught:
+            return
+
         previous = event.previous if isinstance(event, StateEvent) else None
         places   = {
             Member.Kind.invite: room.state.invitees,
