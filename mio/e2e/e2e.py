@@ -1,3 +1,6 @@
+# Copyright mio authors & contributors <https://github.com/mirukana/mio>
+# SPDX-License-Identifier: LGPL-3.0-or-later
+
 import json
 from asyncio import Future, ensure_future
 from dataclasses import dataclass, field

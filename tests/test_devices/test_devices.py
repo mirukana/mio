@@ -1,3 +1,6 @@
+# Copyright mio authors & contributors <https://github.com/mirukana/mio>
+# SPDX-License-Identifier: LGPL-3.0-or-later
+
 from conftest import new_device_from
 from mio.client import Client
 from mio.net.errors import MatrixError

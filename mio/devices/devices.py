@@ -1,3 +1,6 @@
+# Copyright mio authors & contributors <https://github.com/mirukana/mio>
+# SPDX-License-Identifier: LGPL-3.0-or-later
+
 from asyncio import Lock
 from contextlib import suppress
 from dataclasses import dataclass, field

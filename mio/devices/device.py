@@ -1,3 +1,6 @@
+# Copyright mio authors & contributors <https://github.com/mirukana/mio>
+# SPDX-License-Identifier: LGPL-3.0-or-later
+
 import asyncio
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Dict, List, Optional
