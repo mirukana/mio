@@ -63,7 +63,7 @@ def on_text_message(room: Room, event: TimelineEvent[Text]) -> None:
 async def main() -> None:
     async with Client("/tmp/mio-example", "https://example.org") as client:
         # Register a function that will be called when we receive Text events:
-        client.rooms.callbacks[Text].append(on_text_message)
+        client.rooms.callbacks[TimelineEvent[Text]].append(on_text_message)
 
         if client.path.exists():
             await client.load()
@@ -87,5 +87,5 @@ async def main() -> None:
         print(client.rooms[room_id].timeline)
 
 
-asyncio.get_event_loop().run_until_complete(main())
+asyncio.run(main())
 ```
