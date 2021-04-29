@@ -1,11 +1,12 @@
 # mio
 
-Experimental high-level Python Matrix library, with support for end-to-end 
-encryption and persistence.
+High-level Python Matrix library, with support for end-to-end encryption 
+and persistence. Currently in early development, API can change anytime.
 
 ## Installation
 
-Requires Python 3.7 or later and olm 3 development headers.
+Requires Python 3.7 or later and olm 3 development headers installed 
+on the system.
 
 ```sh
 pip3 install -U --user .
@@ -32,7 +33,8 @@ Arguments that can be added to the pytest command include:
 
 - Paths to the files in *tests/* to run, instead of running everything
 - `--pdb` to disable parallel testing and let debugger calls work normally
-- `--capture=no`/`-s` to show logging output and prints in real time
+- `--capture=no`/`-s` to show logging output and prints in real time, 
+  combine with `--pdb`
 - `--cov` to generate test coverage info, terminal and HTML by default.  
   Don't pass file paths when using this flag, or the results will be incorrect.
 
