@@ -5,20 +5,25 @@ import asyncio
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Awaitable, Callable, Generator, Generic, List, Optional
+from typing import (
+    Awaitable, Callable, Generator, Generic, List, Optional, TypeVar,
+)
 
 from .files import ReadableIO
-from .utils import MaybeCoro, StrBytes, T, make_awaitable
+from .utils import MaybeCoro, make_awaitable
 
 TransferUpdateCallback = Optional[Callable[["Transfer"], MaybeCoro]]
 
+AwaitT = TypeVar("AwaitT")
+ANextT = TypeVar("ANextT")
+
 
 @dataclass
-class Transfer(Generic[T], Awaitable[T]):
-    data:      Optional[ReadableIO]   = None
-    size:      Optional[int]          = None
-    on_update: TransferUpdateCallback = None
-    task:      Optional[Awaitable[T]] = None
+class Transfer(Generic[AwaitT, ANextT], Awaitable[AwaitT]):
+    data:      Optional[ReadableIO]        = None
+    size:      Optional[int]               = None
+    on_update: TransferUpdateCallback      = None
+    task:      Optional[Awaitable[AwaitT]] = None
 
     started_at:    datetime           = field(init=False)
     read:          int                = field(init=False)
@@ -35,7 +40,7 @@ class Transfer(Generic[T], Awaitable[T]):
         self.restart()
 
 
-    def __await__(self) -> Generator[None, None, T]:
+    def __await__(self) -> Generator[None, None, AwaitT]:
         if not self.task:
             raise RuntimeError
 
@@ -46,7 +51,7 @@ class Transfer(Generic[T], Awaitable[T]):
         return self
 
 
-    async def __anext__(self) -> StrBytes:
+    async def __anext__(self) -> ANextT:
         while self.paused or not self.data:
             await asyncio.sleep(0.1)
 

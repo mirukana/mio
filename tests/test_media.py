@@ -16,8 +16,8 @@ pytestmark = mark.asyncio
 
 
 async def test_up_download_path(alice: Client, image: Path, tmp_path: Path):
-    got:  List[Transfer[Media]] = []
-    got2: List[Transfer[Media]] = []
+    got:  List[Transfer[Media, bytes]] = []
+    got2: List[Transfer[Media, bytes]] = []
 
     first = await alice.media.upload_from_path(image, on_update=got.append)
     assert got
