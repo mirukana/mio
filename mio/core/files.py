@@ -8,14 +8,17 @@ import re
 import shutil
 import stat
 import sys
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager, suppress
 from pathlib import Path
-from typing import Any, AsyncIterator, Optional, Union
+from tempfile import NamedTemporaryFile
+from typing import IO, Any, AsyncIterator, Iterator, Optional, Union
 from urllib.parse import quote, unquote
 
 import aiofiles
 import filetype
 from aiofiles.os import wrap as aiowrap  # type: ignore
+from aiofiles.threadpool.binary import AsyncBufferedReader
+from aiofiles.threadpool.text import AsyncTextIOWrapper
 from aiopath import AsyncPath
 from binaryornot.helpers import is_binary_string
 
@@ -38,6 +41,8 @@ SVG_REGEX = re.compile(
     r"(?:<svg|<!DOCTYPE svg)\b",
     re.DOTALL,
 )
+
+TRUNCATE_FILE_MODES = {"w", "wb", "w+", "wb+"}
 
 # Characters that can't be in file/dir names on either windows, mac or linux -
 # Actual % must be encoded too to not conflict with % encoded chars
@@ -97,6 +102,58 @@ async def add_write_permissions(path: Union[Path, str]) -> AsyncPath:
     read_bits = stat.S_IREAD | stat.S_IRGRP | stat.S_IROTH
     await apath.chmod(mode | (mode & read_bits) >> 1)  # Copy read → write bits
     return apath
+
+
+@contextmanager
+def sync_atomic_write(
+    path: Union[Path, str], mode: str = "wt", **kwargs,
+) -> Iterator[IO]:
+
+    final  = Path(path)
+    prefix = f".{final.stem}."
+
+    with NamedTemporaryFile(
+        dir=final.parent, prefix=prefix, suffix=".partial", delete=False,
+    ) as file:
+        temp = Path(file.name)
+
+    try:
+        if mode not in TRUNCATE_FILE_MODES and final.exists():
+            shutil.copy2(final, temp)
+
+        with open(temp, mode, **kwargs) as out:
+            yield out
+
+        temp.replace(final)
+    finally:
+        with suppress(FileNotFoundError):
+            temp.unlink()
+
+
+@asynccontextmanager
+async def atomic_write(
+    path: Union[Path, str], mode: str = "wt", **kwargs,
+) -> AsyncIterator[Union[AsyncTextIOWrapper, AsyncBufferedReader]]:
+
+    final  = AsyncPath(path)
+    prefix = f".{final.stem}."
+
+    with NamedTemporaryFile(
+        dir=final.parent, prefix=prefix, suffix=".partial", delete=False,
+    ) as file:
+        temp = AsyncPath(file.name)
+
+    try:
+        if mode not in TRUNCATE_FILE_MODES and await final.exists():
+            await copy_file_with_metadata(final, temp)
+
+        async with aiofiles.open(temp, mode, **kwargs) as out:  # type: ignore
+            yield out
+
+        await temp.replace(final)
+    finally:
+        with suppress(FileNotFoundError):
+            await temp.unlink()
 
 
 @asynccontextmanager

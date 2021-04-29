@@ -20,6 +20,7 @@ from aiopath import AsyncPath
 from yarl import URL
 
 from .errors import MioError
+from .files import atomic_write, sync_atomic_write
 from .utils import DictS, NoneType, T, deep_find_parent_classes
 
 if sys.version_info <= (3, 9):
@@ -411,7 +412,8 @@ class JSONFile(JSON):
             data = self.json
 
             if data != "{}":
-                Path(self.path).write_text(data)
+                with sync_atomic_write(self.path) as out:
+                    out.write(data)
 
     @property
     def path(self) -> AsyncPath:
@@ -423,7 +425,8 @@ class JSONFile(JSON):
         data = self.json
 
         if data != "{}":
-            await self.path.write_text(data)
+            async with atomic_write(self.path) as out:
+                await out.write(data)  # type: ignore
 
 
     async def load(self) -> "JSONFile":

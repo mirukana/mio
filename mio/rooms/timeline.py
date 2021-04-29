@@ -15,6 +15,7 @@ from sortedcollections import ValueSortedDict
 from ..core.contents import EventContent
 from ..core.data import JSON, IndexableMap, JSONFile, Parent, Runtime
 from ..core.events import InvalidEvent
+from ..core.files import atomic_write
 from ..core.ids import EventId
 from ..core.utils import get_logger, remove_none, report
 from ..e2e.contents import Megolm
@@ -171,13 +172,16 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
 
             if not await path.exists():
                 await path.parent.mkdir(parents=True, exist_ok=True)
-                await path.write_text("[]")
+                async with atomic_write(path) as output:
+                    await output.write("[]")  # type: ignore
 
-            async with aiofiles.open(path, "r+") as file:
+            async with aiofiles.open(path, "r") as file:
                 evs  = json.loads(await file.read())
                 evs += event_dicts
-                await file.seek(0)
-                await file.write(json.dumps(evs, indent=4, ensure_ascii=False))
+
+            async with atomic_write(path, "w") as file2:
+                dump = json.dumps(evs, indent=4, ensure_ascii=False)
+                await file2.write(dump)  # type: ignore
 
             self._loaded_files.add(path)
 

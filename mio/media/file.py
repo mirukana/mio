@@ -12,8 +12,8 @@ from aiopath import AsyncPath
 
 from ..core.data import Parent
 from ..core.files import (
-    SeekableIO, add_write_permissions, copy_file_with_metadata, decode_name,
-    read_chunked_binary, remove_write_permissions, sha256_chunked,
+    SeekableIO, add_write_permissions, atomic_write, copy_file_with_metadata,
+    decode_name, read_chunked_binary, remove_write_permissions, sha256_chunked,
 )
 from ..core.ids import MXC
 from ..net.exchange import Reply
@@ -49,9 +49,9 @@ class Media:
         if not await content.exists():
             await content.parent.mkdir(parents=True, exist_ok=True)
 
-            async with aiofiles.open(content, "wb") as output:
+            async with atomic_write(content, "wb") as output:
                 async for chunk in read_chunked_binary(data):
-                    await output.write(chunk)
+                    await output.write(chunk)  # type: ignore
 
             await remove_write_permissions(content)
 

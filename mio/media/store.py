@@ -14,7 +14,8 @@ from yarl import URL
 
 from ..core.data import Parent
 from ..core.files import (
-    SeekableIO, encode_name, guess_mime, is_probably_binary, measure,
+    SeekableIO, atomic_write, encode_name, guess_mime, is_probably_binary,
+    measure,
 )
 from ..core.ids import MXC
 from ..core.transfer import Transfer, TransferUpdateCallback
@@ -44,10 +45,10 @@ class MediaStore(ClientModule):
         filename:  Optional[str]          = None,
         on_update: TransferUpdateCallback = None,
         mime:      Optional[str]          = None,
-    ) -> Transfer[Media]:
+    ) -> Transfer[Media, bytes]:
         # TODO: check server max allowed size
 
-        transfer: Transfer[Media] = Transfer(data, on_update=on_update)
+        transfer: Transfer[Media, bytes] = Transfer(data, on_update=on_update)
 
         async def _upload(mime=mime) -> Media:
             size          = await measure(data)
@@ -99,9 +100,9 @@ class MediaStore(ClientModule):
 
     def download(
         self, mxc: MXC, on_update: TransferUpdateCallback = None,
-    ) -> Transfer[Media]:
+    ) -> Transfer[Media, bytes]:
 
-        transfer: Transfer[Media] = Transfer(on_update=on_update)
+        transfer: Transfer[Media, bytes] = Transfer(on_update=on_update)
 
         async def _download() -> Media:
             assert mxc.host
@@ -139,9 +140,9 @@ class MediaStore(ClientModule):
         for_mxc:   MXC,
         form:      ThumbnailForm,
         on_update: TransferUpdateCallback = None,
-    ) -> Transfer[Thumbnail]:
+    ) -> Transfer[Thumbnail, bytes]:
 
-        transfer: Transfer[Thumbnail] = Transfer(on_update=on_update)
+        transfer: Transfer[Thumbnail, bytes] = Transfer(on_update=on_update)
 
         async def _get_thumb() -> Thumbnail:
             assert for_mxc.host
@@ -233,7 +234,7 @@ class MediaStore(ClientModule):
         # 206 means we requested a range of bytes and the server complied
         mode = "ab" if reply.status == 206 else "wb"
 
-        async with aiofiles.open(path, mode) as output:  # type: ignore
+        async with atomic_write(path, mode) as output:
             async for chunk in transfer:
                 await output.write(chunk)
 
