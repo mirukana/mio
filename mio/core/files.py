@@ -111,9 +111,10 @@ def sync_atomic_write(
 
     final  = Path(path)
     prefix = f".{final.stem}."
+    suffix = f"{final.suffix}.partial"
 
     with NamedTemporaryFile(
-        dir=final.parent, prefix=prefix, suffix=".partial", delete=False,
+        dir=final.parent, prefix=prefix, suffix=suffix, delete=False,
     ) as file:
         temp = Path(file.name)
 
@@ -137,9 +138,10 @@ async def atomic_write(
 
     final  = AsyncPath(path)
     prefix = f".{final.stem}."
+    suffix = f"{final.suffix}.partial"
 
     with NamedTemporaryFile(
-        dir=final.parent, prefix=prefix, suffix=".partial", delete=False,
+        dir=final.parent, prefix=prefix, suffix=suffix, delete=False,
     ) as file:
         temp = AsyncPath(file.name)
 

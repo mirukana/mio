@@ -61,7 +61,7 @@ async def test_atomic_write(tmp_path: Path):
     assert not new.exists()
 
     def tmp_file_exists():
-        name = re.compile(r"^\.x\..+?\.partial$")
+        name = re.compile(r"^\.x\..+?\.json\.partial$")
         return any(name.match(f.name) for f in tmp_path.iterdir())
 
     async with atomic_write(new) as out1:
