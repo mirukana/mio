@@ -175,7 +175,7 @@ async def measure(data: SeekableIO) -> int:
         return end - start
 
 
-async def read_chunked(data: ReadableIO) -> IOChunks:
+async def read_chunked(data: SeekableIO) -> IOChunks:
     async with rewind(data):
         while True:
             chunk = await make_awaitable(data.read(4096))
@@ -184,12 +184,12 @@ async def read_chunked(data: ReadableIO) -> IOChunks:
             yield chunk
 
 
-async def read_chunked_binary(data: ReadableIO) -> AsyncIterator[bytes]:
+async def read_chunked_binary(data: SeekableIO) -> AsyncIterator[bytes]:
     async for chunk in read_chunked(data):
         yield chunk.encode() if isinstance(chunk, str) else chunk
 
 
-async def guess_mime(data: ReadableIO) -> str:
+async def guess_mime(data: SeekableIO) -> str:
     try:
         chunk1 = await read_chunked(data).__anext__()
     except StopAsyncIteration:
@@ -198,7 +198,7 @@ async def guess_mime(data: ReadableIO) -> str:
     return MIME_DETECTOR.from_buffer(chunk1)
 
 
-async def sha256_chunked(data: ReadableIO) -> str:
+async def sha256_chunked(data: SeekableIO) -> str:
     sha256 = hashlib.sha256()
 
     async for chunk in read_chunked_binary(data):
