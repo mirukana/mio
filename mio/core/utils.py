@@ -2,12 +2,13 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
 import logging
+import re
 from contextlib import contextmanager
 from inspect import isawaitable
 from io import StringIO
 from typing import (
     Any, Awaitable, Dict, Generator, Iterator, List, Mapping, MutableMapping,
-    Optional, Tuple, Type, TypeVar, Union,
+    Optional, Pattern, Tuple, Type, TypeVar, Union,
 )
 
 from rich.console import Console
@@ -17,6 +18,8 @@ from rich.text import Text as RichText
 # Characters that can't be in file/dir names on either windows, mac or linux -
 # Actual % must be encoded too to not conflict with % encoded chars
 FS_BAD_CHARS: str = r'"%*/:<>?\|'
+
+HTML_TAGS_RE: Pattern = re.compile(r"<\/?[^>]+(>|$)")
 
 StrBytes     = Union[str, bytes]
 DictS        = Dict[str, Any]
