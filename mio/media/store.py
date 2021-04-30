@@ -14,8 +14,7 @@ from yarl import URL
 
 from ..core.data import Parent
 from ..core.files import (
-    SeekableIO, atomic_write, encode_name, guess_mime, is_probably_binary,
-    measure,
+    SeekableIO, atomic_write, encode_name, guess_mime, measure,
 )
 from ..core.ids import MXC
 from ..core.transfer import Transfer, TransferUpdateCallback
@@ -44,13 +43,12 @@ class MediaStore(ClientModule):
         data:      SeekableIO,
         filename:  Optional[str]          = None,
         on_update: TransferUpdateCallback = None,
-        mime:      Optional[str]          = None,
     ) -> Transfer[Media, bytes]:
         # TODO: check server max allowed size
 
         transfer: Transfer[Media, bytes] = Transfer(data, on_update=on_update)
 
-        async def _upload(mime=mime) -> Media:
+        async def _upload() -> Media:
             size          = await measure(data)
             transfer.size = size
             media         = await Media.from_data(self, data)
@@ -60,9 +58,7 @@ class MediaStore(ClientModule):
                     # TODO: check if mxc still exists on server & is accessible
                     return media
 
-            if mime is None:
-                mime = await guess_mime(data)
-
+            mime    = await guess_mime(data)
             url     = self.net.media_api / "upload"
             headers = {"Content-Type": mime, "Content-Length": str(size)}
 
@@ -81,21 +77,11 @@ class MediaStore(ClientModule):
 
 
     async def upload_from_path(
-        self,
-        path:      Union[Path, str],
-        on_update: TransferUpdateCallback = None,
-        mime:      Optional[str]          = None,
-        binary:    Optional[bool]         = None,
+        self, path: Union[Path, str], on_update: TransferUpdateCallback = None,
     ) -> Media:
 
-        if binary is None:
-            binary = await is_probably_binary(path)
-
-        path = Path(path)
-        mode = "rb" if binary else "rt"
-
-        async with aiofiles.open(path, mode) as file:  # type: ignore
-            return await self.upload(file, path.name, on_update, mime)
+        async with aiofiles.open(path, "rb") as file:
+            return await self.upload(file, Path(path).name, on_update)
 
 
     def download(

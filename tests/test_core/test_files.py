@@ -25,16 +25,7 @@ async def test_encode_name():
 
 
 async def test_guess_mime_empty():
-    assert await guess_mime(BytesIO()) == "inode/x-empty"
-
-
-async def test_guess_mime_from_filename():
-    assert await guess_mime(BytesIO(b"abc")) == "application/octet-stream"
-    assert await guess_mime(BytesIO(b"abc"), "a.png") == "image/png"
-
-
-async def test_guess_mime_svg_no_filename():
-    assert await guess_mime(StringIO("<svg>")) == "image/svg+xml"
+    assert await guess_mime(BytesIO()) == "application/x-empty"
 
 
 async def test_sha256_binary(image: Path):

@@ -38,31 +38,22 @@ async def test_up_download_path(alice: Client, image: Path, tmp_path: Path):
     assert (await media.last_mxc) == (await first.last_mxc)
 
 
-async def test_upload_no_name_manual_mime(alice: Client, image: Path):
+async def test_upload_text_file_from_path(alice: Client, utf8_file: Path):
+    media = await alice.media.upload_from_path(utf8_file)
+    assert media._reply
+    assert media._reply.request.headers["Content-Type"] == "text/plain"
+
+
+async def test_upload_nameless(alice: Client, image: Path):
     async with aiofiles.open(image, "rb") as file:
-        media = await alice.media.upload(file, mime="application/fake")
+        media = await alice.media.upload(file)
         mxc   = await media.last_mxc
         await media.remove()
         assert not await media.content.exists()
 
     media = await alice.media.download(mxc)
-    assert media._reply and media._reply.mime == "application/fake"
-    ref = await media.last_reference
+    ref   = await media.last_reference
     assert ref.named_file.name == ref.mxc.path[1:]
-
-
-async def test_upload_manual_binary(alice: Client, utf8_file: Path):
-    media = await alice.media.upload_from_path(utf8_file)
-    assert media._reply
-    assert media._reply.request.headers["Content-Type"] == "text/plain"
-    assert media._reply.request.headers["Content-Length"] == "15"
-    await media.remove()
-
-    media = await alice.media.upload_from_path(utf8_file, binary=True)
-    octet = "application/octet-stream"
-    assert media._reply
-    assert media._reply.request.headers["Content-Type"] == octet
-    assert media._reply.request.headers["Content-Length"] == "15"
 
 
 async def test_partial_download(alice: Client, image: Path):

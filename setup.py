@@ -28,9 +28,8 @@ setup(
         aiohttp           >= 3.7.3,  < 4
         aiopath           >= 0.5.4,  < 0.6
         backoff           >= 1.10.0, < 2
-        binaryornot       >= 0.4.4,  < 0.5
-        filetype          >= 1.0.7,  < 2
         pycryptodomex     >= 3.10.1, < 4
+        python-magic      >= 0.4.22, < 0.5
         python-olm        >= 3.1.3,  < 4
         rich              >= 10.1.0, < 11
         sortedcollections >= 1.2.1,  < 2

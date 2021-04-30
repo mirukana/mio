@@ -51,26 +51,19 @@ class Profile(JSONClientModule):
         data:      SeekableIO,
         filename:  Optional[str]          = None,
         on_update: TransferUpdateCallback = None,
-        mime:      Optional[str]          = None,
     ) -> Media:
 
-        args  = (data, filename, on_update, mime)
-        media = await self.client.media.upload(*args)
+        media = await self.client.media.upload(data, filename, on_update)
         await self.set_avatar(await media.last_mxc)
         return media
 
 
     async def set_avatar_from_path(
-        self,
-        path:      Union[Path, str],
-        on_update: TransferUpdateCallback = None,
-        mime:      Optional[str]          = None,
-        binary:    Optional[bool]         = None,
+        self, path: Union[Path, str], on_update: TransferUpdateCallback = None,
     ) -> Media:
 
-        args  = (path, on_update, mime, binary)
-        media = await self.client.media.upload_from_path(*args)
-        await self.set_avatar((await media.last_reference).mxc)
+        media = await self.client.media.upload_from_path(path, on_update)
+        await self.set_avatar(await media.last_mxc)
         return media
 
 

@@ -2,25 +2,22 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
 import hashlib
-import mimetypes
 import os
-import re
 import shutil
 import stat
 import sys
 from contextlib import asynccontextmanager, contextmanager, suppress
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import IO, Any, AsyncIterator, Iterator, Optional, Union
+from typing import IO, Any, AsyncIterator, Iterator, Union
 from urllib.parse import quote, unquote
 
 import aiofiles
-import filetype
 from aiofiles.os import wrap as aiowrap  # type: ignore
 from aiofiles.threadpool.binary import AsyncBufferedReader
 from aiofiles.threadpool.text import AsyncTextIOWrapper
 from aiopath import AsyncPath
-from binaryornot.helpers import is_binary_string
+from magic import Magic
 
 from .utils import StrBytes, make_awaitable
 
@@ -34,19 +31,13 @@ ReadableIO = Union["Readable", "AsyncReadable"]
 SeekableIO = Union["Seekable", "AsyncSeekable"]
 IOChunks   = AsyncIterator[StrBytes]
 
-# XXX: SVG could begin with big comment spanning more than size of first chunk
-SVG_REGEX = re.compile(
-    r"^\s*(?:<\?xml\b[^>]*>[^<]*)?"
-    r"(?:<!--.*?-->[^<]*)*"
-    r"(?:<svg|<!DOCTYPE svg)\b",
-    re.DOTALL,
-)
-
 TRUNCATE_FILE_MODES = {"w", "wb", "w+", "wb+"}
 
 # Characters that can't be in file/dir names on either windows, mac or linux -
 # Actual % must be encoded too to not conflict with % encoded chars
 FS_BAD_CHARS: str = r'"%*/:<>?\|'
+
+MIME_DETECTOR: Magic = Magic(mime=True)
 
 # https://github.com/Tinche/aiofiles/issues/61#issuecomment-794163101
 copy_file               = aiowrap(shutil.copyfile)
@@ -198,32 +189,13 @@ async def read_chunked_binary(data: ReadableIO) -> AsyncIterator[bytes]:
         yield chunk.encode() if isinstance(chunk, str) else chunk
 
 
-async def guess_mime(data: ReadableIO, filename: Optional[str] = None) -> str:
+async def guess_mime(data: ReadableIO) -> str:
     try:
         chunk1 = await read_chunked(data).__anext__()
     except StopAsyncIteration:
-        return "inode/x-empty"
+        return "application/x-empty"
 
-    guess_chunk = chunk1.encode() if isinstance(chunk1, str) else chunk1
-    mime        = filetype.guess_mime(guess_chunk)
-
-    if mime is None and filename:
-        mime = mimetypes.guess_type(filename)[0]
-
-    if mime is None and isinstance(chunk1, str):
-        if SVG_REGEX.match(chunk1):
-            return "image/svg+xml"
-        return "text/plain"
-
-    if mime is None:
-        return "application/octet-stream"
-
-    return mime
-
-
-async def is_probably_binary(path: Union[Path, str]) -> bool:
-    async with aiofiles.open(path, "rb") as file:
-        return is_binary_string(await file.read(1024))
+    return MIME_DETECTOR.from_buffer(chunk1)
 
 
 async def sha256_chunked(data: ReadableIO) -> str:
