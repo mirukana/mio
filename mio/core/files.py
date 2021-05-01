@@ -1,12 +1,14 @@
 # Copyright mio authors & contributors <https://github.com/mirukana/mio>
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
+import ctypes
 import hashlib
 import os
 import shutil
 import stat
 import sys
 from contextlib import asynccontextmanager, contextmanager, suppress
+from io import BytesIO
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import IO, Any, AsyncIterator, Iterator, Union
@@ -18,6 +20,8 @@ from aiofiles.threadpool.binary import AsyncBufferedReader
 from aiofiles.threadpool.text import AsyncTextIOWrapper
 from aiopath import AsyncPath
 from magic import Magic
+from PIL import Image as PILImage
+from pymediainfo import MediaInfo
 
 from .utils import StrBytes, make_awaitable
 
@@ -167,12 +171,25 @@ async def try_rewind(data: Any) -> AsyncIterator[None]:
         yield
 
 
+async def position(data: SeekableIO) -> int:
+    return await make_awaitable(data.tell())
+
+
 async def measure(data: SeekableIO) -> int:
     async with rewind(data):
-        start = await make_awaitable(data.tell())
+        start = await position(data)
         await make_awaitable(data.seek(0, os.SEEK_END))
-        end = await make_awaitable(data.tell())
+        end = await position(data)
         return end - start
+
+
+async def read_whole(data: ReadableIO) -> StrBytes:
+    return await make_awaitable(data.read())
+
+
+async def read_whole_binary(data: ReadableIO) -> bytes:
+    read = await read_whole(data)
+    return read.encode() if isinstance(read, str) else read
 
 
 async def read_chunked(data: SeekableIO) -> IOChunks:
@@ -190,10 +207,11 @@ async def read_chunked_binary(data: SeekableIO) -> AsyncIterator[bytes]:
 
 
 async def guess_mime(data: SeekableIO) -> str:
-    try:
-        chunk1 = await read_chunked(data).__anext__()
-    except StopAsyncIteration:
-        return "application/x-empty"
+    async with rewind(data):
+        try:
+            chunk1 = await read_chunked(data).__anext__()
+        except StopAsyncIteration:
+            return "application/x-empty"
 
     return MIME_DETECTOR.from_buffer(chunk1)
 
@@ -205,3 +223,61 @@ async def sha256_chunked(data: SeekableIO) -> str:
         sha256.update(chunk)
 
     return sha256.hexdigest()
+
+
+def has_transparency(image: PILImage) -> bool:
+    if image.mode == "P" and "transparency" in image.info:
+        transparent = image.info["transparency"]
+        return any(pixel == transparent for _count, pixel in image.getcolors())
+
+    with suppress(ValueError, TypeError, IndexError):
+        return image.getextrema()[image.getbands().index("A")][0] < 255
+
+    return False
+
+
+async def save_png(image: PILImage, optimize: bool = True) -> bytes:
+    buffer = BytesIO()
+    image.save(buffer, "PNG", optimize=optimize)
+    return buffer.getvalue()
+
+
+async def save_jpg(image: PILImage, optimize: bool = True) -> bytes:
+    buffer = BytesIO()
+    image  = image.convert("RGB")
+    image.save(buffer, "JPEG", optimize=optimize, quality=75, progressive=True)
+    return buffer.getvalue()
+
+
+async def media_info(data: SeekableIO) -> MediaInfo:
+    lib, handle, _str_version, lib_version = MediaInfo._get_library()
+
+    xml_option = "OLDXML" if lib_version >= (17, 10) else "XML"
+    lib.MediaInfo_Option(handle, "CharSet", "UTF-8")
+    lib.MediaInfo_Option(handle, "Inform", xml_option)
+    lib.MediaInfo_Option(handle, "Complete", "1")
+    lib.MediaInfo_Option(handle, "ParseSpeed", "0.5")
+
+    size = await measure(data)
+    lib.MediaInfo_Open_Buffer_Init(handle, size, 0)
+
+    # mediainfo doesn't need to read the entire file, and the read_chunked
+    # generator won't rewind on its own if it isn't fully exhausted
+    async with rewind(data):
+        async for chunk in read_chunked_binary(data):
+            lc = len(chunk)
+            if lib.MediaInfo_Open_Buffer_Continue(handle, chunk, lc) & 0x08:
+                break
+
+            seek = lib.MediaInfo_Open_Buffer_Continue_GoTo_Get(handle)
+
+            if seek != ctypes.c_uint64(-1).value:
+                await make_awaitable(data.seek(seek))
+                lib.MediaInfo_Open_Buffer_Init(handle, size, seek)
+
+    lib.MediaInfo_Open_Buffer_Finalize(handle)
+
+    info: str = lib.MediaInfo_Inform(handle, 0)
+    lib.MediaInfo_Close(handle)
+    lib.MediaInfo_Delete(handle)
+    return MediaInfo(info)

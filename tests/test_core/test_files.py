@@ -3,14 +3,15 @@
 
 import re
 import sys
-from io import BytesIO, StringIO
+from io import BytesIO
 from pathlib import Path
 
 import aiofiles
 from mio.core.files import (
-    FS_BAD_CHARS, atomic_write, encode_name, guess_mime, sha256_chunked,
-    sync_atomic_write,
+    FS_BAD_CHARS, atomic_write, encode_name, guess_mime, has_transparency,
+    sha256_chunked, sync_atomic_write,
 )
+from PIL import Image as PILImage
 from pytest import mark, raises
 
 pytestmark = mark.asyncio
@@ -111,3 +112,12 @@ async def test_atomic_append(tmp_path: Path):
             raise RuntimeError
 
     assert new.read_text() == "abcdefDEF"
+
+
+async def test_has_transparency(image: Path, transparent_indexed_png: Path):
+    assert has_transparency(PILImage.open(image)) is False
+    assert has_transparency(PILImage.open(transparent_indexed_png)) is True
+
+    rgba = BytesIO()
+    PILImage.open(transparent_indexed_png).convert("RGBA").save(rgba, "PNG")
+    assert has_transparency(PILImage.open(rgba)) is True

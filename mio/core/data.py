@@ -23,10 +23,18 @@ from .errors import MioError
 from .files import atomic_write, sync_atomic_write
 from .utils import DictS, NoneType, T, deep_find_parent_classes
 
+if sys.version_info < (3, 8):
+    from typing_extensions import Literal
+else:
+    from typing import Literal
+
 if sys.version_info <= (3, 9):
     from typing_extensions import Annotated, get_origin
 else:
     from typing import Annotated, get_origin
+
+Annotated = Annotated
+Literal   = Literal
 
 Loaders   = Dict[Union[str, Type], Callable[[Any, Any], Any]]
 Dumpers   = Dict[Union[str, Type], Callable[["JSON", Any], Any]]

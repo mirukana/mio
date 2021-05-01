@@ -132,5 +132,30 @@ async def large_image():
 
 
 @fixture
+async def transparent_indexed_png():
+    return Path("tests/data/2x2-indexed-transparency-metadata.png")
+
+
+@fixture
+async def gradient():
+    return Path("tests/data/64x48-gradient.png")
+
+
+@fixture
+async def gradient_transparency():
+    return Path("tests/data/64x48-gradient-with-transparency.png")
+
+
+@fixture
 async def utf8_file():
     return Path("tests/data/utf8")
+
+
+@fixture
+async def ogg():
+    return Path("tests/data/noise.ogg")
+
+
+@fixture
+async def mkv():
+    return Path("tests/data/unequal-track-lengths.mkv")
