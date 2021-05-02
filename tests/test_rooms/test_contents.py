@@ -16,6 +16,8 @@ from mio.rooms.room import Room
 from PIL import Image as PILImage
 from pytest import mark, raises
 
+from ..conftest import TestData
+
 pytestmark = mark.asyncio
 
 def create_encrypted_file(**init_kwargs):
@@ -86,28 +88,28 @@ def test_media_init():
         Media(body="")
 
 
-async def test_generic_file_from_path(alice: Client, utf8_file: Path):
-    file = await Media.from_path(alice, utf8_file)
+async def test_generic_file_from_path(alice: Client, data: TestData):
+    file = await Media.from_path(alice, data.utf8)
     assert isinstance(file, File)
 
-    assert file.body == file.filename == "utf8"
+    assert file.body == file.filename == data.utf8.name
     assert file.mxc and await alice.media.download(file.mxc)
     assert file.encrypted is None
     assert file.mime == "text/plain"
-    assert file.size == 15
+    assert file.size == data.utf8.stat().st_size
 
     check_no_thumbnail(file)
 
 
-async def test_image_from_path(alice: Client, large_image: Path):
-    image = await Media.from_path(alice, large_image)
+async def test_image_from_path(alice: Client, data: TestData):
+    image = await Media.from_path(alice, data.large_unicolor_png)
     assert isinstance(image, Image)
 
     assert image.mxc and await alice.media.download(image.mxc)
-    assert image.body == "1024x768-blue.png"
+    assert image.body == data.large_unicolor_png.name
     assert image.encrypted is None
     assert image.mime == "image/png"
-    assert image.size == 219
+    assert image.size == data.large_unicolor_png.stat().st_size
 
     assert image.thumbnail_mxc
     assert await alice.media.download(image.thumbnail_mxc)
@@ -118,28 +120,28 @@ async def test_image_from_path(alice: Client, large_image: Path):
     assert image.thumbnail_size and image.thumbnail_size < image.size
 
 
-async def test_video_from_path(alice: Client, mkv: Path):
-    video = await Media.from_path(alice, mkv)
+async def test_video_from_path(alice: Client, data: TestData):
+    video = await Media.from_path(alice, data.unequal_track_lengths_mkv)
     assert isinstance(video, Video)
 
-    assert video.body == "unequal-track-lengths.mkv"
+    assert video.body == data.unequal_track_lengths_mkv.name
     assert video.mxc and await alice.media.download(video.mxc)
     assert video.encrypted is None
     assert video.mime == "video/x-matroska"
-    assert video.size == 14_196
+    assert video.size == data.unequal_track_lengths_mkv.stat().st_size
 
     check_no_thumbnail(video)
 
 
-async def test_audio_from_path(alice: Client, ogg: Path):
-    audio = await Media.from_path(alice, ogg)
+async def test_audio_from_path(alice: Client, data: TestData):
+    audio = await Media.from_path(alice, data.noise_ogg)
     assert isinstance(audio, Audio)
 
-    assert audio.body == "noise.ogg"
+    assert audio.body == data.noise_ogg.name
     assert audio.mxc and await alice.media.download(audio.mxc)
     assert audio.encrypted is None
     assert audio.mime == "audio/ogg"
-    assert audio.size == 10_071
+    assert audio.size == data.noise_ogg.stat().st_size
 
 
 async def test_unthumbnailable_formats(alice: Client):
@@ -148,84 +150,80 @@ async def test_unthumbnailable_formats(alice: Client):
     assert not await thumb._set_thumbnail(alice, BytesIO(), "image/svg+xml")
 
 
-async def test_thumb_dimensions(alice: Client, image: Path, large_image: Path):
+async def test_thumb_dimensions(alice: Client, data: TestData):
     thumb = Thumbnailable(body="", mxc=MXC("mxc://a/b"))
 
-    async with aiofiles.open(image, "rb") as file:
-        data = await thumb._set_thumbnail(alice, file, "image/bmp")
-        assert data
-        assert PILImage.open(BytesIO(data)).size == (1, 1)  # unchanged
+    async with aiofiles.open(data.tiny_unicolor_bmp, "rb") as file:
+        got = await thumb._set_thumbnail(alice, file, "image/bmp")
+        assert got
+        assert PILImage.open(BytesIO(got)).size == (1, 1)  # unchanged
 
-    async with aiofiles.open(large_image, "rb") as file:
-        data = await thumb._set_thumbnail(alice, file, "image/png")
-        assert data
-        assert PILImage.open(BytesIO(data)).size == (800, 600)  # downscaled
+    async with aiofiles.open(data.large_unicolor_png, "rb") as file:
+        got = await thumb._set_thumbnail(alice, file, "image/png")
+        assert got
+        assert PILImage.open(BytesIO(got)).size == (800, 600)  # downscaled
 
 
-async def test_thumb_jpg_vs_png(
-    alice:                 Client,
-    gradient:              Path,
-    gradient_transparency: Path,
-    large_image:           Path,
-):
-    def png_size(image: Path) -> int:
+async def test_thumb_jpg_vs_png(alice: Client, data: TestData):
+    def png_len(image: Path) -> int:
         buffer = BytesIO()
         PILImage.open(image).save(buffer, "PNG", optimize=True)
         return len(buffer.getvalue())
 
-    def jpg_size(image: Path) -> int:
+    def jpg_len(image: Path) -> int:
         buffer = BytesIO()
         PILImage.open(image).convert("RGB").save(
             buffer, "JPEG", optimize=True, quality=75, progressive=True,
         )
         return len(buffer.getvalue())
 
-    assert png_size(gradient) > jpg_size(gradient)
-    assert png_size(gradient_transparency) > jpg_size(gradient_transparency)
-    assert png_size(large_image) < jpg_size(large_image)
+    assert png_len(data.gradient_png) > jpg_len(data.gradient_png)
+    assert png_len(data.gradient_hole_png) > jpg_len(data.gradient_hole_png)
+    assert png_len(data.large_unicolor_png) < jpg_len(data.large_unicolor_png)
 
     thumb = Thumbnailable(body="", mxc=MXC("mxc://a/b"))
 
-    async with aiofiles.open(gradient, "rb") as file:
-        data = await thumb._set_thumbnail(alice, file, "image/png")
-        assert data
-        assert PILImage.open(BytesIO(data)).format == "JPEG"
+    async with aiofiles.open(data.gradient_png, "rb") as file:
+        got = await thumb._set_thumbnail(alice, file, "image/png")
+        assert got
+        assert PILImage.open(BytesIO(got)).format == "JPEG"
 
-    async with aiofiles.open(gradient_transparency, "rb") as file:
+    async with aiofiles.open(data.gradient_hole_png, "rb") as file:
         # needed to not have data be None
         buffer = BytesIO(await file.read())
-        out = BytesIO()
+        out    = BytesIO()
         PILImage.open(buffer).resize((1024, 768)).save(out, "PNG")
         out.seek(0)
 
-        data = await thumb._set_thumbnail(alice, out, "image/png")
-        assert data
-        assert PILImage.open(BytesIO(data)).format == "PNG"
+        got = await thumb._set_thumbnail(alice, out, "image/png")
+        assert got
+        assert PILImage.open(BytesIO(got)).format == "PNG"
 
-    async with aiofiles.open(large_image, "rb") as file:
-        data = await thumb._set_thumbnail(alice, file, "image/png")
-        assert data
-        assert PILImage.open(BytesIO(data)).format == "PNG"
+    async with aiofiles.open(data.large_unicolor_png, "rb") as file:
+        got = await thumb._set_thumbnail(alice, file, "image/png")
+        assert got
+        assert PILImage.open(BytesIO(got)).format == "PNG"
 
 
-async def test_thumb_not_enough_saved_space(alice: Client, image: Path):
+async def test_thumb_not_enough_saved_space(alice: Client, data: TestData):
     thumb   = Thumbnailable(body="", mxc=MXC("mxc://a/b"))
     formats = THUMBNAIL_POSSIBLE_PIL_FORMATS
 
     # Not enough space saved, but original image is in an unacceptable format
 
-    assert PILImage.open(image).format not in formats
+    assert PILImage.open(data.tiny_unicolor_bmp).format not in formats
 
-    async with aiofiles.open(image, "rb") as file:
-        data = await thumb._set_thumbnail(alice, file, "image/bmp")
+    async with aiofiles.open(data.tiny_unicolor_bmp, "rb") as file:
+        got = await thumb._set_thumbnail(alice, file, "image/bmp")
 
-    assert data
-    assert len(data) > len(image.read_bytes()) * THUMBNAIL_SIZE_MAX_OF_ORIGINAL
+    assert got
+    original_size = data.tiny_unicolor_bmp.stat().st_size
+    assert len(got) > original_size * THUMBNAIL_SIZE_MAX_OF_ORIGINAL
 
     # Not enough space saved
 
     assert "PNG" in formats
     buffer = BytesIO()
-    PILImage.open(image).save(buffer, "PNG", optimize=True)
+    PILImage.open(data.tiny_unicolor_bmp).save(buffer, "PNG", optimize=True)
     buffer.seek(0)
     assert not await thumb._set_thumbnail(alice, buffer, "image/png")

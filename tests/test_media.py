@@ -12,13 +12,16 @@ from mio.media.file import Media
 from mio.media.thumbnail import ThumbnailForm, ThumbnailMode
 from pytest import mark
 
+from .conftest import TestData
+
 pytestmark = mark.asyncio
 
 
-async def test_up_download_path(alice: Client, image: Path, tmp_path: Path):
+async def test_up_download_path(alice: Client, data: TestData, tmp_path: Path):
     got:  List[Transfer[Media, bytes]] = []
     got2: List[Transfer[Media, bytes]] = []
 
+    image = data.tiny_unicolor_bmp
     first = await alice.media.upload_from_path(image, on_update=got.append)
     assert got
     assert first._reply
@@ -38,14 +41,14 @@ async def test_up_download_path(alice: Client, image: Path, tmp_path: Path):
     assert (await media.last_mxc) == (await first.last_mxc)
 
 
-async def test_upload_text_file_from_path(alice: Client, utf8_file: Path):
-    media = await alice.media.upload_from_path(utf8_file)
+async def test_upload_text_file_from_path(alice: Client, data: TestData):
+    media = await alice.media.upload_from_path(data.utf8)
     assert media._reply
     assert media._reply.request.headers["Content-Type"] == "text/plain"
 
 
-async def test_upload_nameless(alice: Client, image: Path):
-    async with aiofiles.open(image, "rb") as file:
+async def test_upload_nameless(alice: Client, data: TestData):
+    async with aiofiles.open(data.tiny_unicolor_bmp, "rb") as file:
         media = await alice.media.upload(file)
         mxc   = await media.last_mxc
         await media.remove()
@@ -56,11 +59,11 @@ async def test_upload_nameless(alice: Client, image: Path):
     assert ref.named_file.name == ref.mxc.path[1:]
 
 
-async def test_partial_download(alice: Client, image: Path):
+async def test_partial_download(alice: Client, data: TestData):
     # FIXME: looks like our local synapse doesn't support HTTP range headers;
     # this ends up only testing "we want a range but server doesn't comply"
 
-    media     = await alice.media.upload_from_path(image)
+    media     = await alice.media.upload_from_path(data.tiny_unicolor_bmp)
     mxc       = await media.last_mxc
     partial   = alice.media._partial_path(mxc)
     full_size = (await media.content.stat()).st_size
@@ -87,8 +90,8 @@ async def test_partial_download(alice: Client, image: Path):
     assert not await partial.exists()
 
 
-async def test_get_thumbnail(alice: Client, large_image: Path):
-    media = await alice.media.upload_from_path(large_image)
+async def test_get_thumbnail(alice: Client, data: TestData):
+    media = await alice.media.upload_from_path(data.large_unicolor_png)
     ref   = await media.last_reference
     assert not [t async for t in ref.thumbnails]
 
@@ -127,19 +130,20 @@ async def test_thumbnail_best_match():
     assert ThumbnailForm.best_match(1, 1, scale) is ThumbnailForm.medium
 
 
-async def test_multiple_refs(alice: Client, image: Path, image_symlink: Path):
-    media1 = await alice.media.upload_from_path(image)
-    media2 = await alice.media.upload_from_path(image_symlink)
+async def test_multiple_refs(alice: Client, data: TestData):
+    media1 = await alice.media.upload_from_path(data.tiny_unicolor_bmp)
+    media2 = await alice.media.upload_from_path(data.tiny_link_bmp)
     assert media1 == media2
 
     refs = {r.named_file.name async for r in media2.references}
-    assert refs == {image.name, image_symlink.name}
+    assert refs == {data.tiny_unicolor_bmp.name, data.tiny_link_bmp.name}
 
 
-async def test_named_file_clash(alice: Client, image: Path, utf8_file: Path):
+async def test_named_file_clash(alice: Client, data: TestData):
+    image  = data.tiny_unicolor_bmp
     media1 = await alice.media.upload_from_path(image)
 
-    async with aiofiles.open(utf8_file) as file:
+    async with aiofiles.open(data.utf8) as file:
         media2 = await alice.media.upload(file, image.name)
 
     assert media1 != media2

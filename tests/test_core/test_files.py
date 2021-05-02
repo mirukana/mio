@@ -14,6 +14,8 @@ from mio.core.files import (
 from PIL import Image as PILImage
 from pytest import mark, raises
 
+from ..conftest import TestData
+
 pytestmark = mark.asyncio
 
 
@@ -29,21 +31,21 @@ async def test_guess_mime_empty():
     assert await guess_mime(BytesIO()) == "application/x-empty"
 
 
-async def test_sha256_binary(image: Path):
+async def test_sha256_binary(data: TestData):
     sha = "7a76913febd4b0a0c43fa93cfd0cc6c2f037f722fc84c6ba0ddc33af2e08d558"
 
-    async with aiofiles.open(image, "rb") as file:
+    async with aiofiles.open(data.tiny_unicolor_bmp, "rb") as file:
         assert await sha256_chunked(file) == sha
 
 
-async def test_sha256_text(utf8_file: Path):
+async def test_sha256_text(data: TestData):
     sha = "d2878e8a038ce6701a7c1029e2569f3d5248ff2c98aba9439f012b9bbce1b688"
 
-    async with aiofiles.open(utf8_file, "rb") as file:
+    async with aiofiles.open(data.utf8, "rb") as file:
         assert await sha256_chunked(file) == sha
 
 
-async def test_sha256_empty(utf8_file: Path):
+async def test_sha256_empty():
     sha = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     assert await sha256_chunked(BytesIO()) == sha
 
@@ -114,10 +116,11 @@ async def test_atomic_append(tmp_path: Path):
     assert new.read_text() == "abcdefDEF"
 
 
-async def test_has_transparency(image: Path, transparent_indexed_png: Path):
-    assert has_transparency(PILImage.open(image)) is False
-    assert has_transparency(PILImage.open(transparent_indexed_png)) is True
+async def test_has_transparency(data: TestData):
+    indexed = data.indexed_transparency_png
+    assert has_transparency(PILImage.open(data.tiny_unicolor_bmp)) is False
+    assert has_transparency(PILImage.open(indexed)) is True
 
     rgba = BytesIO()
-    PILImage.open(transparent_indexed_png).convert("RGBA").save(rgba, "PNG")
+    PILImage.open(indexed).convert("RGBA").save(rgba, "PNG")
     assert has_transparency(PILImage.open(rgba)) is True

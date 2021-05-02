@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
 import json
+import re
 import sys
 from pathlib import Path
 from shutil import copytree
@@ -14,6 +15,12 @@ from mio.rooms.contents.settings import Encryption
 from pytest import fixture
 
 from .synapse import SynapseHandle
+
+
+class TestData:
+    def __getattr__(self, name: str) -> Path:
+        name = re.sub(r"(.*)_", r"\1.", name).replace("_", "-")
+        return Path(f"tests/data/{name}")
 
 
 def pytest_configure(config):
@@ -72,6 +79,11 @@ def read_json(path: Union[Path, str]) -> dict:
 
 
 @fixture
+def data():
+    return TestData()
+
+
+@fixture
 def mock_responses():
     with aioresponses() as mock:
         yield mock
@@ -115,48 +127,3 @@ async def e2e_room(room):
     await room.state.send(Encryption())
     await room.client.sync.once()
     return room
-
-
-@fixture
-async def image():
-    return Path("tests/data/1x1-blue.bmp")
-
-
-@fixture
-async def image_symlink():
-    return Path("tests/data/1x1-blue.link.bmp")
-
-
-@fixture
-async def large_image():
-    return Path("tests/data/1024x768-blue.png")
-
-
-@fixture
-async def transparent_indexed_png():
-    return Path("tests/data/2x2-indexed-transparency-metadata.png")
-
-
-@fixture
-async def gradient():
-    return Path("tests/data/64x48-gradient.png")
-
-
-@fixture
-async def gradient_transparency():
-    return Path("tests/data/64x48-gradient-with-transparency.png")
-
-
-@fixture
-async def utf8_file():
-    return Path("tests/data/utf8")
-
-
-@fixture
-async def ogg():
-    return Path("tests/data/noise.ogg")
-
-
-@fixture
-async def mkv():
-    return Path("tests/data/unequal-track-lengths.mkv")
