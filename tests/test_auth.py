@@ -4,10 +4,10 @@
 from pathlib import Path
 
 from aiohttp import ClientSession
-from conftest import clone_client, compare_clients, new_device_from
+from mio.client import Client
 from pytest import mark, raises
 
-from mio.client import Client
+from .conftest import clone_client, compare_clients, new_device_from
 
 pytestmark = mark.asyncio
 

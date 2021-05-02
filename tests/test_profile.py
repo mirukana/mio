@@ -4,11 +4,12 @@
 from pathlib import Path
 
 import aiofiles
-from conftest import new_device_from
 from mio.client import Client
 from mio.core.ids import MXC
 from mio.rooms.room import Room
 from pytest import mark
+
+from .conftest import new_device_from
 
 pytestmark = mark.asyncio
 

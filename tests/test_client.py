@@ -5,11 +5,12 @@ from pathlib import Path
 
 import filelock
 from aiopath import AsyncPath
-from conftest import clone_client, compare_clients, read_json
 from mio.client import Client
 from mio.net.exchange import Request
 from pytest import mark, raises
 from yarl import URL
+
+from .conftest import clone_client, compare_clients, read_json
 
 pytestmark = mark.asyncio
 

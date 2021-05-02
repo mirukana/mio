@@ -12,7 +12,8 @@ from aioresponses import aioresponses
 from mio.client import Client
 from mio.rooms.contents.settings import Encryption
 from pytest import fixture
-from synapse import SynapseHandle
+
+from .synapse import SynapseHandle
 
 
 def pytest_configure(config):
