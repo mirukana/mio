@@ -15,7 +15,7 @@ from ..core.data import Parent, Runtime
 from ..core.files import (
     AsyncSeekable, Seekable, read_chunked_binary, try_rewind,
 )
-from ..core.utils import DictS, get_logger
+from ..core.utils import DictS
 from ..module import ClientModule
 from .errors import ServerError
 from .exchange import Reply, ReqData, Request
@@ -25,21 +25,21 @@ if TYPE_CHECKING:
 
 MethHeaders = Optional[DictS]
 
-LOG = get_logger()
-
 
 def _on_backoff(info: DictS) -> None:
     # https://github.com/litl/backoff#event-handlers
+    client = info["args"][0].client
     lines  = str(sys.exc_info()[1]).splitlines()
     wait   = math.ceil(info["wait"])
     first  = f"{lines[0]} (retry {info['tries']}, next in {wait} seconds)"
-    LOG.warning("\n".join((first, *lines[1:])), stacklevel=7)
+    client.warn("\n".join((first, *lines[1:])), stacklevel=7)
 
 
 def _on_giveup(info: DictS) -> None:
+    client = info["args"][0].client
     lines  = str(sys.exc_info()[1]).splitlines()
     first  = f"{lines[0]} (no retry possible)"
-    LOG.warning("\n".join((first, *lines[1:])), stacklevel=7)
+    client.err("\n".join((first, *lines[1:])), stacklevel=7)
 
 
 @dataclass
@@ -138,7 +138,7 @@ class Network(ClientModule):
             reply.error = error
             raise error
         else:
-            LOG.debug("%s", reply, stacklevel=5)
+            self.client.debug("%s", reply, stacklevel=5)
             return reply
         finally:
             self.last_replies.appendleft(reply)

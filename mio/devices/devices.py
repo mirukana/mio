@@ -17,7 +17,6 @@ from ..core.callbacks import CallbackGroup, Callbacks, EventCallbacks
 from ..core.contents import EventContent
 from ..core.data import IndexableMap, Parent, Runtime
 from ..core.ids import InvalidId, UserId
-from ..core.utils import get_logger, report
 from ..e2e.contents import (
     CancelGroupSessionRequest, ForwardedGroupSessionInfo, GroupSessionInfo,
     GroupSessionRequest, Olm,
@@ -30,8 +29,6 @@ from .events import ToDeviceEvent
 
 if TYPE_CHECKING:
     from ..client import Client
-
-LOG = get_logger()
 
 # {user_id: [device_id]} - empty list means to get all devices for that user
 UserDeviceIds = Dict[UserId, List[str]]
@@ -59,7 +56,7 @@ class MioDeviceCallbacks(CallbackGroup):
         if key not in ses:
             session  = olm.InboundGroupSession(content.session_key)
             ses[key] = (session, sender_ed25519, {}, [])
-            LOG.debug("Added group session from %r", event)
+            devices.client.debug("Added group session from %r", event)
 
             devices.client.e2e._sent_session_requests.pop(key, None)
             await devices.client.e2e.save()
@@ -75,42 +72,43 @@ class MioDeviceCallbacks(CallbackGroup):
         event:   ToDeviceEvent[ForwardedGroupSessionInfo],
     ) -> None:
 
+        client           = devices.client
         content          = event.content
-        requests         = devices.client.e2e._sent_session_requests
+        requests         = client.e2e._sent_session_requests
         request, sent_to = requests.get(content.compare_key, (None, {}))
 
         if not request or not sent_to:
-            LOG.warning("Ignoring unrequested %r (%r)", event, set(requests))
+            client.warn("Ignoring unrequested %r (%r)", event, set(requests))
             return
 
         if not event.decryption:
-            LOG.warning("Ignoring %r sent unencrypted", event)
+            client.warn("Ignoring %r sent unencrypted", event)
             return
 
         try:
             key     = content.session_key
             session = olm.InboundGroupSession.import_session(key)
         except olm.OlmGroupSessionError:
-            LOG.exception("Failed importing session from %r", event)
+            client.exception("Failed importing session from %r", event)
             return
 
-        if content.compare_key in devices.client.e2e._in_group_sessions:
-            LOG.warning("Session already present for %r, ignoring", event)
+        if content.compare_key in client.e2e._in_group_sessions:
+            client.warn("Session already present for %r, ignoring", event)
             return
 
         sender_curve = event.decryption.original.content.sender_curve25519
 
-        devices.client.e2e._in_group_sessions[content.compare_key] = (
+        client.e2e._in_group_sessions[content.compare_key] = (
             session,
             content.creator_supposed_ed25519,
             {},
             content.curve25519_forward_chain + [sender_curve],
         )
-        LOG.debug("Imported group session from %r", event)
+        client.debug("Imported group session from %r", event)
 
         requests.pop(content.compare_key)
-        await devices.client.e2e.save()
-        await devices.client.rooms._retry_decrypt(content.compare_key)
+        await client.e2e.save()
+        await client.rooms._retry_decrypt(content.compare_key)
 
         await devices.send({
             device: request.cancellation
@@ -203,7 +201,7 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
         await self.save()
 
         async with self._query_lock:
-            LOG.debug("Querying devices for %r", set(self.outdated))
+            self.client.debug("Querying devices for %r", set(self.outdated))
 
             reply = await self.net.post(
                 self.net.api / "keys" / "query",
@@ -216,14 +214,14 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
             )
 
             if reply.json["failures"]:
-                LOG.warning(
+                self.client.warn(
                     "Failed querying devices of some users for %r: %r",
                     set(self.outdated),
                     reply.json["failures"],
                 )
 
             for user_id, queried_devices in reply.json["device_keys"].items():
-                with report(InvalidId) as caught:
+                with self.client.report(InvalidId) as caught:
                     user_id = UserId(user_id)
                 if caught:
                     continue
@@ -239,9 +237,11 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
                 for device_id, info in queried_devices.items():
                     try:
                         added = self._handle_queried(user_id, device_id, info)
-                        LOG.debug("Registered %r", added)
+                        self.client.debug("Registered %r", added)
                     except (errors.QueriedDeviceError, InvalidSignedDict) as e:
-                        LOG.warning("Rejected queried device %r: %r", info, e)
+                        self.client.warn(
+                            "Rejected queried device %r: %r", info, e,
+                        )
 
             await self.save()
 

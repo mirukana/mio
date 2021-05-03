@@ -15,7 +15,7 @@ from aiopath import AsyncPath
 from .core.data import Parent, Runtime
 from .core.events import Event, InvalidEvent
 from .core.ids import InvalidId, RoomId, UserId
-from .core.utils import get_logger, remove_none, report
+from .core.utils import remove_none
 from .devices.events import ToDeviceEvent
 from .e2e.contents import Megolm, Olm
 from .module import JSONClientModule
@@ -28,8 +28,6 @@ from .rooms.room import Room
 
 if TYPE_CHECKING:
     from .client import Client
-
-LOG = get_logger()
 
 FilterType = Union[None, str, Dict[str, Any]]
 
@@ -120,7 +118,7 @@ class Sync(JSONClientModule):
             data: dict, key: str, evtype: Type[Event], coro: Callable,
         ) -> None:
             for event in data.get(key, {}).get("events", ()):
-                with report(InvalidEvent):
+                with self.client.report(InvalidEvent):
                     ev = evtype.from_dict(event, self.client)
 
                     if isinstance(ev, ToDeviceEvent):
@@ -136,7 +134,7 @@ class Sync(JSONClientModule):
                 InvitedRoomStateEvent if invited else StateEvent
 
             for event in data.get(key, {}).get("events", ()):
-                with report(InvalidEvent):
+                with self.client.report(InvalidEvent):
                     if "state_key" in event:
                         state_ev = state.from_dict(event, room)
                         await room.state._register(state_ev)
@@ -164,7 +162,7 @@ class Sync(JSONClientModule):
         for event in sync.get("to_device", {}).get("events", ()):
             if Olm.matches(event):
                 with suppress(InvalidEvent):
-                    with report(InvalidId):
+                    with self.client.report(InvalidId):
                         e2e_senders.add(UserId(event["sender"]))
 
         for kind in ("invite", "join"):
@@ -172,7 +170,7 @@ class Sync(JSONClientModule):
                 for event in data.get("timeline", {}).get("events", ()):
                     if Megolm.matches(event):
                         with suppress(InvalidEvent):
-                            with report(InvalidId):
+                            with self.client.report(InvalidId):
                                 e2e_senders.add(UserId(event["sender"]))
 
         await self.client.devices.ensure_tracked(e2e_senders)
@@ -180,7 +178,7 @@ class Sync(JSONClientModule):
         changed = set()
 
         for user_id in sync.get("device_lists", {}).get("changed", []):
-            with report(InvalidId):
+            with self.client.report(InvalidId):
                 changed.add(UserId(user_id))
 
         await self.client.devices.update(changed)
@@ -198,7 +196,7 @@ class Sync(JSONClientModule):
             return rooms._data[room_id]
 
         for room_id, data in sync.get("rooms", {}).get("invite", {}).items():
-            with report(InvalidId) as caught:
+            with self.client.report(InvalidId) as caught:
                 room = await set_room(RoomId(room_id))
 
             if not caught:
@@ -207,7 +205,7 @@ class Sync(JSONClientModule):
                 await room_events_call(data, "invite_state", room)
 
         for room_id, data in sync.get("rooms", {}).get("join", {}).items():
-            with report(InvalidEvent) as caught:
+            with self.client.report(InvalidEvent) as caught:
                 room = await set_room(RoomId(room_id))
 
             if caught:
@@ -264,7 +262,7 @@ class Sync(JSONClientModule):
             if room_id in self.client.rooms.forgotten:
                 continue
 
-            with report(InvalidId) as caught:
+            with self.client.report(InvalidId) as caught:
                 room = await set_room(RoomId(room_id))
 
             if not caught:
@@ -276,7 +274,7 @@ class Sync(JSONClientModule):
         no_more_shared_e2e_room = set()
 
         for user_id in sync.get("device_lists", {}).get("left", []):
-            with report(InvalidId):
+            with self.client.report(InvalidId):
                 no_more_shared_e2e_room.add(user_id)
 
         self.client.devices.drop(*no_more_shared_e2e_room)

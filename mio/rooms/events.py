@@ -9,15 +9,13 @@ from ..core.contents import ContentT
 from ..core.data import Parent, Runtime
 from ..core.events import Event
 from ..core.ids import EventId, RoomId, UserId
-from ..core.utils import DictS, get_logger
+from ..core.utils import DictS
 from ..devices.device import Device
 from ..e2e.contents import Megolm
 from ..e2e.errors import MegolmDecryptionError, MegolmVerificationError
 
 if TYPE_CHECKING:
     from .room import Room
-
-LOG = get_logger()
 
 StateEvT    = TypeVar("StateEvT", bound="StateEvent")
 DecryptInfo = Optional["TimelineDecryptInfo"]
@@ -45,13 +43,14 @@ class TimelineEvent(Event[ContentT]):
         if not isinstance(self.content, Megolm):
             return self
 
-        decrypt = self.room.client.e2e._decrypt_megolm_payload
+        client  = self.room.client
+        decrypt = client.e2e._decrypt_megolm_payload
 
         try:
             payload, chain, errors = await decrypt(self)  # type: ignore
         except MegolmDecryptionError as e:
             if log:
-                LOG.exception("Failed decrypting %r", self)
+                client.exception("Failed decrypting %r", self)
 
             self.decryption = TimelineDecryptInfo(self, error=e)
             return self
@@ -63,7 +62,7 @@ class TimelineEvent(Event[ContentT]):
         )
 
         if errors and log:
-            LOG.warning("Error verifying decrypted event %r\n", clear)
+            client.warn("Error verifying decrypted event %r\n", clear)
 
         return clear
 

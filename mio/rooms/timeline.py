@@ -17,15 +17,13 @@ from ..core.data import JSON, IndexableMap, JSONFile, Parent, Runtime
 from ..core.events import InvalidEvent
 from ..core.files import atomic_write
 from ..core.ids import EventId
-from ..core.utils import get_logger, remove_none, report
+from ..core.utils import remove_none
 from ..e2e.contents import Megolm
 from .contents.settings import Creation
 from .events import TimelineEvent
 
 if TYPE_CHECKING:
     from .room import Room
-
-LOG = get_logger()
 
 InGroupSessionKey = Tuple[str, str]  # (sender_curve25519, session_id)
 UndecryptedEvents = Dict[InGroupSessionKey, List[TimelineEvent[Megolm]]]
@@ -81,7 +79,7 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
                 if hour_file in self._loaded_files:
                     continue
 
-                LOG.debug("Loading events from %s", hour_file)
+                self.room.client.debug("Loading events from %s", hour_file)
                 events = json.loads(await hour_file.read_text())
 
                 self._loaded_files.add(hour_file)
@@ -89,7 +87,7 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
                 for source in events:
                     ev: TimelineEvent
 
-                    with report(InvalidEvent, trace=True):
+                    with self.room.client.report(InvalidEvent, trace=True):
                         ev = TimelineEvent.from_dict(source, self.room)
                         ev = await ev._decrypted()
 
@@ -256,7 +254,7 @@ class Gap(JSON):
         for source in reply.json["chunk"]:
             ev: TimelineEvent
 
-            with report(InvalidEvent):
+            with self.room.client.report(InvalidEvent):
                 ev = TimelineEvent.from_dict(source, self.room)
                 ev = await ev._decrypted()
 

@@ -6,9 +6,7 @@ from typing import Generic, Optional, Type, TypeVar
 
 from .contents import ContentT, EventContent, InvalidContent, NoMatchingType
 from .data import JSON, JSONLoadError, Runtime
-from .utils import DictS, deep_find_subclasses, deep_merge_dict, get_logger
-
-LOG = get_logger()
+from .utils import DictS, deep_find_subclasses, deep_merge_dict
 
 EventT = TypeVar("EventT", bound="Event")
 
@@ -37,7 +35,6 @@ class Event(JSON, Generic[ContentT]):
         try:
             return super().from_dict(data, parent)
         except JSONLoadError as e:
-            LOG.error("Failed parsing %s from %r: %r", cls.__name__, data, e)
             raise InvalidEvent(data, content, e)
 
     @classmethod
@@ -49,7 +46,7 @@ class Event(JSON, Generic[ContentT]):
         content_subs = deep_find_subclasses(EventContent)
 
         try:
-            content_cls  = next(c for c in content_subs if c.matches(event))
+            content_cls = next(c for c in content_subs if c.matches(event))
         except StopIteration:
             return InvalidContent(content, NoMatchingType())
 

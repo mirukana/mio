@@ -12,7 +12,7 @@ from yarl import URL
 from .auth import Auth
 from .core.data import JSONFile, Runtime
 from .core.ids import UserId
-from .core.utils import get_logger
+from .core.logging import MioLogger
 from .devices.devices import Devices
 from .e2e.e2e import E2E
 from .media.store import MediaStore
@@ -22,11 +22,9 @@ from .profile import Profile
 from .rooms.rooms import Rooms
 from .sync import Sync
 
-LOG = get_logger()
-
 
 @dataclass
-class Client(JSONFile):
+class Client(JSONFile, MioLogger):
     base_dir:     Runtime[Union[Path, str]]
     server:       Union[URL, str] = ""
     device_id:    str             = ""

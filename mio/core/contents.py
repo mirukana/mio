@@ -6,9 +6,7 @@ from typing import ClassVar, Optional, Type, TypeVar, Union
 
 from .data import JSON, JSONLoadError, Runtime
 from .errors import MioError
-from .utils import DictS, get_logger
-
-LOG = get_logger()
+from .utils import DictS
 
 ContentT = TypeVar("ContentT", bound="EventContent")
 
@@ -24,7 +22,6 @@ class EventContent(JSON):
         try:
             return super().from_dict(data, parent)
         except JSONLoadError as e:
-            LOG.error("Failed parsing %s from %r: %r", cls.__name__, data, e)
             raise InvalidContent(data, e)
 
     @classmethod

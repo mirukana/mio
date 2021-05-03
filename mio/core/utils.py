@@ -1,19 +1,15 @@
 # Copyright mio authors & contributors <https://github.com/mirukana/mio>
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
-import logging
 import re
-from contextlib import contextmanager
 from inspect import isawaitable
 from io import StringIO
 from typing import (
-    Any, Awaitable, Dict, Generator, Iterator, List, Mapping, MutableMapping,
-    Optional, Pattern, Tuple, Type, TypeVar, Union,
+    Any, Awaitable, Dict, Generator, Mapping, MutableMapping, Optional,
+    Pattern, Tuple, Type, TypeVar, Union,
 )
 
 from rich.console import Console
-from rich.logging import RichHandler
-from rich.text import Text as RichText
 
 # Characters that can't be in file/dir names on either windows, mac or linux -
 # Actual % must be encoded too to not conflict with % encoded chars
@@ -27,42 +23,6 @@ NoneType     = type(None)
 T            = TypeVar("T")
 MaybeCoro    = Optional[Awaitable[None]]
 ErrorCatcher = Union[Type[Exception], Tuple[Type[Exception], ...]]
-
-
-class LogHandler(RichHandler):
-    short_names = {
-        "DEBUG":    "~",
-        "INFO":     "i",
-        "WARNING":  "!",
-        "ERROR":    "X",
-        "CRITICAL": "F",
-    }
-
-
-    def get_level_text(self, record):
-        return RichText.styled(
-            self.short_names[record.levelname],
-            f"logging.level.{record.levelname.lower()}",
-        )
-
-
-logging.basicConfig(
-    level    = logging.INFO,
-    format   = "%(message)s\n",
-    datefmt  = "%T",
-    handlers = [LogHandler(
-        rich_tracebacks     = True,
-        omit_repeated_times = False,
-        log_time_format     = "%F %T",
-    )],
-)
-
-
-def get_logger(name: str = __name__) -> logging.Logger:
-    return logging.getLogger(name)
-
-
-LOG = get_logger()
 
 
 def rich_repr(*objects: Any, sep: str = " ", color: bool = False) -> str:
@@ -108,21 +68,3 @@ def deep_merge_dict(dict1: MutableMapping, dict2: Mapping) -> None:
 
 async def make_awaitable(result):
     return await result if isawaitable(result) else result
-
-
-@contextmanager
-def report(
-    *types: Type[Exception], level: int = logging.WARNING, trace: bool = False,
-) -> Iterator[List[Exception]]:
-
-    caught: List[Exception] = []
-
-    try:
-        yield caught
-    except types as e:
-        caught.append(e)
-
-        if trace:
-            LOG.exception("Caught exception", stacklevel=3)
-        else:
-            LOG.log(level, repr(e), stacklevel=3)

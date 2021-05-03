@@ -8,14 +8,12 @@ from ..core.contents import ContentT
 from ..core.data import Parent, Runtime
 from ..core.events import Event
 from ..core.ids import UserId
-from ..core.utils import DictS, get_logger
+from ..core.utils import DictS
 from ..e2e.contents import Olm
 from ..e2e.errors import OlmDecryptionError, OlmVerificationError
 
 if TYPE_CHECKING:
     from ..client import Client
-
-LOG = get_logger()
 
 DecryptInfo = Optional["ToDeviceDecryptInfo"]
 
@@ -36,7 +34,7 @@ class ToDeviceEvent(Event[ContentT]):
         try:
             payload, verif_err = await decrypt(self)  # type: ignore
         except OlmDecryptionError as e:
-            LOG.exception("Failed to decrypt %r", self)
+            self.client.exception("Failed to decrypt %r", self)
             self.decryption = ToDeviceDecryptInfo(self, error=e)
             return self
 
@@ -44,7 +42,7 @@ class ToDeviceEvent(Event[ContentT]):
         clear.decryption = ToDeviceDecryptInfo(self, payload, None, verif_err)
 
         if verif_err:
-            LOG.warning("Error verifying decrypted event %r\n", clear)
+            self.client.warn("Error verifying decrypted event %r\n", clear)
 
         return clear
 
