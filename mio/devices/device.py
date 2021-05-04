@@ -30,6 +30,8 @@ class Device(JSON):
 
 
     async def trust(self) -> None:
+        self.devices.client.debug("Trusting %r", self)
+
         self.trusted = True
         await self.devices.save()
 
@@ -42,6 +44,8 @@ class Device(JSON):
 
 
     async def block(self) -> None:
+        self.devices.client.debug("Blocking %r", self)
+
         self.trusted = False
 
         e2e      = self.devices.client.e2e

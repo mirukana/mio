@@ -203,6 +203,9 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
 
     async def _retry_decrypt(self, *sessions: InGroupSessionKey) -> None:
         decrypted = []
+        self.room.client.debug(
+            "%r: retry decrypting events for %r", self.room.id, sessions,
+        )
 
         for key in sessions:
             for event in self._undecrypted.get(key, []):
@@ -210,7 +213,12 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
                 if not isinstance(event2.content, Megolm):
                     decrypted.append(event2)
 
-        await self._register_events(*decrypted)
+        if decrypted:
+            self.room.client.info(
+                "%r: %s events decrypted after retry",
+                self.room.id, len(decrypted),
+            )
+            await self._register_events(*decrypted)
 
 
 @dataclass

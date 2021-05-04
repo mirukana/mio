@@ -179,6 +179,8 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
         self, users: Collection[UserId], timeout: float = 10,
     ) -> None:
 
+        self.client.debug("Ensure tracking for %r", users)
+
         for devices in self.values():
             for device in devices.values():
                 self.by_curve[device.curve25519] = device
@@ -201,7 +203,7 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
         await self.save()
 
         async with self._query_lock:
-            self.client.debug("Querying devices for %r", set(self.outdated))
+            self.client.debug("Updating devices for %r", set(self.outdated))
 
             reply = await self.net.post(
                 self.net.api / "keys" / "query",
@@ -223,6 +225,7 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
             for user_id, queried_devices in reply.json["device_keys"].items():
                 with self.client.report(InvalidId) as caught:
                     user_id = UserId(user_id)
+
                 if caught:
                     continue
 
@@ -247,6 +250,8 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
 
 
     def drop(self, *users: UserId) -> None:
+        self.client.debug("Dropping devices of users %r", users)
+
         for user_id in users:
             for device in self._data.pop(user_id, {}).values():
                 self.by_curve.pop(device.curve25519, None)
@@ -303,6 +308,7 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
                 "recipient_keys": {"ed25519": device.ed25519},
             }
 
+            self.client.debug("Encrypting %r for %r", payload, device)
             msg    = session.encrypt(e2e._canonical_json(payload))
             cipher = Olm.Cipher(type=msg.message_type, body=msg.ciphertext)
 
