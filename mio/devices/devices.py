@@ -56,7 +56,7 @@ class MioDeviceCallbacks(CallbackGroup):
         if key not in ses:
             session  = olm.InboundGroupSession(content.session_key)
             ses[key] = (session, sender_ed25519, {}, [])
-            devices.client.debug("Added group session from %r", event)
+            devices.client.debug("Added group session from {}", event)
 
             devices.client.e2e._sent_session_requests.pop(key, None)
             await devices.client.e2e.save()
@@ -78,22 +78,22 @@ class MioDeviceCallbacks(CallbackGroup):
         request, sent_to = requests.get(content.compare_key, (None, {}))
 
         if not request or not sent_to:
-            client.warn("Ignoring unrequested %r (%r)", event, set(requests))
+            client.warn("Ignoring unrequested {} ({})", event, set(requests))
             return
 
         if not event.decryption:
-            client.warn("Ignoring %r sent unencrypted", event)
+            client.warn("Ignoring {} sent unencrypted", event)
             return
 
         try:
             key     = content.session_key
             session = olm.InboundGroupSession.import_session(key)
         except olm.OlmGroupSessionError:
-            client.exception("Failed importing session from %r", event)
+            client.exception("Failed importing session from {}", event)
             return
 
         if content.compare_key in client.e2e._in_group_sessions:
-            client.warn("Session already present for %r, ignoring", event)
+            client.warn("Session already present for {}, ignoring", event)
             return
 
         sender_curve = event.decryption.original.content.sender_curve25519
@@ -104,7 +104,7 @@ class MioDeviceCallbacks(CallbackGroup):
             {},
             content.curve25519_forward_chain + [sender_curve],
         )
-        client.debug("Imported group session from %r", event)
+        client.debug("Imported group session from {}", event)
 
         requests.pop(content.compare_key)
         await client.e2e.save()
@@ -179,7 +179,7 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
         self, users: Collection[UserId], timeout: float = 10,
     ) -> None:
 
-        self.client.debug("Ensure tracking for %r", users)
+        self.client.debug("Ensure tracking for {}", users)
 
         for devices in self.values():
             for device in devices.values():
@@ -203,7 +203,7 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
         await self.save()
 
         async with self._query_lock:
-            self.client.debug("Updating devices for %r", set(self.outdated))
+            self.client.debug("Updating devices for {}", set(self.outdated))
 
             reply = await self.net.post(
                 self.net.api / "keys" / "query",
@@ -217,7 +217,7 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
 
             if reply.json["failures"]:
                 self.client.warn(
-                    "Failed querying devices of some users for %r: %r",
+                    "Failed querying devices of some users for {}: {}",
                     set(self.outdated),
                     reply.json["failures"],
                 )
@@ -240,17 +240,17 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
                 for device_id, info in queried_devices.items():
                     try:
                         added = self._handle_queried(user_id, device_id, info)
-                        self.client.debug("Registered %r", added)
+                        self.client.debug("Registered {}", added)
                     except (errors.QueriedDeviceError, InvalidSignedDict) as e:
                         self.client.warn(
-                            "Rejected queried device %r: %r", info, e,
+                            "Rejected queried device {}: {}", info, e,
                         )
 
             await self.save()
 
 
     def drop(self, *users: UserId) -> None:
-        self.client.debug("Dropping devices of users %r", users)
+        self.client.debug("Dropping devices of users {}", users)
 
         for user_id in users:
             for device in self._data.pop(user_id, {}).values():
@@ -308,7 +308,7 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
                 "recipient_keys": {"ed25519": device.ed25519},
             }
 
-            self.client.debug("Encrypting %r for %r", payload, device)
+            self.client.debug("Encrypting {} for {}", payload, device)
             msg    = session.encrypt(e2e._canonical_json(payload))
             cipher = Olm.Cipher(type=msg.message_type, body=msg.ciphertext)
 

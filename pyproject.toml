@@ -39,6 +39,7 @@
             "if TYPE_CHECKING:",
             "pass",
             "if sys.version_info",
+            "raise NotImplementedError",
         ]
 
     [tool.coverage.html]

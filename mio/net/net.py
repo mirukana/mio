@@ -32,14 +32,14 @@ def _on_backoff(info: DictS) -> None:
     lines  = str(sys.exc_info()[1]).splitlines()
     wait   = math.ceil(info["wait"])
     first  = f"{lines[0]} (retry {info['tries']}, next in {wait} seconds)"
-    client.warn("\n".join((first, *lines[1:])), stacklevel=7)
+    client.warn("\n".join((first, *lines[1:])), depth=5)
 
 
 def _on_giveup(info: DictS) -> None:
     client = info["args"][0].client
     lines  = str(sys.exc_info()[1]).splitlines()
     first  = f"{lines[0]} (no retry possible)"
-    client.err("\n".join((first, *lines[1:])), stacklevel=7)
+    client.err("\n".join((first, *lines[1:])), depth=5)
 
 
 @dataclass
@@ -98,9 +98,8 @@ class Network(ClientModule):
         if self.client._terminated:
             raise RuntimeError(f"{self.client} terminated, create a new one")
 
-        request.identifier = self.client.user_id
-        token              = self.client.access_token
-        data               = request.data
+        token = self.client.access_token
+        data  = request.data
 
         if token:
             request.headers["Authorization"] = f"Bearer {token}"
@@ -138,7 +137,7 @@ class Network(ClientModule):
             reply.error = error
             raise error
         else:
-            self.client.debug("%s", reply, stacklevel=5)
+            self.client.debug("{}", reply, depth=3)
             return reply
         finally:
             self.last_replies.appendleft(reply)

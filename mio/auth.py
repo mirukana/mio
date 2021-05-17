@@ -43,6 +43,7 @@ class Auth(ClientModule):
         )
 
         shutil.move(unexpanded_base_dir, str(client.base_dir))
+        client._reconfigure_logging()
 
         client.user_id      = UserId(reply.json["user_id"])
         client.access_token = reply.json["access_token"]

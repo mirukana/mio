@@ -4,7 +4,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from http import HTTPStatus
-from typing import Any, Dict, Optional, Union
+from typing import Dict, Optional, Union
 
 from yarl import URL
 
@@ -17,18 +17,16 @@ ReqData = Union[None, bytes, DictS, SeekableIO, IOChunks]
 
 @dataclass
 class Request:
-    method:     str
-    url:        URL
-    data:       ReqData        = None
-    headers:    Dict[str, str] = field(default_factory=dict, repr=False)
-    identifier: Any            = None
-    sent_at:    datetime       = field(default_factory=datetime.now)
+    method:  str
+    url:     URL
+    data:    ReqData        = None
+    headers: Dict[str, str] = field(default_factory=dict, repr=False)
+    sent_at: datetime       = field(default_factory=datetime.now)
 
 
     def __str__(self) -> str:
-        start = f"? {self.identifier}\n❯" if self.identifier else "❯"
         hdrs  = {k: v for k, v in self.headers.items() if k != "Authorization"}
-        return rich_thruthies(start, self.method, self.url, self.data, hdrs)
+        return rich_thruthies("❯", self.method, self.url, self.data, hdrs)
 
 
 @dataclass

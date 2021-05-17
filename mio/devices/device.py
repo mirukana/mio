@@ -30,7 +30,7 @@ class Device(JSON):
 
 
     async def trust(self) -> None:
-        self.devices.client.debug("Trusting %r", self)
+        self.devices.client.debug("Trusting {}", self)
 
         self.trusted = True
         await self.devices.save()
@@ -44,7 +44,7 @@ class Device(JSON):
 
 
     async def block(self) -> None:
-        self.devices.client.debug("Blocking %r", self)
+        self.devices.client.debug("Blocking {}", self)
 
         self.trusted = False
 

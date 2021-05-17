@@ -50,7 +50,7 @@ class TimelineEvent(Event[ContentT]):
             payload, chain, errors = await decrypt(self)  # type: ignore
         except MegolmDecryptionError as e:
             if log:
-                client.exception("Failed decrypting %r", self)
+                client.exception("Failed decrypting {}", self)
 
             self.decryption = TimelineDecryptInfo(self, error=e)
             return self
@@ -62,7 +62,7 @@ class TimelineEvent(Event[ContentT]):
         )
 
         if errors and log:
-            client.warn("Error verifying decrypted event %r\n", clear)
+            client.warn("Error verifying decrypted event {}", clear)
 
         return clear
 

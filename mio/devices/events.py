@@ -34,7 +34,7 @@ class ToDeviceEvent(Event[ContentT]):
         try:
             payload, verif_err = await decrypt(self)  # type: ignore
         except OlmDecryptionError as e:
-            self.client.exception("Failed to decrypt %r", self)
+            self.client.exception("Failed to decrypt {}", self)
             self.decryption = ToDeviceDecryptInfo(self, error=e)
             return self
 
@@ -42,7 +42,7 @@ class ToDeviceEvent(Event[ContentT]):
         clear.decryption = ToDeviceDecryptInfo(self, payload, None, verif_err)
 
         if verif_err:
-            self.client.warn("Error verifying decrypted event %r\n", clear)
+            self.client.warn("Error verifying decrypted event {}", clear)
 
         return clear
 

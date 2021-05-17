@@ -79,7 +79,7 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
                 if hour_file in self._loaded_files:
                     continue
 
-                self.room.client.debug("Loading events from %s", hour_file)
+                self.room.client.debug("Loading events from {}", hour_file)
                 events = json.loads(await hour_file.read_text())
 
                 self._loaded_files.add(hour_file)
@@ -204,7 +204,7 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
     async def _retry_decrypt(self, *sessions: InGroupSessionKey) -> None:
         decrypted = []
         self.room.client.debug(
-            "%r: retry decrypting events for %r", self.room.id, sessions,
+            "{}: retry decrypting events for {}", self.room.id, sessions,
         )
 
         for key in sessions:
@@ -215,7 +215,7 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
 
         if decrypted:
             self.room.client.info(
-                "%r: %s events decrypted after retry",
+                "{}: {} events decrypted after retry",
                 self.room.id, len(decrypted),
             )
             await self._register_events(*decrypted)

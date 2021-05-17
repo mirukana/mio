@@ -134,7 +134,7 @@ class E2E(JSONClientModule):
         sessions = []
 
         for key, value in self._in_group_sessions.items():
-            self.client.debug("Structuring for export: %s, %s", key, value)
+            self.client.debug("Structuring for export: {}, {}", key, value)
 
             room_id, sender_curve25519, session_id    = key
             session, sender_ed25519, _, forward_chain = value
@@ -151,7 +151,7 @@ class E2E(JSONClientModule):
                 "session_key": session.export_session(first_index),
             })
 
-        self.client.debug("Structured sessions for export: %s", sessions)
+        self.client.debug("Structured sessions for export: {}", sessions)
 
         salt  = Random.new().read(16)  # 16 byte/128 bit salt
         count = 100_000
@@ -226,7 +226,7 @@ class E2E(JSONClientModule):
         cipher        = AES.new(aes256_key, AES.MODE_CTR, counter=counter)
         json_sessions = cipher.decrypt(session_data)
 
-        self.client.debug("Importing sessions from %s", json_sessions)
+        self.client.debug("Importing sessions from {}", json_sessions)
 
         try:
             sessions = json.loads(json_sessions)
@@ -241,7 +241,7 @@ class E2E(JSONClientModule):
         for session in sessions:
             try:
                 if session["algorithm"] != Algorithm.megolm_v1.value:
-                    client.warn("Skipping %r, unsupported algorithm", session)
+                    client.warn("Skipping {}, unsupported algorithm", session)
                     continue
 
                 storage_key = (
@@ -259,7 +259,9 @@ class E2E(JSONClientModule):
                     rebuilt_session.first_known_index <=
                     existing[0].first_known_index
                 ):
-                    client.warn("Skipping %r, older version of known session")
+                    client.warn(
+                        "Skipping {}, older version of {}", session, existing,
+                    )
                     continue
 
                 self._in_group_sessions[storage_key] = (
@@ -270,7 +272,7 @@ class E2E(JSONClientModule):
                 )
                 imported.append(storage_key)
             except (TypeError, KeyError, olm.OlmGroupSessionError):
-                client.exception("Skipping %r, import failure", session)
+                client.exception("Skipping {}, import failure", session)
 
         if imported:
             await self.save()
@@ -281,7 +283,7 @@ class E2E(JSONClientModule):
 
     async def _upload_one_time_keys(self, currently_uploaded: int) -> None:
         minimum = self._account.max_one_time_keys // 2
-        self.client.debug("%s/%s uploaded OTK", currently_uploaded, minimum)
+        self.client.debug("{}/{} uploaded OTK", currently_uploaded, minimum)
 
         if currently_uploaded >= minimum:
             return
@@ -419,7 +421,7 @@ class E2E(JSONClientModule):
 
         for_users = set(for_users)
 
-        self.client.debug("Encrypt %s/%r for %r", room_id, content, for_users)
+        self.client.debug("Encrypt {}/{} for {}", room_id, content, for_users)
 
         default: tuple = (olm.OutboundGroupSession(), datetime.utcnow(), 0, {})
 
@@ -434,7 +436,7 @@ class E2E(JSONClientModule):
         ):
             key = (room_id, self.device.curve25519, session.id)
             self.client.debug(
-                "Create matching in group session for new outbound: %s", key,
+                "Create matching in group session for new outbound: {}", key,
             )
 
             our_ed     = self.device.ed25519
@@ -465,7 +467,7 @@ class E2E(JSONClientModule):
             "content": content.dict,
             "room_id": room_id,
         }
-        self.client.debug("Will encrypt payload: %r", payload)
+        self.client.debug("Will encrypt payload: {}", payload)
 
         encrypted = Megolm(
             sender_curve25519 = self.device.curve25519,
@@ -483,7 +485,7 @@ class E2E(JSONClientModule):
 
 
     async def _drop_outbound_group_session(self, room_id: RoomId) -> None:
-        self.client.debug("Drop out group sessions for %s", room_id)
+        self.client.debug("Drop out group sessions for {}", room_id)
         self._out_group_sessions.pop(room_id, None)
         await self.save()
 
@@ -497,21 +499,21 @@ class E2E(JSONClientModule):
         details = self._in_group_sessions.get(request.compare_key)
 
         if not details:
-            client.info("Ignoring %r, no matching session to share", request)
+            client.info("Ignoring {}, no matching session to share", request)
             return
 
         dev = devices.get(to_user_id, {}).get(request.requesting_device_id)
 
         if not dev:
-            client.warn("Ignoring %r from unknown device")
+            client.warn("Ignoring {} from unknown device", request)
             return
 
         if dev.user_id != devices.client.user_id:
-            client.warn("Ignoring %r, session not created by us", request, dev)
+            client.warn("Ignoring {}, session not created by us", request)
             return
 
         if not dev.trusted:
-            client.info("Pending %r from untrusted device %r", request, dev)
+            client.info("Pending {} from untrusted device {}", request, dev)
             dev.pending_session_requests[request.request_id] = request
             await devices.save()
             return
@@ -530,12 +532,12 @@ class E2E(JSONClientModule):
             curve25519_forward_chain   = forward_chain,
         )
 
-        client.info("Replying to %s %r with %r", to_user_id, request, info)
+        client.info("Replying to {}'s {} with {}", to_user_id, request, info)
 
         olms, no_otks = await devices.encrypt(info, dev)
 
         if no_otks:
-            client.warn("No one-time key for %r, can't send %r", no_otks, info)
+            client.warn("No one-time key for {}, can't send {}", no_otks, info)
             return
 
         task = ensure_future(devices.send(olms))  # type: ignore
@@ -550,7 +552,7 @@ class E2E(JSONClientModule):
         self, for_user_id: UserId, request: CancelGroupSessionRequest,
     ) -> None:
 
-        self.client.debug("Applying %r from %s", request, for_user_id)
+        self.client.debug("Applying {} from {}", request, for_user_id)
 
         devices = self.client.devices
 
@@ -590,7 +592,7 @@ class E2E(JSONClientModule):
         if not devices:
             return {}
 
-        self.client.debug("Claiming keys for devices %r", devices)
+        self.client.debug("Claiming keys for devices {}", devices)
 
         otk: Dict[str, Dict[str, str]] = {}
         for d in devices:
@@ -600,7 +602,7 @@ class E2E(JSONClientModule):
         reply = await self.net.post(self.net.api / "keys" / "claim", data)
 
         if reply.json["failures"]:
-            self.client.warn("Failed claiming: %s", reply.json["failures"])
+            self.client.warn("Failed claiming: {}", reply.json["failures"])
 
         await self.client.devices.ensure_tracked(
             set(reply.json["one_time_keys"]),
@@ -615,7 +617,7 @@ class E2E(JSONClientModule):
 
                     if "key" not in key_dict:
                         self.client.warn(
-                            "No key for %r claim: %r", dev, key_dict,
+                            "No key for {} claim: {}", dev, key_dict,
                         )
                         continue
 
@@ -625,7 +627,7 @@ class E2E(JSONClientModule):
                         )
                     except err.InvalidSignedDict as e:
                         self.client.warn(
-                            "Rejected %r claimed key %r: %r", dev, key_dict, e,
+                            "Rejected {} claimed key {}: {}", dev, key_dict, e,
                         )
                     else:
                         valided[dev] = key_dict["key"]
@@ -638,7 +640,7 @@ class E2E(JSONClientModule):
     ) -> None:
 
         self.client.info(
-            "Olm session with %s has been corrupted, creating a replacement",
+            "Olm session with {} has been corrupted, creating a replacement",
             event.sender,
         )
 
@@ -652,7 +654,7 @@ class E2E(JSONClientModule):
 
         if no_otks:
             self.client.warn(
-                "Didn't get any one-time keys for %r, can't send new session!",
+                "Didn't get any one-time keys for {}, can't send new session!",
                 no_otks,
             )
             return
@@ -662,7 +664,7 @@ class E2E(JSONClientModule):
         for request, sent_to in self._sent_session_requests.values():
             if event.sender in sent_to:
                 self.client.info(
-                    "Assuming we have lost the response to %r sent by %s, "
+                    "Assuming we have lost the response to {} sent by {}, "
                     "resending the request over fresh olm session",
                     request, event.sender,
                 )
@@ -689,13 +691,13 @@ class E2E(JSONClientModule):
             session_key = session.session_key,
         )
 
-        self.client.debug("Sharing %r to %r", info, to)
+        self.client.debug("Sharing {} to {}", info, to)
         olms, no_otks = await self.client.devices.encrypt(info, *to)
 
         if no_otks:
             self.client.warn(
-                "Didn't get any one-time keys for %r, they won't receive "
-                "the keys to decrypt messages sent over group session %r!",
+                "Didn't get any one-time keys for {}, they won't receive "
+                "the keys to decrypt messages sent over group session {}!",
                 no_otks, info,
             )
 
@@ -715,7 +717,7 @@ class E2E(JSONClientModule):
 
         request = GroupSessionRequest.from_megolm(for_event)
         send_to = {self.client.user_id, for_event.sender}
-        self.client.info("Sending %r to %r", request, send_to)
+        self.client.info("Sending {} to {}", request, send_to)
 
         self._sent_session_requests[request_key] = (request, send_to)
 

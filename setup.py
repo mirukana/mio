@@ -28,6 +28,7 @@ setup(
         aiohttp           >= 3.7.3,  < 4
         aiopath           >= 0.5.4,  < 0.6
         backoff           >= 1.10.0, < 2
+        loguru            >= 0.5.3,  < 0.6
         pycryptodomex     >= 3.10.1, < 4
         python-magic      >= 0.4.22, < 0.5
         python-olm        >= 3.1.3,  < 4

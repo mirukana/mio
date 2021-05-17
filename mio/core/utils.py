@@ -26,8 +26,9 @@ ErrorCatcher = Union[Type[Exception], Tuple[Type[Exception], ...]]
 
 
 def rich_repr(*objects: Any, sep: str = " ", color: bool = False) -> str:
-    out = StringIO()
-    Console(file=out, force_terminal=color).print(*objects, sep=sep, end=" ")
+    out     = StringIO()
+    console = Console(file=out, force_terminal=color, width=80, soft_wrap=True)
+    console.print(*objects, sep=sep, end=" ")
     return out.getvalue().rstrip()
 
 

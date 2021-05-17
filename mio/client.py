@@ -45,6 +45,8 @@ class Client(JSONFile, MioLogger):
 
 
     def __post_init__(self) -> None:
+        MioLogger.__post_init__(self)
+
         self.net     = Network(self)
         self.auth    = Auth(self)
         self.profile = Profile(self)
@@ -57,7 +59,7 @@ class Client(JSONFile, MioLogger):
         self._lock       = None
         self._terminated = False
 
-        super().__post_init__()
+        JSONFile.__post_init__(self)
 
 
     async def __aenter__(self) -> "Client":
