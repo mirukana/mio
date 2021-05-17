@@ -24,6 +24,15 @@ class RoomUser:
         self.user_id  # fail early if user ID is invalid
 
 
+    def __repr__(self) -> str:
+        props = ", ".join((
+            f"{name}={getattr(self, name)!r}"
+            for name, cls_attr in type(self).__dict__.items()
+            if isinstance(cls_attr, property)
+        ))
+        return "%s(%s)" % (type(self).__name__, props)
+
+
     @property
     def user_id(self) -> UserId:
         return UserId(self.state.state_key)
