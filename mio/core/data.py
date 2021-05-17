@@ -13,7 +13,8 @@ from typing import (
     Any, Callable, ClassVar, Collection, Counter, Dict, ForwardRef, Iterator,
     Mapping, Optional, Sequence, Tuple, Type, TypeVar, Union,
 )
-from uuid import UUID
+from uuid import UUID, uuid4
+from weakref import WeakValueDictionary
 
 import typingplus
 from aiopath import AsyncPath
@@ -62,6 +63,13 @@ class AutoStrEnum(Enum):
     @staticmethod
     def _generate_next_value_(name: str, *_):
         return name
+
+
+class InstanceTracker:
+    _instances: ClassVar[Runtime[WeakValueDictionary]] = WeakValueDictionary()
+
+    def __post_init__(self) -> None:
+        self._instances[uuid4()] = self
 
 
 @dataclass

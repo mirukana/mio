@@ -10,9 +10,7 @@ from datetime import datetime
 from io import StringIO
 from pathlib import Path
 from types import TracebackType
-from typing import Any, ClassVar, Dict, Iterator, List, Optional, Type, Union
-from uuid import uuid4
-from weakref import WeakValueDictionary
+from typing import Any, Dict, Iterator, List, Type, Union
 
 import loguru
 from aiopath import AsyncPath
@@ -22,21 +20,19 @@ from rich.logging import RichHandler
 from rich.text import Text as RichText
 from rich.traceback import Traceback as RichTraceback
 
-from .data import Runtime
+from .data import InstanceTracker, Runtime
 
 
 @dataclass
-class MioLogger:
-    _instances: ClassVar[Runtime[WeakValueDictionary]] = WeakValueDictionary()
-
+class MioLogger(InstanceTracker):
     logger:        Runtime[Logger]   = field(init=False, repr=False)
     creation:      Runtime[datetime] = field(init=False, repr=False)
     _term_sink_id: Runtime[int]      = field(init=False, repr=False)
 
 
     def __post_init__(self) -> None:
-        self.creation            = datetime.now()
-        self._instances[uuid4()] = self
+        super().__post_init__()
+        self.creation = datetime.now()
         self._reconfigure_logging()
 
 
