@@ -219,13 +219,13 @@ class Sync(JSONClientModule):
             unread  = data.get("unread_notifications", {})
 
             if summary.get("m.heroes"):
-                room.summary_heroes = tuple(summary["m.heroes"])
+                room.lazy_load_heroes = tuple(summary["m.heroes"])
 
             if summary.get("m.joined_members_count"):
-                room.summary_joined = summary["m.joined_members_count"]
+                room.lazy_load_joined = summary["m.joined_members_count"]
 
             if summary.get("m.invited_members_count"):
-                room.summary_invited = summary["m.invited_members_count"]
+                room.lazy_load_joined = summary["m.invited_members_count"]
 
             if unread.get("notification_count"):
                 room.unread_notifications = unread["notification_count"]

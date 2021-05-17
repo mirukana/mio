@@ -19,21 +19,25 @@ from .timeline import Timeline
 if TYPE_CHECKING:
     from ..client import Client
 
+Heroes = Tuple[UserId, ...]
+
 
 @dataclass
 class Room(JSONFile, EventCallbacks):
     client:  Parent["Client"] = field(repr=False)
     id:      RoomId
 
-    # Set by Sync.handle_sync and default callbacks
-    invited:              bool               = False
-    left:                 bool               = False
-    typing:               Set[UserId]        = field(default_factory=set)
-    summary_heroes:       Tuple[UserId, ...] = ()
-    summary_joined:       int                = 0
-    summary_invited:      int                = 0
-    unread_notifications: int                = 0
-    unread_highlights:    int                = 0
+    # Set by default callbacks
+    invited:              bool        = False
+    left:                 bool        = False
+    typing:               Set[UserId] = field(repr=False, default_factory=set)
+
+    # Set by Sync.handle_sync
+    unread_notifications: int              = 0
+    unread_highlights:    int              = 0
+    lazy_load_joined:     Optional[int]    = field(repr=False, default=None)
+    lazy_load_invited:    Optional[int]    = field(repr=False, default=None)
+    lazy_load_heroes:     Optional[Heroes] = field(repr=False, default=None)
 
     timeline: Runtime[Timeline]  = field(init=False, repr=False)
     state:    Runtime[RoomState] = field(init=False, repr=False)
