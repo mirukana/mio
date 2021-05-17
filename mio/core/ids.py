@@ -32,7 +32,7 @@ class _Identifier(str):
 
 
     def __repr__(self) -> str:
-        return "%s(%r)" % (type(self).__name__, str(self))
+        return "%s%r" % (self.sigil, str(self))
 
 
     @classmethod
