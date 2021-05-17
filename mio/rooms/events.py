@@ -9,6 +9,7 @@ from ..core.contents import ContentT
 from ..core.data import Parent, Runtime
 from ..core.events import Event
 from ..core.ids import EventId, RoomId, UserId
+from ..core.logging import MioLogger
 from ..core.utils import DictS
 from ..devices.device import Device
 from ..e2e.contents import Megolm
@@ -22,10 +23,18 @@ DecryptInfo = Optional["TimelineDecryptInfo"]
 
 
 @dataclass
-class TimelineEvent(Event[ContentT]):
+class RoomEvent(Event[ContentT]):
+    room: Parent["Room"] = field(repr=False)
+
+    @property
+    def logger(self) -> MioLogger:
+        return self.room.client
+
+
+@dataclass
+class TimelineEvent(RoomEvent[ContentT]):
     aliases = {"id": "event_id", "date": "origin_server_ts"}
 
-    room:       Parent["Room"] = field(repr=False)
     content:    ContentT
     id:         EventId
     sender:     UserId
@@ -43,14 +52,13 @@ class TimelineEvent(Event[ContentT]):
         if not isinstance(self.content, Megolm):
             return self
 
-        client  = self.room.client
-        decrypt = client.e2e._decrypt_megolm_payload
+        decrypt = self.room.client.e2e._decrypt_megolm_payload
 
         try:
             payload, chain, errors = await decrypt(self)  # type: ignore
         except MegolmDecryptionError as e:
             if log:
-                client.exception("Failed decrypting {}", self)
+                self.logger.exception("Failed decrypting {}", self)
 
             self.decryption = TimelineDecryptInfo(self, error=e)
             return self
@@ -62,7 +70,7 @@ class TimelineEvent(Event[ContentT]):
         )
 
         if errors and log:
-            client.warn("Error verifying decrypted event {}", clear)
+            self.logger.warn("Error verifying decrypted event {}", clear)
 
         return clear
 
@@ -80,8 +88,7 @@ class TimelineDecryptInfo:
 
 
 @dataclass
-class StateBase(Event[ContentT]):
-    room:      Parent["Room"] = field(repr=False)
+class StateBase(RoomEvent[ContentT]):
     content:   ContentT
     state_key: str
     sender:    UserId
@@ -127,6 +134,5 @@ class StateEvent(StateBase[ContentT]):
 
 
 @dataclass
-class EphemeralEvent(Event[ContentT]):
-    room:      Parent["Room"] = field(repr=False)
-    content:   ContentT
+class EphemeralEvent(RoomEvent[ContentT]):
+    content: ContentT

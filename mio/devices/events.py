@@ -8,6 +8,7 @@ from ..core.contents import ContentT
 from ..core.data import Parent, Runtime
 from ..core.events import Event
 from ..core.ids import UserId
+from ..core.logging import MioLogger
 from ..core.utils import DictS
 from ..e2e.contents import Olm
 from ..e2e.errors import OlmDecryptionError, OlmVerificationError
@@ -24,6 +25,10 @@ class ToDeviceEvent(Event[ContentT]):
     content:    ContentT
     sender:     UserId
     decryption: Runtime[DecryptInfo] = field(default=None, repr=False)
+
+    @property
+    def logger(self) -> MioLogger:
+        return self.client
 
     async def _decrypted(self) -> "ToDeviceEvent":
         if not isinstance(self.content, Olm):

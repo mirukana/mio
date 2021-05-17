@@ -29,14 +29,14 @@ class EventContent(JSON):
         return bool(cls.type) and cls.type == event.get("type")
 
 
-class NoMatchingType(MioError):
-    pass
+class UnknownType(MioError):
+    type: Optional[str]
 
 
 @dataclass
 class InvalidContent(Exception, EventContent):
     source: Runtime[DictS]
-    error:  Runtime[Union[JSONLoadError, NoMatchingType]]
+    error:  Runtime[Union[JSONLoadError, UnknownType]]
 
     @property
     def dict(self) -> DictS:
