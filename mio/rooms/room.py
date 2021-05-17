@@ -52,6 +52,16 @@ class Room(JSONFile, EventCallbacks):
         super().__post_init__()
 
 
+    def __repr__(self) -> str:
+        return "%s(id=%r, state.display_name=%r, invited=%r, left=%r)" % (
+            type(self).__name__,
+            self.id,
+            self.state.display_name,
+            self.invited,
+            self.left,
+        )
+
+
     @property
     def path(self) -> AsyncPath:
         room_id = encode_name(self.id)
