@@ -15,8 +15,8 @@ setup(
     author       = "miruka",
     author_email = "miruka@disroot.org",
     keywords     = "matrix api chat messaging library",
-    license      = "LGPLv3"
-    url          = "https://github.com/mirukana/mio"
+    license      = "LGPLv3",
+    url          = "https://github.com/mirukana/mio",
 
     description                   = "Experimental Matrix library",
     long_description              = Path("README.md").read_text(),
