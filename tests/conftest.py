@@ -4,6 +4,7 @@
 import json
 import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from shutil import copytree
 from typing import Union
@@ -21,6 +22,19 @@ class TestData:
     def __getattr__(self, name: str) -> Path:
         name = re.sub(r"(.*)_", r"\1.", name).replace("_", "-")
         return Path(f"tests/data/{name}")
+
+
+@dataclass
+class ClientFactory:
+    path:    Path
+    synapse: SynapseHandle
+
+    async def __getattr__(self, name: str) -> Client:
+        name = f"{name}.{uuid4()}"
+        path = self.path / "{user_id}.{device_id}"
+        self.synapse.register(name)
+        client = Client(path, self.synapse.url)
+        return await client.auth.login_password(name, "test")
 
 
 def pytest_configure(config):
@@ -62,13 +76,6 @@ def clone_client(client: Client, *args, **kwargs) -> Client:
     return Client(new_base_dir, *args, **kwargs)
 
 
-async def get_client(synapse: SynapseHandle, path: Path, name: str) -> Client:
-    name = f"{name}.{uuid4()}"
-    path = path / "{user_id}.{device_id}"
-    synapse.register(name)
-    return await Client(path, synapse.url).auth.login_password(name, "test")
-
-
 async def new_device_from(client: Client, path: Path) -> Client:
     new = Client(path, client.server)
     return await new.auth.login_password(client.user_id, "test")
@@ -95,15 +102,20 @@ def synapse():
 
 
 @fixture
+def clients(tmp_path, synapse):
+    return ClientFactory(tmp_path, synapse)
+
+
+@fixture
 async def alice(synapse, tmp_path):
-    client = await get_client(synapse, tmp_path, "alice")
+    client = await ClientFactory(tmp_path, synapse).alice
     yield client
     await client.terminate()
 
 
 @fixture
 async def bob(synapse, tmp_path):
-    client = await get_client(synapse, tmp_path, "bob")
+    client = await ClientFactory(tmp_path, synapse).bob
     yield client
     await client.terminate()
 
