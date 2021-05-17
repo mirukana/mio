@@ -16,6 +16,8 @@ from mio.rooms.room import Room
 from pytest import mark, raises
 from yarl import URL
 
+from ..conftest import ClientFactory
+
 pytestmark = mark.asyncio
 
 
@@ -127,3 +129,99 @@ async def test_user_dicts(alice: Client, room: Room, bob: Client):
     assert set(state.members) == {alice.user_id}
     assert set(state.banned) == {bob.user_id}
     assert not state.invitees and not state.leavers
+
+
+async def test_display_name(clients: ClientFactory, room: Room):
+    # TODO: test with lazy load room fields
+
+    async def check_name(wanted: str):
+        await room.client.sync.once()
+        assert room.state.display_name == wanted
+
+    # 1 member (us)
+
+    assert len(room.state.users) == 1
+    assert room.state.display_name == "Empty Room"
+
+    # 2 members
+
+    bob = await clients.bob
+    await bob.profile.set_name("Bob")
+    await bob.rooms.join(room.id)
+    await check_name("Bob")
+
+    # 3 members
+
+    carol = await clients.carol
+    await carol.profile.set_name("Carol")
+    await carol.rooms.join(room.id)
+    await check_name("Bob and Carol")
+
+    # 4 members
+
+    dave = await clients.dave
+    await dave.profile.set_name("Dave")
+    await dave.rooms.join(room.id)
+    await check_name("Bob, Carol and Dave")
+
+    # 5 joined, 1 invited - more than 6 members total
+
+    erin = await clients.erin
+    await erin.profile.set_name("Erin")
+    await erin.rooms.join(room.id)
+
+    frank = await clients.frank
+    await frank.profile.set_name("Frank")
+    await frank.rooms.join(room.id)
+
+    mallory = await clients.mallory
+    await mallory.profile.set_name("Frank")
+    await room.invite(mallory.user_id)
+
+    fr1 = frank.user_id
+    fr2 = mallory.user_id
+    await check_name(f"Bob, Carol, Dave, Erin, Frank ({fr1}) and 1 more")
+
+    # 4 joined, 1 invited, 1 left and display name conflict
+
+    await bob.sync.once()
+    await bob.rooms[room.id].leave()
+    await check_name(f"Carol, Dave, Erin, Frank ({fr1}) and Frank ({fr2})")
+
+    # 1 joined (us), 1 invited, 5 left and no more display name conflict
+
+    for client in (carol, dave, erin, frank):
+        await room.state.users[client.user_id].kick()
+
+    await check_name("Frank")
+
+    # 1 joined (us), 5 left, 1 banned
+
+    await room.client.sync.once()
+    await room.state.users[mallory.user_id].ban()
+    await check_name(
+        f"Empty Room (had {bob.user_id}, {carol.user_id}, {dave.user_id}, "
+        f"{erin.user_id} and {frank.user_id})",
+    )
+
+    # 1 joined (us), 6 banned (FIXME: display "and more" for empty rooms)
+
+    for client in (bob, carol, dave, erin, frank):
+        await room.state.users[client.user_id].ban()
+
+    await check_name(
+        f"Empty Room (had {mallory.user_id}, {bob.user_id}, {carol.user_id}, "
+        f"{dave.user_id} and {erin.user_id})",
+    )
+
+    # Room with an alias
+
+    alias = RoomAlias(f"#{uuid4()}:localhost")
+    await room.create_alias(alias)
+    await room.state.send(CanonicalAlias(alias))
+    await check_name(alias)
+
+    # Room with an explicit name
+
+    await room.state.send(Name("Forest of Magic"))
+    await check_name("Forest of Magic")

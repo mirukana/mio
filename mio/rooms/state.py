@@ -3,8 +3,10 @@
 
 from collections import ChainMap
 from dataclasses import dataclass, field
+from itertools import islice
 from typing import (
-    TYPE_CHECKING, DefaultDict, Dict, List, Optional, Set, Tuple, Type, Union,
+    TYPE_CHECKING, DefaultDict, Dict, List, NamedTuple, Optional, Set, Tuple,
+    Type, Union,
 )
 
 from aiopath import AsyncPath
@@ -12,6 +14,7 @@ from aiopath import AsyncPath
 from ..core.contents import EventContent
 from ..core.data import JSONFile, Map, Parent, Runtime
 from ..core.ids import MXC, EventId, RoomAlias, UserId
+from ..core.utils import comma_and_join
 from .contents.settings import (
     Avatar, CanonicalAlias, Creation, Encryption, GuestAccess,
     HistoryVisibility, JoinRules, Name, PinnedEvents, PowerLevels, ServerACL,
@@ -105,6 +108,44 @@ class RoomState(JSONFile, Map):
 
 
     @property
+    def display_name(self) -> str:
+        return self.name or self.alias or str(self.user_based_name)
+
+
+    @property
+    def user_based_name(self) -> "UserBasedRoomName":
+        user_ids = self.room.lazy_load_heroes
+        joined   = self.room.lazy_load_joined
+        invited  = self.room.lazy_load_invited
+
+        def get(*dicts: Dict[UserId, RoomUser]) -> Tuple[str, ...]:
+            us    = self.room.client.user_id
+            users = ChainMap(*dicts)
+            return tuple(islice(
+                (u.unique_name for u in users.values() if u.user_id != us), 5,
+            ))
+
+        if user_ids is None:
+            names = get(self.invitees, self.members) or \
+                get(self.leavers) or \
+                get(self.banned)
+        else:
+            names = tuple(self.users[u].unique_name for u in user_ids[:5])
+
+        if joined is None:
+            joined = len(self.members)
+
+        if invited is None:
+            invited = len(self.invitees)
+
+        return UserBasedRoomName(
+            empty  = joined + invited <= 1,
+            names  = names,
+            others = max(0, joined + invited - 1 - len(names)),  # - 1 = us
+        )
+
+
+    @property
     def name(self) -> Optional[str]:
         return self[Name].content.name if Name in self else None
 
@@ -174,7 +215,8 @@ class RoomState(JSONFile, Map):
 
     @property
     def users(self) -> ChainMap[UserId, RoomUser]:
-        return ChainMap(self.invitees, self.members, self.leavers, self.banned)
+        # The ChainMap iterates from last to first child dict
+        return ChainMap(self.banned, self.leavers, self.invitees, self.members)
 
 
     @property
@@ -204,3 +246,21 @@ class RoomState(JSONFile, Map):
             await self.room._call_callbacks(event)
 
         await self.save()
+
+
+class UserBasedRoomName(NamedTuple):
+    empty:  bool
+    names:  Tuple[str, ...]
+    others: int
+
+    def __str__(self) -> str:
+        if self.others:
+            who = comma_and_join(*self.names, f"{self.others} more")
+        else:
+            who = comma_and_join(*self.names)
+
+        if self.empty and who:
+            return f"Empty Room (had {who})"
+        if self.empty:
+            return "Empty Room"
+        return who

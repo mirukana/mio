@@ -69,3 +69,13 @@ def deep_merge_dict(dict1: MutableMapping, dict2: Mapping) -> None:
 
 async def make_awaitable(result):
     return await result if isawaitable(result) else result
+
+
+def comma_and_join(*items: str) -> str:
+    if not items:
+        return ""
+
+    if len(items) == 1:
+        return items[0]
+
+    return "%s and %s" % (", ".join(items[:-1]), items[-1])
