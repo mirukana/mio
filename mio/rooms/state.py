@@ -114,29 +114,9 @@ class RoomState(JSONFile, Map):
 
     @property
     def user_based_name(self) -> "UserBasedRoomName":
-        user_ids = self.room.lazy_load_heroes
-        joined   = self.room.lazy_load_joined
-        invited  = self.room.lazy_load_invited
-
-        def get(*dicts: Dict[UserId, RoomUser]) -> Tuple[str, ...]:
-            us    = self.room.client.user_id
-            users = ChainMap(*dicts)
-            return tuple(islice(
-                (u.unique_name for u in users.values() if u.user_id != us), 5,
-            ))
-
-        if user_ids is None:
-            names = get(self.invitees, self.members) or \
-                get(self.leavers) or \
-                get(self.banned)
-        else:
-            names = tuple(self.users[u].unique_name for u in user_ids[:5])
-
-        if joined is None:
-            joined = len(self.members)
-
-        if invited is None:
-            invited = len(self.invitees)
+        names    = tuple(user.unique_name for user in self.heroes.values())
+        joined   = self.total_members
+        invited  = self.total_invitees
 
         return UserBasedRoomName(
             empty  = joined + invited <= 1,
@@ -211,6 +191,36 @@ class RoomState(JSONFile, Map):
     def server_acl(self) -> ServerACL:
         default = ServerACL(allow=["*"])
         return self[ServerACL].content if ServerACL in self else default
+
+
+    @property
+    def total_members(self) -> int:
+        if self.room._lazy_load_joined is None:
+            return len(self.members)
+        return self.room._lazy_load_joined
+
+
+    @property
+    def total_invitees(self) -> int:
+        if self.room._lazy_load_invited is None:
+            return len(self.invitees)
+        return self.room._lazy_load_invited
+
+
+    @property
+    def heroes(self) -> Dict[UserId, RoomUser]:
+        if self.room._lazy_load_heroes is not None:
+            return {u: self.users[u] for u in self.room._lazy_load_heroes}
+
+        def get(*dicts: Dict[UserId, RoomUser]) -> Dict[UserId, RoomUser]:
+            our_id = self.room.client.user_id
+            users  = ChainMap(*dicts).items()
+            return dict(islice(
+                ((uid, user) for uid, user in users if uid != our_id), 5,
+            ))
+
+        main = get(self.invitees, self.members)
+        return main or get(self.leavers) or get(self.banned)
 
 
     @property

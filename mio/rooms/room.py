@@ -35,9 +35,9 @@ class Room(JSONFile, EventCallbacks):
     # Set by Sync.handle_sync
     unread_notifications: int              = 0
     unread_highlights:    int              = 0
-    lazy_load_joined:     Optional[int]    = field(repr=False, default=None)
-    lazy_load_invited:    Optional[int]    = field(repr=False, default=None)
-    lazy_load_heroes:     Optional[Heroes] = field(repr=False, default=None)
+    _lazy_load_joined:    Optional[int]    = field(repr=False, default=None)
+    _lazy_load_invited:   Optional[int]    = field(repr=False, default=None)
+    _lazy_load_heroes:    Optional[Heroes] = field(repr=False, default=None)
 
     timeline: Runtime[Timeline]  = field(init=False, repr=False)
     state:    Runtime[RoomState] = field(init=False, repr=False)
