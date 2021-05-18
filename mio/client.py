@@ -9,6 +9,7 @@ from aiopath import AsyncPath
 from filelock import FileLock
 from yarl import URL
 
+from .account_data.account_data import AccountData
 from .auth import Auth
 from .core.data import JSONFile, Runtime
 from .core.ids import UserId
@@ -47,14 +48,15 @@ class Client(JSONFile, MioLogger):
     def __post_init__(self) -> None:
         MioLogger.__post_init__(self)
 
-        self.net     = Network(self)
-        self.auth    = Auth(self)
-        self.profile = Profile(self)
-        self.rooms   = Rooms(self)
-        self.sync    = Sync(self)
-        self.e2e     = E2E(self)
-        self.devices = Devices(self)
-        self.media   = MediaStore(self)
+        self.net          = Network(self)
+        self.auth         = Auth(self)
+        self.profile      = Profile(self)
+        self.account_data = AccountData(self)
+        self.rooms        = Rooms(self)
+        self.sync         = Sync(self)
+        self.e2e          = E2E(self)
+        self.devices      = Devices(self)
+        self.media        = MediaStore(self)
 
         self._lock       = None
         self._terminated = False

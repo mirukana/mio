@@ -43,7 +43,7 @@ class RoomState(JSONFile, Map):
 
     room: Parent["Room"] = field(repr=False)
 
-    # {event.type: {event.state_key: event}}
+    # {(event.type, event.state_key): event}
     _data: Dict[Tuple[str, str], StateBase] = field(default_factory=dict)
 
     invitees: Runtime[Dict[UserId, RoomUser]] = field(default_factory=dict)

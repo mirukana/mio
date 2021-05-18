@@ -153,7 +153,7 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
         init=False, repr=False, default_factory=lambda: DefaultDict(list),
     )
 
-    callback_groups: Runtime[List["CallbackGroup"]] = field(
+    callback_groups: Runtime[List[CallbackGroup]] = field(
         init=False, repr=False, default_factory=lambda: [MioDeviceCallbacks()],
     )
 

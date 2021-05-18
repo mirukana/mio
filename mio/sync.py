@@ -12,6 +12,7 @@ from typing import (
 
 from aiopath import AsyncPath
 
+from .account_data.events import AccountDataEvent
 from .core.data import Parent, Runtime
 from .core.events import Event, InvalidEvent
 from .core.ids import InvalidId, RoomId, UserId
@@ -107,7 +108,7 @@ class Sync(JSONClientModule):
 
 
     async def _handle_sync(self, sync: Dict[str, Any]) -> None:
-        # TODO: account_data, presence
+        # TODO: room account data, presence, refactor because it's way too long
 
         while self.paused:
             await asyncio.sleep(0.1)
@@ -117,6 +118,7 @@ class Sync(JSONClientModule):
         async def events_call(
             data: dict, key: str, evtype: Type[Event], coro: Callable,
         ) -> None:
+
             for event in data.get(key, {}).get("events", ()):
                 with self.client.report(InvalidEvent):
                     ev = evtype.from_dict(event, self.client)
@@ -157,6 +159,13 @@ class Sync(JSONClientModule):
 
                     await room.timeline._register_events(ev)
 
+        # Global account data
+
+        accdata_call = self.client.account_data._register
+        await events_call(sync, "account_data", AccountDataEvent, accdata_call)
+
+        # Devices
+
         e2e_senders: Set[UserId] = set()
 
         for event in sync.get("to_device", {}).get("events", ()):
@@ -183,8 +192,10 @@ class Sync(JSONClientModule):
 
         await self.client.devices.update(changed)
 
-        to_call = self.client.devices._call_callbacks
-        await events_call(sync, "to_device", ToDeviceEvent, to_call)
+        dev_call = self.client.devices._call_callbacks
+        await events_call(sync, "to_device", ToDeviceEvent, dev_call)
+
+        # Rooms
 
         rooms = self.client.rooms
 
@@ -195,6 +206,8 @@ class Sync(JSONClientModule):
             rooms._data[room_id] = Room(client=self.client, id=room_id)
             return rooms._data[room_id]
 
+        # -- Invited rooms
+
         for room_id, data in sync.get("rooms", {}).get("invite", {}).items():
             with self.client.report(InvalidId) as caught:
                 room = await set_room(RoomId(room_id))
@@ -203,6 +216,8 @@ class Sync(JSONClientModule):
                 room.invited = True
                 room.left    = False
                 await room_events_call(data, "invite_state", room)
+
+        # -- Joined rooms
 
         for room_id, data in sync.get("rooms", {}).get("join", {}).items():
             with self.client.report(InvalidEvent) as caught:
@@ -258,6 +273,8 @@ class Sync(JSONClientModule):
             await room_events_call(data, "timeline", room)
             await room_events_call(data, "ephemeral", room)
 
+        # -- Left rooms
+
         for room_id, data in sync.get("rooms", {}).get("leave", {}).items():
             if room_id in self.client.rooms.forgotten:
                 continue
@@ -271,6 +288,8 @@ class Sync(JSONClientModule):
                 await room_events_call(data, "state", room)
                 await room_events_call(data, "timeline", room)
 
+        # Left devices
+
         no_more_shared_e2e_room = set()
 
         for user_id in sync.get("device_lists", {}).get("left", []):
@@ -279,11 +298,17 @@ class Sync(JSONClientModule):
 
         self.client.devices.drop(*no_more_shared_e2e_room)
 
+        # E2E one time keys
+
         if "device_one_time_keys_count" in sync:
             up = sync["device_one_time_keys_count"].get("signed_curve25519", 0)
             await self.client.e2e._upload_one_time_keys(currently_uploaded=up)
 
+        # Profile
+
         await self.client.profile._update_on_sync(*state_member_events)
+
+        # Finish
 
         self.next_batch = sync["next_batch"]
         await self.save()
