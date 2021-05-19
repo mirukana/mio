@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, DefaultDict, Dict, List, Type, Union
+from typing import TYPE_CHECKING, DefaultDict, Dict, List
 
 from aiopath import AsyncPath
 
 from ..core.callbacks import CallbackGroup, Callbacks, EventCallbacks
-from ..core.contents import EventContent
+from ..core.contents import EventContent, EventContentType, str_type
 from ..core.data import Map, Parent, Runtime
 from ..module import JSONClientModule
 from .events import AccountDataEvent
@@ -16,7 +16,6 @@ if TYPE_CHECKING:
     from ..client import Client
 
 _Map = Map[str, AccountDataEvent]
-_Key = Union[Type[EventContent], str]
 
 
 @dataclass
@@ -35,12 +34,8 @@ class AccountData(JSONClientModule, _Map, EventCallbacks):
     )
 
 
-    def __getitem__(self, key: _Key) -> AccountDataEvent:
-        if isinstance(key, type):
-            assert key.type
-            return self._data[key.type]
-
-        return self._data[key]
+    def __getitem__(self, key: EventContentType) -> AccountDataEvent:
+        return self._data[str_type(key)]
 
 
     @property

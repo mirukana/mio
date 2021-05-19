@@ -8,7 +8,8 @@ from .data import JSON, JSONLoadError, Runtime
 from .errors import MioError
 from .utils import DictS
 
-ContentT = TypeVar("ContentT", bound="EventContent")
+EventContentType = Union[Type["EventContent"], str]
+ContentT         = TypeVar("ContentT", bound="EventContent")
 
 
 @dataclass
@@ -41,3 +42,10 @@ class InvalidContent(Exception, EventContent):
     @property
     def dict(self) -> DictS:
         return self.source
+
+
+def str_type(content_type: EventContentType) -> str:
+    if isinstance(content_type, type):
+        assert content_type.type
+        return content_type.type
+    return content_type

@@ -6,12 +6,12 @@ from dataclasses import dataclass, field
 from itertools import islice
 from typing import (
     TYPE_CHECKING, DefaultDict, Dict, List, NamedTuple, Optional, Set, Tuple,
-    Type, Union,
+    Union,
 )
 
 from aiopath import AsyncPath
 
-from ..core.contents import EventContent
+from ..core.contents import EventContent, EventContentType, str_type
 from ..core.data import JSONFile, Map, Parent, Runtime
 from ..core.ids import MXC, EventId, RoomAlias, UserId
 from ..core.utils import comma_and_join
@@ -26,9 +26,7 @@ from .user import RoomUser
 if TYPE_CHECKING:
     from .room import Room
 
-Key = Union[
-    Type[EventContent], str, Tuple[Type[EventContent], str], Tuple[str, str],
-]
+_Key = Union[EventContentType, Tuple[EventContentType, str]]
 
 
 @dataclass
@@ -57,14 +55,10 @@ class RoomState(JSONFile, Map):
     )
 
 
-    def __getitem__(self, key: Key) -> StateBase:
+    def __getitem__(self, key: _Key) -> StateBase:
         if not isinstance(key, tuple):
-            key = (key, "")  # type: ignore
-
-        if isinstance(key[0], type):  # type: ignore
-            key = (key[0].type, key[1])  # type: ignore
-
-        return self._data[key]  # type: ignore
+            key = (key, "")
+        return self._data[str_type(key[0]), key[1]]
 
 
     async def load(self) -> "RoomState":
