@@ -23,7 +23,7 @@ pip3 install -U --user --editable '.[dev]'
 To run checks, from the project's root folder:
 
 ```sh
-mypy mio & flake8 mio & python3 -m pytest
+mypy . & flake8 . & python3 -m pytest
 ```
 
 Using `python3 -m pytest` instead of `pytest` will ensure that the current
