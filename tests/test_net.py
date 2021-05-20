@@ -3,11 +3,12 @@
 
 from io import BytesIO
 
+from pytest import mark, raises
+
 from mio.client import Client
 from mio.net.errors import (
     RETRIABLE_STATUS, NonStandardRetriableStatus, ServerError,
 )
-from pytest import mark, raises
 
 pytestmark = mark.asyncio
 

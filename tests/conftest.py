@@ -11,9 +11,11 @@ from typing import Union
 from uuid import uuid4
 
 from aioresponses import aioresponses
+from diff_cover.diff_cover_tool import main  # type: ignore
+from pytest import fixture
+
 from mio.client import Client
 from mio.rooms.contents.settings import Encryption
-from pytest import fixture
 
 from .synapse import SynapseHandle
 
@@ -44,7 +46,6 @@ def pytest_configure(config):
 def pytest_unconfigure(config):
     if config.option.cov_source:
         print()
-        from diff_cover.diff_cover_tool import main  # type: ignore
 
         cov_dir = Path(__file__).parent / "coverage"
         xml     = str(cov_dir / "output.xml")

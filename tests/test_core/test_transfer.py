@@ -5,8 +5,9 @@ import asyncio
 from io import StringIO
 from typing import List
 
-from mio.core.transfer import Transfer
 from pytest import mark, raises
+
+from mio.core.transfer import Transfer
 
 pytestmark = mark.asyncio
 

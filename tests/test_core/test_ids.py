@@ -3,11 +3,12 @@
 
 from typing import Type
 
+from pytest import mark, raises
+
 from mio.core.ids import (
     EventId, GroupId, InvalidId, RoomAlias, RoomId, UserId, _DomainIdentifier,
     _Identifier,
 )
-from pytest import mark, raises
 
 pytestmark = mark.asyncio
 

@@ -3,11 +3,12 @@
 
 from dataclasses import dataclass
 
+from pytest import mark
+
 from mio.account_data.events import AccountDataEvent
 from mio.client import Client
 from mio.core.callbacks import CallbackGroup
 from mio.core.contents import EventContent
-from pytest import mark
 
 pytestmark = mark.asyncio
 

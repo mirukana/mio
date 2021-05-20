@@ -1,12 +1,12 @@
 # Copyright mio authors & contributors <https://github.com/mirukana/mio>
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
+from pytest import mark, raises
+
 from mio.client import Client
 from mio.core.ids import MXC
 from mio.net.errors import MatrixError
 from mio.rooms.room import Room
-from pytest import mark, raises
-from yarl import URL
 
 pytestmark = mark.asyncio
 

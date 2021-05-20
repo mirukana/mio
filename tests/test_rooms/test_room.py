@@ -3,12 +3,13 @@
 
 from uuid import uuid4
 
+from pytest import mark
+
 from mio.client import Client
 from mio.core.ids import RoomAlias
 from mio.rooms.contents.messages import Text
 from mio.rooms.contents.settings import CanonicalAlias
 from mio.rooms.room import Room
-from pytest import mark
 
 pytestmark = mark.asyncio
 

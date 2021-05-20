@@ -5,6 +5,8 @@ import shutil
 from dataclasses import dataclass, field
 from uuid import uuid4
 
+from pytest import mark
+
 from mio.client import Client
 from mio.core.ids import RoomAlias
 from mio.rooms.contents.messages import Emote, Text
@@ -12,7 +14,6 @@ from mio.rooms.contents.settings import CanonicalAlias, Name, Topic
 from mio.rooms.events import StateEvent, TimelineEvent
 from mio.rooms.room import Room
 from mio.rooms.rooms import CallbackGroup
-from pytest import mark
 
 from ..conftest import clone_client, new_device_from
 

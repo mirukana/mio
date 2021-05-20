@@ -1,8 +1,9 @@
 # Copyright mio authors & contributors <https://github.com/mirukana/mio>
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
-from mio.core.utils import comma_and_join
 from pytest import mark
+
+from mio.core.utils import comma_and_join
 
 pytestmark = mark.asyncio
 

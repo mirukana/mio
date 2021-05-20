@@ -5,10 +5,11 @@ from pathlib import Path
 
 import filelock
 from aiopath import AsyncPath
-from mio.client import Client
-from mio.net.exchange import Request
 from pytest import mark, raises
 from yarl import URL
+
+from mio.client import Client
+from mio.net.exchange import Request
 
 from .conftest import clone_client, compare_clients, read_json
 

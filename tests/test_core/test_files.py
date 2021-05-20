@@ -7,12 +7,13 @@ from io import BytesIO
 from pathlib import Path
 
 import aiofiles
+from PIL import Image as PILImage
+from pytest import mark, raises
+
 from mio.core.files import (
     FS_BAD_CHARS, atomic_write, encode_name, guess_mime, has_transparency,
     sha256_chunked, sync_atomic_write,
 )
-from PIL import Image as PILImage
-from pytest import mark, raises
 
 from ..conftest import TestData
 

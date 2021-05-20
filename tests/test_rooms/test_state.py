@@ -4,6 +4,9 @@
 import asyncio
 from uuid import uuid4
 
+from pytest import mark, raises
+from yarl import URL
+
 from mio.client import Client
 from mio.core.ids import RoomAlias, RoomId
 from mio.rooms.contents.settings import (
@@ -13,8 +16,6 @@ from mio.rooms.contents.settings import (
 )
 from mio.rooms.contents.users import Member
 from mio.rooms.room import Room
-from pytest import mark, raises
-from yarl import URL
 
 from ..conftest import ClientFactory
 

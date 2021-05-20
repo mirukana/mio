@@ -1,13 +1,12 @@
 # Copyright mio authors & contributors <https://github.com/mirukana/mio>
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
-from pathlib import Path
-
 import aiofiles
+from pytest import mark
+
 from mio.client import Client
 from mio.core.ids import MXC
 from mio.rooms.room import Room
-from pytest import mark
 
 from .conftest import TestData, new_device_from
 

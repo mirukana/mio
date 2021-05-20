@@ -5,6 +5,9 @@ from io import BytesIO
 from pathlib import Path
 
 import aiofiles
+from PIL import Image as PILImage
+from pytest import mark, raises
+
 from mio.client import Client
 from mio.core.ids import MXC
 from mio.rooms.contents.messages import (
@@ -13,8 +16,6 @@ from mio.rooms.contents.messages import (
     Video,
 )
 from mio.rooms.room import Room
-from PIL import Image as PILImage
-from pytest import mark, raises
 
 from ..conftest import TestData
 

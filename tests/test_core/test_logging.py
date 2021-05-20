@@ -7,9 +7,10 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from pytest import mark
+
 from mio.client import Client
 from mio.core.logging import unexpected_errors_logger
-from pytest import mark
 
 pytestmark = mark.asyncio
 

@@ -3,6 +3,8 @@
 
 import json
 
+from pytest import mark, raises
+
 from mio.client import Client
 from mio.core.utils import NoneType
 from mio.devices.events import ToDeviceEvent
@@ -11,7 +13,6 @@ from mio.e2e.contents import Dummy, Megolm, Olm
 from mio.e2e.e2e import SESSION_FILE_FOOTER, SESSION_FILE_HEADER
 from mio.rooms.contents.messages import Text
 from mio.rooms.room import Room
-from pytest import mark, raises
 
 from .conftest import new_device_from
 

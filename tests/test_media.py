@@ -6,11 +6,12 @@ from pathlib import Path
 from typing import List
 
 import aiofiles
+from pytest import mark
+
 from mio.client import Client
 from mio.core.transfer import Transfer
 from mio.media.file import Media
 from mio.media.thumbnail import ThumbnailForm, ThumbnailMode
-from pytest import mark
 
 from .conftest import TestData
 
