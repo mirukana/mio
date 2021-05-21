@@ -144,7 +144,6 @@ class MioLogger(InstanceTracker):
             open(file, "a"),  # FIXME: loguru has issues with {} in paths
             level     = logging.NOTSET,
             backtrace = False,
-            enqueue   = True,
             format    = file_format,
         )
 
