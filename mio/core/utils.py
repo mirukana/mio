@@ -11,10 +11,6 @@ from typing import (
 
 from rich.console import Console
 
-# Characters that can't be in file/dir names on either windows, mac or linux -
-# Actual % must be encoded too to not conflict with % encoded chars
-FS_BAD_CHARS: str = r'"%*/:<>?\|'
-
 HTML_TAGS_RE: Pattern = re.compile(r"<\/?[^>]+(>|$)")
 
 StrBytes     = Union[str, bytes]
