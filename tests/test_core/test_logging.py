@@ -120,7 +120,6 @@ async def test_file_logging(tmp_path: Path):
             await entry_match("ERROR", entry_txt, msg)
             assert len(text.splitlines()) > 3
             assert type(err).__name__ in text
-            assert "Version with locals:" in text
 
         try:
             raise err

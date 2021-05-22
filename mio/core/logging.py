@@ -119,15 +119,6 @@ class MioLogger(InstanceTracker):
                         indent_guides=False, show_locals=False,
                     ))
 
-                    out.write("\nVersion with locals:\n")
-
-                    Console(file=out, soft_wrap=True).print(RichTraceback(
-                        indent_guides     = False,
-                        show_locals       = True,
-                        locals_max_length = None,  # type: ignore
-                        locals_max_string = None,  # type: ignore
-                    ))
-
                     record["extra"]["stack"] = out.getvalue()
                     return "%s\n{extra[stack]}\n" % fmt
 
