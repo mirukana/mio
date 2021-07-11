@@ -19,14 +19,15 @@ from ...core.files import (
     SeekableIO, guess_mime, has_transparency, measure, media_info,
     read_whole_binary, save_jpg, save_png,
 )
-from ...core.ids import MXC
+from ...core.ids import MXC, EventId
 from ...core.transfer import TransferUpdateCallback
-from ...core.utils import HTML_TAGS_RE
+from ...core.utils import HTML_TAGS_RE, DictS
 
 if TYPE_CHECKING:
     from ...client import Client
 
-TexT = TypeVar("TexT", bound="Textual")
+TexT     = TypeVar("TexT", bound="Textual")
+ContentT = TypeVar("ContentT", bound="EventContent")
 
 THUMBNAIL_POSSIBLE_PIL_FORMATS: Set[str] = {"PNG", "JPEG"}
 THUMBNAIL_SIZE_MAX_OF_ORIGINAL: float    = 0.9  # must be <90% of orig size
@@ -54,8 +55,24 @@ class Message(EventContent):
 
 @dataclass
 class Textual(Message):
-    format:         Optional[str] = None
-    formatted_body: Optional[str] = None
+    format:         Optional[str]     = None
+    formatted_body: Optional[str]     = None
+    in_reply_to:    Optional[EventId] = None
+
+
+    # Used to fill in_reply_to
+    @classmethod
+    def from_dict(
+        cls: Type[ContentT], data: DictS, parent: Optional["JSON"] = None,
+    ) -> ContentT:
+        textual    = super().from_dict(data, parent)
+        relates_to = data.get("m.relates_to")
+
+        if relates_to and relates_to.get("m.in_reply_to"):
+            in_reply_to = relates_to["m.in_reply_to"]["event_id"]
+            textual.in_reply_to = EventId(in_reply_to)
+
+        return textual
 
 
     @classmethod
