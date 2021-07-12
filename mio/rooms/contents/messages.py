@@ -55,22 +55,22 @@ class Message(EventContent):
 
 @dataclass
 class Textual(Message):
+    aliases = {
+        "in_reply_to": ["m.relates_to", "m.in_reply_to", "event_id"],
+    }
+
     format:         Optional[str]     = None
     formatted_body: Optional[str]     = None
     in_reply_to:    Optional[EventId] = None
 
 
-    # Used to fill in_reply_to
+    # Needed for reply features
     @classmethod
     def from_dict(
         cls: Type[ContentT], data: DictS, parent: Optional["JSON"] = None,
     ) -> ContentT:
         textual    = super().from_dict(data, parent)
-        relates_to = data.get("m.relates_to")
 
-        if relates_to and relates_to.get("m.in_reply_to"):
-            in_reply_to = relates_to["m.in_reply_to"]["event_id"]
-            textual.in_reply_to = EventId(in_reply_to)
 
         return textual
 
