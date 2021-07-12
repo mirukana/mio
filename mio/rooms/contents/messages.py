@@ -61,6 +61,7 @@ class Textual(Message):
 
     format:         Optional[str]     = None
     formatted_body: Optional[str]     = None
+    stripped_body:  Optional[str]     = None
     in_reply_to:    Optional[EventId] = None
 
 
@@ -69,8 +70,20 @@ class Textual(Message):
     def from_dict(
         cls: Type[ContentT], data: DictS, parent: Optional["JSON"] = None,
     ) -> ContentT:
-        textual    = super().from_dict(data, parent)
+        textual               = super().from_dict(data, parent)
+        textual.stripped_body = textual.body
 
+        # Strip body if it's a reply, according to matrix spec
+        if textual.in_reply_to:
+            parts = textual.stripped_body.split("\n")
+
+            while parts[0].startswith("> "):
+                parts = parts[1:]
+
+            if not parts[0]:  # Sometimes parts[0] is ""
+                parts = parts[1:]
+
+            textual.stripped_body = "\n".join(parts)
 
         return textual
 
