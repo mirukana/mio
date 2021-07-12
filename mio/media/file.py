@@ -4,6 +4,7 @@
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime
+from os.path import relpath
 from pathlib import Path
 from typing import TYPE_CHECKING, AsyncIterator, Optional, Union
 
@@ -99,14 +100,14 @@ class Media:
     @property
     async def references(self) -> AsyncIterator["Reference"]:
         async for named_link in self.content.parent.glob("ref.*"):
-            named_file = await named_link.readlink()
+            named_file = named_link.parent / await named_link.readlink()
             conflict   = self.store._named_conflict_marker(named_file)
             fname      = named_file.name
 
             with suppress(FileNotFoundError):
                 fname = (await conflict.readlink()).name
 
-            mxc_file = await named_file.readlink()
+            mxc_file = named_file.parent / await named_file.readlink()
             host     = decode_name(mxc_file.parent.parent.parent.name)
             mxc      = MXC(f"mxc://{host}/{decode_name(mxc_file.parent.name)}")
 
@@ -192,15 +193,17 @@ class Reference:
         # Create everything
 
         await mxc_file.parent.mkdir(parents=True, exist_ok=True)
-        await mxc_file.symlink_to(media.content)
+        await mxc_file.symlink_to(relpath(media.content, mxc_file.parent))
 
         await named_file.parent.mkdir(parents=True, exist_ok=True)
-        await named_file.symlink_to(mxc_file)
-        await named_link.symlink_to(named_file)
+        await named_file.symlink_to(relpath(mxc_file, named_file.parent))
+        await named_link.symlink_to(relpath(named_file, named_link.parent))
 
         if name_conflict:
             await name_conflict.parent.mkdir(parents=True, exist_ok=True)
-            await name_conflict.symlink_to(named_file_0)
+            await name_conflict.symlink_to(
+                relpath(named_file_0, name_conflict.parent),
+            )
 
         return cls(media, named_link, named_file, mxc_file, mxc, filename)
 
