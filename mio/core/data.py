@@ -182,8 +182,8 @@ class JSON(RichFix):
         return cls.from_dict(json.loads(data), parent)
 
 
-    def but(self, **fields) -> "JSON":
-        return replace(self, **fields)
+    def but(self, **fields) -> JSONT:
+        return replace(self, **fields)  # type: ignore
 
 
     def _dump(self, value: Any, name: Optional[str] = None) -> Any:
