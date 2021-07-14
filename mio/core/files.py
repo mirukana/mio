@@ -213,7 +213,10 @@ async def guess_mime(data: SeekableIO) -> str:
         except StopAsyncIteration:
             return "application/x-empty"
 
-    return MIME_DETECTOR.from_buffer(chunk1)
+    mime = MIME_DETECTOR.from_buffer(chunk1)
+
+    # x-ms-bmp is a legacy mimetype not handled correctly by some browsers
+    return "image/bmp" if mime == "image/x-ms-bmp" else mime
 
 
 async def sha256_chunked(data: SeekableIO) -> str:
