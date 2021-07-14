@@ -28,9 +28,9 @@ class Room(JSONFile, EventCallbacks):
     id:      RoomId
 
     # Set by default callbacks
-    invited:              bool        = False
-    left:                 bool        = False
-    typing:               Set[UserId] = field(repr=False, default_factory=set)
+    invited: bool        = False
+    left:    bool        = False
+    typing:  Set[UserId] = field(repr=False, default_factory=set)
 
     # Set by Sync.handle_sync
     unread_notifications: int              = 0

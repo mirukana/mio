@@ -4,9 +4,12 @@
 from pytest import mark, raises
 
 from mio.client import Client
-from mio.core.ids import MXC
+from mio.core.ids import MXC, UserId
 from mio.net.errors import MatrixError
+from mio.rooms.contents.settings import Name
 from mio.rooms.room import Room
+
+from ..conftest import ClientFactory
 
 pytestmark = mark.asyncio
 
@@ -58,11 +61,11 @@ async def test_power_level(room: Room):
     assert room.state.me.power_level == 100
 
 
-async def test_inviter(alice: Client, bob: Client, room: Room):
+async def test_invited_by(alice: Client, bob: Client, room: Room):
     assert bob.user_id not in room.state.users
     await room.invite(bob.user_id)
     await alice.sync.once()
-    assert room.state.invitees[bob.user_id].inviter == alice.user_id
+    assert room.state.invitees[bob.user_id].invited_by == alice.user_id
 
 
 async def test_join_leave_properties(alice: Client, room: Room):
@@ -103,3 +106,166 @@ async def test_ban_unban(alice: Client, bob: Client, room: Room):
     assert room.state.leavers[bob.user_id].membership_reason == "mistake"
 
     await bob.rooms.join(room.id)
+
+
+async def test_can_send_message(room: Room, bob: Client):
+    # Can't send message because invitee
+    await room.invite(bob.user_id)
+    await room.client.sync.once()
+    assert not room.state.invitees[bob.user_id].can_send_message()
+
+    # Can send because joined
+    await bob.rooms.join(room.id)
+    await room.client.sync.once()
+    assert room.state.members[bob.user_id].can_send_message()
+
+    # Can't send because general power level too low
+    await room.state.send(room.state.power_levels.but(messages_default=1))
+    await room.client.sync.once()
+    assert not room.state.members[bob.user_id].can_send_message()
+
+    # Can send because this user's power level was raised
+    await room.state.send(room.state.power_levels.but(users={bob.user_id: 2}))
+    await room.client.sync.once()
+    assert room.state.members[bob.user_id].can_send_message()
+
+
+async def test_can_send_state(room: Room, bob: Client):
+    # Can't send state because invitee
+    await room.invite(bob.user_id)
+    users = {**room.state.power_levels.users, bob.user_id: 50}
+    await room.state.send(room.state.power_levels.but(users=users))
+    await room.client.sync.once()
+    assert not room.state.invitees[bob.user_id].can_send_state(Name)
+
+    # Can send because joined
+    await bob.rooms.join(room.id)
+    await room.client.sync.once()
+    assert room.state.members[bob.user_id].can_send_state(Name)
+
+    # Can't send because power level too low
+    events = {**room.state.power_levels.events, Name.type: 51}
+    await room.state.send(room.state.power_levels.but(events=events))
+    await room.client.sync.once()
+    assert not room.state.members[bob.user_id].can_send_state(Name)
+
+    # Can/can't send because of general state event minimum level
+    assert "some_type" not in room.state.power_levels.events
+    assert room.state.members[bob.user_id].can_send_state("some_type")
+    await room.state.send(room.state.power_levels.but(state_default=60))
+    await room.client.sync.once()
+    assert not room.state.members[bob.user_id].can_send_state("some_type")
+
+
+async def test_can_trigger_notification(room: Room, bob: Client):
+    # Can't because invitee
+    await room.invite(bob.user_id)
+    users = {**room.state.power_levels.users, bob.user_id: 50}
+    await room.state.send(room.state.power_levels.but(users=users))
+    await room.client.sync.once()
+    assert not room.state.invitees[bob.user_id].can_trigger_notification()
+
+    # Can because joined
+    await bob.rooms.join(room.id)
+    await room.client.sync.once()
+    assert room.state.members[bob.user_id].can_trigger_notification()
+    assert "a" not in room.state.power_levels.notifications
+    assert room.state.members[bob.user_id].can_trigger_notification("a")
+
+    # Can't because power level too low
+    await room.state.send(room.state.power_levels.but(notifications={"a": 51}))
+    await room.client.sync.once()
+    assert not room.state.members[bob.user_id].can_trigger_notification("a")
+
+
+async def test_can_invite(room: Room, bob: Client):
+    # Can't because invitee
+    await room.invite(bob.user_id)
+    users = {**room.state.power_levels.users, bob.user_id: 50}
+    await room.state.send(room.state.power_levels.but(users=users))
+    await room.client.sync.once()
+    assert not room.state.invitees[bob.user_id].can_invite()
+
+    # Can because joined
+    await bob.rooms.join(room.id)
+    await room.client.sync.once()
+    assert room.state.members[bob.user_id].can_invite()
+    assert room.state.members[bob.user_id].can_invite(UserId("@a:example.org"))
+
+    # Can't because target is already joined
+    assert not room.state.me.can_invite(bob.user_id)
+
+    # Can't because target is banned
+    await room.state.members[bob.user_id].ban()
+    await room.client.sync.once()
+    assert room.state.me.can_invite()
+    assert not room.state.me.can_invite(bob.user_id)
+
+
+async def test_can_affect_other_user(clients: ClientFactory):
+    alice      = await clients.alice
+    bob, carol = await clients.bob, await clients.carol
+
+    for act in ("redact", "kick", "ban", "unban"):
+        room_id = await alice.rooms.create(public=True, invitees=[bob.user_id])
+        await alice.sync.once()
+        room = alice.rooms[room_id]
+
+        # Can't because invitee
+        users = {alice.user_id: 100, bob.user_id: 50}
+        await room.state.send(room.state.power_levels.but(users=users))
+        await alice.sync.once()
+        alice_func = getattr(room.state.me, f"can_{act}")
+        bob_func   = getattr(room.state.users[bob.user_id], f"can_{act}")
+        assert not bob_func()
+        assert not bob_func(bob.user_id)
+
+        # Can because joined
+        await bob.rooms.join(room.id)
+        await bob.sync.once()
+        await alice.sync.once()
+        assert bob_func()
+
+        if act == "kick":
+            # Can't because user not an invitee/member
+            assert not alice_func("@unknown:example.org")
+
+        elif act == "ban":
+            # Must not already be banned
+            await carol.rooms.join(room.id)
+            await alice.sync.once()
+
+            assert alice_func(carol.user_id)
+            await room.state.users[carol.user_id].ban()
+            await alice.sync.once()
+            assert not alice_func(carol.user_id)
+
+        elif act == "unban":
+            await carol.rooms.join(room.id)
+            await alice.sync.once()
+
+            await room.state.members[carol.user_id].ban()
+            await alice.sync.once()
+
+            # Must actually be banned first
+            assert alice_func(carol.user_id)
+            await room.state.users[carol.user_id].unban()
+            await alice.sync.once()
+            assert not alice_func(carol.user_id)
+
+        if act != "unban":
+            # Can/can't because of sender and target power levels
+            assert alice_func(bob.user_id)
+            assert not bob_func(alice.user_id)
+
+            # Can't because general level too low
+            users = {alice.user_id: 48, bob.user_id: 49}
+            await room.state.send(room.state.power_levels.but(users=users))
+            await alice.sync.once()
+            assert not bob_func(alice.user_id)
+
+        if act in ("redact", "kick"):
+            # Can always act on ourselves as long as we're joined
+            assert bob_func(bob.user_id)
+        else:
+            assert not bob_func(bob.user_id)

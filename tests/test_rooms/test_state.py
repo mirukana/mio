@@ -79,12 +79,12 @@ async def test_settings_properties(room: Room):
         HistoryVisibility(HistoryVisibility.Visibility.invited),
         GuestAccess(GuestAccess.Access.can_join),
         PinnedEvents(["$a:localhost"]),  # type: ignore
-        base_levels.but(events_default=-1),
+        base_levels.but(messages_default=-1),
         ServerACL(allow_ip_literals=False, allow=["*"]),
     ]
 
     await asyncio.gather(*[room.create_alias(a) for a in (alias, alt_alias)])
-    await asyncio.gather(*[state.send(c) for c in to_send])  # type: ignore
+    await asyncio.gather(*[state.send(c) for c in to_send])
     await state.send(Tombstone("dead", RoomId("!n:localhost")))
     await room.client.sync.once()
 
@@ -100,7 +100,7 @@ async def test_settings_properties(room: Room):
     assert state.guest_access is GuestAccess.Access.can_join
     assert state.pinned_events == ["$a:localhost"]
     assert state.tombstone == Tombstone("dead", "!n:localhost")
-    assert state.power_levels == base_levels.but(events_default=-1)
+    assert state.power_levels == base_levels.but(messages_default=-1)
     assert state.server_acl == ServerACL(allow_ip_literals=False, allow=["*"])
 
 
