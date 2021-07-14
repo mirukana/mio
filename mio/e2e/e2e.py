@@ -107,7 +107,8 @@ class E2E(JSONClientModule):
     _in_group_sessions:  InGroupSessionsType  = field(default_factory=dict)
     _out_group_sessions: OutGroupSessionsType = field(default_factory=dict)
 
-    _sent_session_requests: SessionRequestsType = field(default_factory=dict)
+    _recovered_olm_this_sync: Set[UserId]         = field(default_factory=set)
+    _sent_session_requests:   SessionRequestsType = field(default_factory=dict)
 
     _forward_tasks: Runtime[Dict[str, Future]] = field(
         init=False, default_factory=dict,
@@ -513,7 +514,12 @@ class E2E(JSONClientModule):
             return
 
         if not dev.trusted:
-            client.info("Pending {} from untrusted device {}", request, dev)
+            client.info(
+                "Pending {} from untrusted device {}. A reply allowing this "
+                "device to decrypt previous messages it has lost will be sent "
+                "if you mark it as trusted.",
+                request, dev,
+            )
             dev.pending_session_requests[request.request_id] = request
             await devices.save()
             return
@@ -637,7 +643,15 @@ class E2E(JSONClientModule):
 
     async def _recover_from_undecryptable_olm(
         self, event: ToDeviceEvent[Olm],
-    ) -> None:
+    ) -> bool:
+
+        if event.sender in self._recovered_olm_this_sync:
+            self.client.debug(
+                "Already tried olm recovery with {} this sync", event.sender,
+            )
+            return False
+
+        self._recovered_olm_this_sync.add(event.sender)
 
         self.client.info(
             "Olm session with {} has been corrupted, creating a replacement",
@@ -657,7 +671,7 @@ class E2E(JSONClientModule):
                 "Didn't get any one-time keys for {}, can't send new session!",
                 no_otks,
             )
-            return
+            return True
 
         await devices.send(olms)  # type: ignore
 
@@ -670,6 +684,8 @@ class E2E(JSONClientModule):
                 )
                 await devices.send({device: request.cancellation})
                 await devices.send({device: request})
+
+        return True
 
 
     async def _share_out_group_session(
@@ -717,7 +733,11 @@ class E2E(JSONClientModule):
 
         request = GroupSessionRequest.from_megolm(for_event)
         send_to = {self.client.user_id, for_event.sender}
-        self.client.info("Sending {} to {}", request, send_to)
+        self.client.info(
+            "Trying to recover some undecryptable events by sending {} to {}. "
+            "They must trust your device or manually approve the request.",
+            request, send_to,
+        )
 
         self._sent_session_requests[request_key] = (request, send_to)
 

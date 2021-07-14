@@ -308,7 +308,9 @@ async def test_olm_recovery(alice: Client, bob: Client):
     alice.e2e._sessions[bob_curve].clear()
     olmed.ciphertext.clear()
     await send_check(olmed, err.NoCipherForUs)
-    # this would fail is recovery didn't create a new session
+    # Ensure we'll never try multiple recoveries with one user in the same sync
+    assert not await bob.e2e._recover_from_undecryptable_olm(bob_got[-2])
+    # This would fail if recovery didn't create a new session
     await send_check(await prepare_dummy())
 
     # OlmSessionError for existing session

@@ -119,7 +119,11 @@ class Sync(JSONClientModule):
             data: dict, key: str, evtype: Type[Event], coro: Callable,
         ) -> None:
 
-            for event in data.get(key, {}).get("events", ()):
+            events = data.get(key, {}).get("events", ())
+
+            for i, event in enumerate(events, 1):
+                self.client.debug("Handling {} {}/{}", key, i, len(events))
+
                 with self.client.report(InvalidEvent):
                     ev = evtype.from_dict(event, self.client)
 
@@ -165,6 +169,8 @@ class Sync(JSONClientModule):
         await events_call(sync, "account_data", AccountDataEvent, accdata_call)
 
         # Devices
+
+        self.client.e2e._recovered_olm_this_sync.clear()
 
         e2e_senders: Set[UserId] = set()
 
