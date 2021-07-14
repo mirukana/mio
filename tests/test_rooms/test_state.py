@@ -11,10 +11,10 @@ from mio.client import Client
 from mio.core.ids import RoomAlias, RoomId
 from mio.rooms.contents.settings import (
     Avatar, CanonicalAlias, Creation, Encryption, GuestAccess,
-    HistoryVisibility, JoinRules, Name, PinnedEvents, PowerLevels, ServerACL,
-    Tombstone, Topic,
+    HistoryVisibility, JoinRules, Name, PinnedEvents, ServerACL, Tombstone,
+    Topic,
 )
-from mio.rooms.contents.users import Member
+from mio.rooms.contents.users import Member, PowerLevels
 from mio.rooms.room import Room
 
 from ..conftest import ClientFactory

@@ -4,13 +4,12 @@
 from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import auto
-from typing import Dict, List, Optional, Type
+from typing import List, Optional
 
-from ...core.contents import EventContent, EventContentType, str_type
+from ...core.contents import EventContent
 from ...core.data import AutoStrEnum
-from ...core.ids import MXC, EventId, RoomAlias, RoomId, UserId
+from ...core.ids import MXC, EventId, RoomAlias, RoomId
 from ...e2e import Algorithm
-from .messages import Message
 
 
 @dataclass
@@ -125,52 +124,6 @@ class Tombstone(EventContent):
 
     server_message:   str
     replacement_room: RoomId
-
-
-@dataclass
-class PowerLevels(EventContent):
-    type    = "m.room.power_levels"
-    aliases = {"messages_default": "events_default"}
-
-    invite: int = 50
-    redact: int = 50
-    kick:   int = 50
-    ban:    int = 50
-
-    users_default:    int = 0
-    messages_default: int = 0
-    state_default:    int = 50
-
-    users:         Dict[UserId, int] = field(default_factory=dict)
-    events:        Dict[str, int]    = field(default_factory=dict)
-    notifications: Dict[str, int]    = field(default_factory=dict)
-
-    def __post_init__(self) -> None:
-        content: Type[EventContent]
-
-        for content in (
-            PowerLevels, HistoryVisibility, Tombstone, ServerACL, Encryption,
-        ):
-            assert content.type
-            self.events.setdefault(content.type, 100)
-
-        for content in (Name, CanonicalAlias, Avatar):
-            assert content.type
-            self.events.setdefault(content.type, 50)
-
-        self.notifications.setdefault("room", 50)
-
-    def user_level(self, user_id: UserId) -> int:
-        return self.users.get(user_id, self.users_default)
-
-    def message_min_level(self, event_type: EventContentType = Message) -> int:
-        return self.events.get(str_type(event_type), self.messages_default)
-
-    def state_min_level(self, event_type: EventContentType) -> int:
-        return self.events.get(str_type(event_type), self.state_default)
-
-    def notification_min_level(self, kind: str) -> int:
-        return self.notifications.get(kind, 50)
 
 
 @dataclass

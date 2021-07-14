@@ -17,9 +17,10 @@ from ..core.ids import MXC, EventId, RoomAlias, UserId
 from ..core.utils import comma_and_join
 from .contents.settings import (
     Avatar, CanonicalAlias, Creation, Encryption, GuestAccess,
-    HistoryVisibility, JoinRules, Name, PinnedEvents, PowerLevels, ServerACL,
-    Tombstone, Topic,
+    HistoryVisibility, JoinRules, Name, PinnedEvents, ServerACL, Tombstone,
+    Topic,
 )
+from .contents.users import PowerLevels
 from .events import InvitedRoomStateEvent, StateBase, StateEvent
 from .user import RoomUser
 
