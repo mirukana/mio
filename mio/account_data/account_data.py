@@ -10,6 +10,7 @@ from ..core.callbacks import CallbackGroup, Callbacks, EventCallbacks
 from ..core.contents import EventContent, EventContentType, str_type
 from ..core.data import Map, Parent, Runtime
 from ..module import JSONClientModule
+from .contents import PushRules
 from .events import AccountDataEvent
 
 if TYPE_CHECKING:
@@ -41,6 +42,11 @@ class AccountData(JSONClientModule, _Map, EventCallbacks):
     @property
     def path(self) -> AsyncPath:
         return self.client.path.parent / "account_data.json"
+
+
+    @property
+    def push_rules(self) -> PushRules:
+        return self[PushRules].content if PushRules in self else PushRules()
 
 
     async def send(self, content: EventContent) -> None:

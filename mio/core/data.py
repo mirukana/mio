@@ -75,7 +75,13 @@ class InstanceTracker:
 @dataclass
 class RichFix:
     """Fix rendering for fields of non-dict Mapping type for rich.print"""
-    def __rich__(self):
+
+    rich_fix: ClassVar[Runtime[bool]] = True
+
+    def __rich__(self):  # pragma: no cover
+        if not self.rich_fix:
+            return self
+
         return replace(self, **{
             f.name: dict(getattr(self, f.name)) for f in get_fields(self)
             if isinstance(getattr(self, f.name), Mapping) and f.init

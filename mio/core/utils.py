@@ -63,6 +63,28 @@ def deep_merge_dict(dict1: MutableMapping, dict2: Mapping) -> None:
             dict1[k] = dict2[k]
 
 
+def dot_flatten_dict(
+    dct: DictS, _prefix: str = "", _flat: Optional[DictS] = None,
+) -> DictS:
+    """Return recursively flattened version of ``dict`` using dotted keys.
+
+    Example:
+        >>> dot_flatten_dict({"content": {"body": "a"}, "m.test": {"x": "y"}})
+        {"content.body": "a", "m.test.x": "y"}
+
+    """
+
+    flat = {} if _flat is None else _flat
+
+    for key, value in dct.items():
+        if isinstance(value, dict):
+            dot_flatten_dict(value, f"{_prefix}{key}.", flat)
+        else:
+            flat[f"{_prefix}{key}"] = value
+
+    return flat
+
+
 async def make_awaitable(result):
     return await result if isawaitable(result) else result
 
