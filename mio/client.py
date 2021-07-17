@@ -16,6 +16,7 @@ from .core.ids import UserId
 from .core.logging import MioLogger
 from .devices.devices import Devices
 from .e2e.e2e import E2E
+from .filters import FilterStore
 from .media.store import MediaStore
 from .module import ClientModule
 from .net.net import Network
@@ -32,14 +33,15 @@ class Client(JSONFile, MioLogger):
     user_id:      UserId          = ""  # type: ignore
     access_token: str             = ""
 
-    net:     Runtime[Network]    = field(init=False, repr=False)
-    auth:    Runtime[Auth]       = field(init=False, repr=False)
-    profile: Runtime[Profile]    = field(init=False, repr=False)
-    rooms:   Runtime[Rooms]      = field(init=False, repr=False)
-    sync:    Runtime[Sync]       = field(init=False, repr=False)
-    e2e:     Runtime[E2E]        = field(init=False, repr=False)
-    devices: Runtime[Devices]    = field(init=False, repr=False)
-    media:   Runtime[MediaStore] = field(init=False, repr=False)
+    net:      Runtime[Network]     = field(init=False, repr=False)
+    auth:     Runtime[Auth]        = field(init=False, repr=False)
+    profile:  Runtime[Profile]     = field(init=False, repr=False)
+    rooms:    Runtime[Rooms]       = field(init=False, repr=False)
+    sync:     Runtime[Sync]        = field(init=False, repr=False)
+    e2e:      Runtime[E2E]         = field(init=False, repr=False)
+    devices:  Runtime[Devices]     = field(init=False, repr=False)
+    media:    Runtime[MediaStore]  = field(init=False, repr=False)
+    _filters: Runtime[FilterStore] = field(init=False, repr=False)
 
     _lock:       Runtime[Optional[FileLock]] = field(init=False, repr=False)
     _terminated: Runtime[bool]               = field(init=False, repr=False)
@@ -57,6 +59,7 @@ class Client(JSONFile, MioLogger):
         self.e2e          = E2E(self)
         self.devices      = Devices(self)
         self.media        = MediaStore(self)
+        self._filters     = FilterStore(self)
 
         self._lock       = None
         self._terminated = False

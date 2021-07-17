@@ -2,12 +2,10 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
 import asyncio
-import json
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from typing import (
     TYPE_CHECKING, Any, Callable, Dict, Iterator, List, Optional, Set, Type,
-    Union,
 )
 
 from aiopath import AsyncPath
@@ -19,6 +17,7 @@ from .core.ids import InvalidId, RoomId, UserId
 from .core.utils import remove_none
 from .devices.events import ToDeviceEvent
 from .e2e.contents import Megolm, Olm
+from .filters import Filter
 from .module import JSONClientModule
 from .rooms.contents.users import Member
 from .rooms.events import (
@@ -29,9 +28,6 @@ from .rooms.room import Room
 
 if TYPE_CHECKING:
     from .client import Client
-
-FilterType = Union[None, str, Dict[str, Any]]
-
 
 @dataclass
 class Sync(JSONClientModule):
@@ -47,22 +43,22 @@ class Sync(JSONClientModule):
 
     async def once(
         self,
-        timeout:      float          = 0,
-        sync_filter:  FilterType     = None,
-        since:        Optional[str]  = None,
-        full_state:   Optional[bool] = None,
-        set_presence: Optional[str]  = None,
-        _handle:      bool           = True,
+        timeout:      float            = 0,
+        filter:       Optional[Filter] = None,
+        since:        Optional[str]    = None,
+        full_state:   Optional[bool]   = None,
+        set_presence: Optional[str]    = None,
+        _handle:      bool             = True,
     ) -> Optional[dict]:
 
-        filter_param: Any = None
+        filter_id: Optional[str] = None
 
-        if sync_filter:
-            filter_param = json.dumps(sync_filter, ensure_ascii=False)
+        if filter:
+            filter_id = await self.client._filters.get_server_id(filter)
 
         reply = await self.net.get(self.net.api / "sync" % remove_none({
             "timeout":      int(timeout * 1000),
-            "filter":       filter_param,
+            "filter":       filter_id,
             "since":        since or self.next_batch,
             "full_state":   full_state,
             "set_presence": set_presence,
@@ -80,19 +76,19 @@ class Sync(JSONClientModule):
 
     async def loop(
         self,
-        timeout:             float                      = 10,
-        sync_filter:         FilterType                 = None,
-        first_sync_filter:   FilterType                 = None,
-        since:               Optional[str]              = None,
-        full_state:          Optional[bool]             = None,
-        set_presence:        Optional[str]              = None,
-        sleep_between_syncs: float                      = 0.5,
+        timeout:             float            = 10,
+        filter:              Optional[Filter] = None,
+        first_sync_filter:   Optional[Filter] = None,
+        since:               Optional[str]    = None,
+        full_state:          Optional[bool]   = None,
+        set_presence:        Optional[str]    = None,
+        sleep_between_syncs: float            = 0.5,
     ) -> None:
 
         first_run = True
 
         while True:
-            use_filter = first_sync_filter if first_run else sync_filter
+            use_filter = first_sync_filter if first_run else filter
             await self.once(timeout, use_filter, None, None, set_presence)
             first_run = False
             await asyncio.sleep(sleep_between_syncs)
