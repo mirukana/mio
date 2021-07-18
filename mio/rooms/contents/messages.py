@@ -21,7 +21,7 @@ from ...core.files import (
 )
 from ...core.ids import MXC, EventId
 from ...core.transfer import TransferUpdateCallback
-from ...core.utils import HTML_TAGS_RE, DictS
+from ...core.utils import HTML_TAGS_RE
 
 if TYPE_CHECKING:
     from ...client import Client
@@ -65,17 +65,13 @@ class Textual(Message):
     in_reply_to:    Optional[EventId] = None
 
 
-    # Needed for reply features
-    @classmethod
-    def from_dict(
-        cls: Type[ContentT], data: DictS, parent: Optional["JSON"] = None,
-    ) -> ContentT:
-        textual               = super().from_dict(data, parent)
-        textual.stripped_body = textual.body
+    @property
+    def stripped_body(self):
+        stripped_body = self.body
 
         # Strip body if it's a reply, according to matrix spec
-        if textual.in_reply_to:
-            parts = textual.stripped_body.split("\n")
+        if self.in_reply_to:
+            parts = self.body.split("\n")
 
             while parts[0].startswith("> "):
                 parts = parts[1:]
@@ -83,9 +79,9 @@ class Textual(Message):
             if not parts[0]:  # Sometimes parts[0] is ""
                 parts = parts[1:]
 
-            textual.stripped_body = "\n".join(parts)
+            stripped_body = "\n".join(parts)
 
-        return textual
+        return stripped_body
 
 
     @classmethod
