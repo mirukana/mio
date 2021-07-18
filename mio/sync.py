@@ -17,7 +17,7 @@ from .core.ids import InvalidId, RoomId, UserId
 from .core.utils import remove_none
 from .devices.events import ToDeviceEvent
 from .e2e.contents import Megolm, Olm
-from .filters import Filter
+from .filters import LAZY_LOAD, LAZY_LOAD_LIGHT_TIMELINE, Filter
 from .module import JSONClientModule
 from .rooms.contents.users import Member
 from .rooms.events import (
@@ -44,7 +44,7 @@ class Sync(JSONClientModule):
     async def once(
         self,
         timeout:      float            = 0,
-        filter:       Optional[Filter] = None,
+        filter:       Optional[Filter] = LAZY_LOAD,
         since:        Optional[str]    = None,
         full_state:   Optional[bool]   = None,
         set_presence: Optional[str]    = None,
@@ -77,10 +77,10 @@ class Sync(JSONClientModule):
     async def loop(
         self,
         timeout:             float            = 10,
-        filter:              Optional[Filter] = None,
-        first_sync_filter:   Optional[Filter] = None,
-        since:               Optional[str]    = None,
-        full_state:          Optional[bool]   = None,
+        filter:              Optional[Filter] = LAZY_LOAD,
+        first_sync_filter:   Optional[Filter] = LAZY_LOAD_LIGHT_TIMELINE,
+        since:               Optional[str]    = None,  # XXX
+        full_state:          Optional[bool]   = None,  # XXX
         set_presence:        Optional[str]    = None,
         sleep_between_syncs: float            = 0.5,
     ) -> None:
@@ -235,19 +235,19 @@ class Sync(JSONClientModule):
             summary = data.get("summary", {})
             unread  = data.get("unread_notifications", {})
 
-            if summary.get("m.heroes"):
+            if summary.get("m.heroes") is not None:
                 room._lazy_load_heroes = tuple(summary["m.heroes"])
 
-            if summary.get("m.joined_members_count"):
-                room._lazy_load_joined = summary["m.joined_members_count"]
+            if summary.get("m.joined_member_count") is not None:
+                room._lazy_load_joined = summary["m.joined_member_count"]
 
-            if summary.get("m.invited_members_count"):
-                room._lazy_load_joined = summary["m.invited_members_count"]
+            if summary.get("m.invited_member_count") is not None:
+                room._lazy_load_invited = summary["m.invited_member_count"]
 
-            if unread.get("notification_count"):
+            if unread.get("notification_count") is not None:
                 room.unread_notifications = unread["notification_count"]
 
-            if unread.get("highlight_count"):
+            if unread.get("highlight_count") is not None:
                 room.unread_highlights = unread["highlight_count"]
 
             timeline   = data.get("timeline", {})

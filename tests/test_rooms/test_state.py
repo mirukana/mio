@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
 import asyncio
+import re
+from typing import Optional, Pattern, Union
 from uuid import uuid4
 
 from pytest import mark, raises
@@ -9,12 +11,14 @@ from yarl import URL
 
 from mio.client import Client
 from mio.core.ids import RoomAlias, RoomId
+from mio.filters import LAZY_LOAD, Filter
 from mio.rooms.contents.settings import (
     Avatar, CanonicalAlias, Creation, Encryption, GuestAccess,
     HistoryVisibility, JoinRules, Name, PinnedEvents, ServerACL, Tombstone,
     Topic,
 )
 from mio.rooms.contents.users import Member, PowerLevels
+from mio.rooms.events import StateEvent
 from mio.rooms.room import Room
 
 from ..conftest import ClientFactory
@@ -132,12 +136,23 @@ async def test_user_dicts(alice: Client, room: Room, bob: Client):
     assert not state.invitees and not state.leavers
 
 
-async def test_display_name(clients: ClientFactory, room: Room):
+async def _display_name(clients: ClientFactory, filter: Optional[Filter]):
     # TODO: test with lazy load room fields
 
-    async def check_name(wanted: str):
-        await room.client.sync.once()
-        assert room.state.display_name == wanted
+    alice   = await clients.alice
+    room_id = await alice.rooms.create(public=True)
+    await alice.sync.once(filter=filter)
+    room  = alice.rooms[room_id]
+
+
+    async def check_name(wanted: Union[str, Pattern]):
+        # Don't use lazy loading, names order will be inconsistent
+        await alice.sync.once(filter=filter)
+
+        if isinstance(wanted, str):
+            return wanted == room.state.display_name
+
+        return wanted.match(room.state.display_name)
 
     # 1 member (us)
 
@@ -185,7 +200,7 @@ async def test_display_name(clients: ClientFactory, room: Room):
 
     # 4 joined, 1 invited, 1 left and display name conflict
 
-    await bob.sync.once()
+    await bob.sync.once(filter=filter)
     await bob.rooms[room.id].leave()
     await check_name(f"Carol, Dave, Erin, Frank ({fr1}) and Frank ({fr2})")
 
@@ -198,22 +213,20 @@ async def test_display_name(clients: ClientFactory, room: Room):
 
     # 1 joined (us), 5 left, 1 banned
 
-    await room.client.sync.once()
+    await alice.sync.once(filter=filter)
     await room.state.users[mallory.user_id].ban()
-    await check_name(
-        f"Empty Room (had {bob.user_id}, {carol.user_id}, {dave.user_id}, "
-        f"{erin.user_id} and {frank.user_id})",
-    )
+    await check_name(re.compile(
+        r"^Empty Room \(had @.+, @.+, @.+, @.+ and @.+\)$",
+    ))
 
     # 1 joined (us), 6 banned (FIXME: display "and more" for empty rooms)
 
     for client in (bob, carol, dave, erin, frank):
         await room.state.users[client.user_id].ban()
 
-    await check_name(
-        f"Empty Room (had {mallory.user_id}, {bob.user_id}, {carol.user_id}, "
-        f"{dave.user_id} and {erin.user_id})",
-    )
+    await check_name(re.compile(
+        r"^Empty Room \(had @.+, @.+, @.+, @.+ and @.+\)$",
+    ))
 
     # Room with an alias
 
@@ -226,3 +239,43 @@ async def test_display_name(clients: ClientFactory, room: Room):
 
     await room.state.send(Name("Forest of Magic"))
     await check_name("Forest of Magic")
+
+
+async def test_display_name_full_sync(clients: ClientFactory):
+    await _display_name(clients, filter=None)
+
+
+async def test_display_name_lazy_sync(clients: ClientFactory):
+    await _display_name(clients, filter=LAZY_LOAD)
+
+
+async def test_load_all_users(alice: Client, bob: Client, room: Room):
+    await room.invite(bob.user_id)
+
+    # Initial state when invited, no users manually loaded
+
+    await bob.sync.once()
+    assert len(bob.rooms[room.id].state.users) == 1
+    assert not bob.rooms[room.id].state.all_users_loaded
+
+    # Loading users while invited (not kept up to date by server)
+
+    got = []
+    cb  = lambda r, e: got.extend([type(r), type(e.content)])  # noqa
+    bob.rooms.callbacks[StateEvent].append(cb)
+
+    assert await bob.rooms[room.id].state.load_all_users()
+    assert set(bob.rooms[room.id].state.users) == {alice.user_id, bob.user_id}
+    assert not bob.rooms[room.id].state.all_users_loaded
+
+    assert got == [Room, Member, Room, Member]
+
+    # Loading users while joined
+
+    await bob.rooms.join(room.id)
+    await bob.sync.once()
+    assert not bob.rooms[room.id].state.all_users_loaded
+    assert await bob.rooms[room.id].state.load_all_users()
+    assert bob.rooms[room.id].state.all_users_loaded
+    assert not await bob.rooms[room.id].state.load_all_users()
+    assert set(bob.rooms[room.id].state.users) == {alice.user_id, bob.user_id}

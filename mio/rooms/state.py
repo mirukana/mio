@@ -13,8 +13,9 @@ from aiopath import AsyncPath
 
 from ..core.contents import EventContent, EventContentType, str_type
 from ..core.data import JSONFile, Map, Parent, Runtime
+from ..core.events import InvalidEvent
 from ..core.ids import MXC, EventId, RoomAlias, UserId
-from ..core.utils import comma_and_join
+from ..core.utils import comma_and_join, remove_none
 from .contents.settings import (
     Avatar, CanonicalAlias, Creation, Encryption, GuestAccess,
     HistoryVisibility, JoinRules, Name, PinnedEvents, ServerACL, Tombstone,
@@ -49,6 +50,8 @@ class RoomState(JSONFile, Map):
     members:  Runtime[Dict[UserId, RoomUser]] = field(default_factory=dict)
     leavers:  Runtime[Dict[UserId, RoomUser]] = field(default_factory=dict)
     banned:   Runtime[Dict[UserId, RoomUser]] = field(default_factory=dict)
+
+    _all_users_queried: bool = False
 
     # {name: {user_id}} - For detecting multiple users having a same name
     _display_names: Runtime[Dict[str, Set[UserId]]] = field(
@@ -190,21 +193,21 @@ class RoomState(JSONFile, Map):
 
     @property
     def total_members(self) -> int:
-        if self.room._lazy_load_joined is None:
+        if self.all_users_loaded:
             return len(self.members)
-        return self.room._lazy_load_joined
+        return self.room._lazy_load_joined or 0
 
 
     @property
     def total_invitees(self) -> int:
-        if self.room._lazy_load_invited is None:
+        if self.all_users_loaded:
             return len(self.invitees)
-        return self.room._lazy_load_invited
+        return self.room._lazy_load_invited or 0
 
 
     @property
     def heroes(self) -> Dict[UserId, RoomUser]:
-        if self.room._lazy_load_heroes is not None:
+        if not self.all_users_loaded and self.room._lazy_load_heroes:
             return {u: self.users[u] for u in self.room._lazy_load_heroes}
 
         def get(*dicts: Dict[UserId, RoomUser]) -> Dict[UserId, RoomUser]:
@@ -227,6 +230,38 @@ class RoomState(JSONFile, Map):
     @property
     def me(self) -> RoomUser:
         return self.users[self.room.client.user_id]
+
+
+    @property
+    def all_users_loaded(self) -> bool:
+        if self.room.invited or self.room.left:
+            return False
+
+        lazy = self.room._lazy_load_joined is not None
+        return not lazy or self._all_users_queried
+
+
+    async def load_all_users(self) -> bool:
+        if self.all_users_loaded:
+            return False
+
+        room   = self.room
+        url    = room.net.api / "rooms" / room.id / "members"
+        params = {"at": room.client.sync.next_batch}
+        reply  = await room.net.get(url % remove_none(params))
+
+        state_evs: List[StateEvent] = []
+
+        for source in reply.json.get("chunk", []):
+            with room.client.report(InvalidEvent):
+                state_evs.append(StateEvent.from_dict(source, room))
+
+        await self._register(*state_evs)
+
+        if not room.invited and not room.left:
+            self._all_users_queried = True
+
+        return True
 
 
     async def send(

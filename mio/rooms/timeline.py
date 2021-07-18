@@ -19,8 +19,10 @@ from ..core.files import atomic_write
 from ..core.ids import EventId
 from ..core.utils import remove_none
 from ..e2e.contents import Megolm
+from ..filters import LAZY_LOAD as LAZY
+from ..filters import Filter
 from .contents.settings import Creation
-from .events import TimelineEvent
+from .events import StateEvent, TimelineEvent
 
 if TYPE_CHECKING:
     from .room import Room
@@ -57,9 +59,14 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
         return not self.gaps
 
 
-    async def load_history(self, count: int = 100) -> List[TimelineEvent]:
-        loaded:      List[TimelineEvent] = await self._fill_newest_gap(count)
+    async def load_history(
+        self, count: int = 100, filter: Optional[Filter] = LAZY,
+    ) -> List[TimelineEvent]:
+
         disk_loaded: List[TimelineEvent] = []
+        loaded:      List[TimelineEvent] = await self._fill_newest_gap(
+            count, filter,
+        )
 
         day_dirs = sorted(  # noqa
             [path async for path in self.path.parent.glob("????-??-??")],
@@ -110,6 +117,9 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
         client = room.client
 
         if room.state.encryption and not isinstance(content, Megolm):
+            if not room.state.all_users_loaded:
+                await room.state.load_all_users()
+
             content = await client.e2e._encrypt_room_event(
                 room_id   = room.id,
                 for_users = room.state.members,
@@ -184,7 +194,10 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
             self._loaded_files.add(path)
 
 
-    async def _fill_newest_gap(self, min_events: int) -> List[TimelineEvent]:
+    async def _fill_newest_gap(
+        self, min_events: int, filter: Optional[Filter] = LAZY,
+    ) -> List[TimelineEvent]:
+
         gap = next(
             (v for k, v in reversed(list(self.gaps.items())) if k in self),
             None,
@@ -196,7 +209,7 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
         events: List[TimelineEvent] = []
 
         while not gap.filled and len(events) < min_events:
-            events += await gap.fill(min_events)
+            events += await gap.fill(min_events, filter)
 
         return events
 
@@ -236,7 +249,7 @@ class Gap(JSON):
 
 
     async def fill(
-        self, max_events: Optional[int] = 100,
+        self, max_events: Optional[int] = 100, filter: Optional[Filter] = LAZY,
     ) -> List[TimelineEvent]:
 
         if self.event_after not in self.room.timeline.gaps:
@@ -244,12 +257,19 @@ class Gap(JSON):
 
         url   = self.room.net.api / "rooms" / self.room.id / "messages"
         reply = await self.room.net.get(url % remove_none({
-            "from":  self.fill_token,
-            "dir":   "b",  # direction: backwards
-            "limit": max_events,
+            "from":   self.fill_token,
+            "dir":    "b",  # direction: backwards
+            "limit":  max_events,
+            "filter": filter.json if filter else None,  # API rejects IDs
         }))
 
-        # for event in reply.get("state", [])  # TODO (for lazy loading)
+        state_evs: List[StateEvent] = []
+
+        for source in reply.json.get("state", []):
+            with self.room.client.report(InvalidEvent):
+                state_evs.append(StateEvent.from_dict(source, self.room))
+
+        await self.room.state._register(*state_evs)
 
         if not reply.json.get("chunk"):
             self.filled = True
@@ -278,7 +298,7 @@ class Gap(JSON):
             self.filled = True
             self.room.timeline.gaps.pop(self.event_after, None)
         else:
-            self.event_after = reply.json["chunk"][-1]
+            self.event_after = evs[-1].id
 
         self.fill_token = reply.json["end"]
         await self.room.timeline.save()

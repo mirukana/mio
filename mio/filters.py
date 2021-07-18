@@ -1,6 +1,7 @@
 # Copyright mio authors & contributors <https://github.com/mirukana/mio>
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
+from copy import deepcopy
 from dataclasses import dataclass, field
 from enum import auto
 from typing import TYPE_CHECKING, Dict, List, Optional
@@ -74,3 +75,16 @@ class FilterStore(ClientModule, IndexableMap[str, Filter]):
 
         self._data[reply.json["filter_id"]] = filter
         return reply.json["filter_id"]
+
+
+LAZY_LOAD = Filter(
+    room = RoomFilter(
+        account_data = RoomEventFilter(lazy_load_members=True),
+        ephemeral    = RoomEventFilter(lazy_load_members=True),
+        timeline     = RoomEventFilter(lazy_load_members=True),
+        state        = RoomEventFilter(lazy_load_members=True),
+    ),
+)
+
+LAZY_LOAD_LIGHT_TIMELINE = deepcopy(LAZY_LOAD)
+LAZY_LOAD_LIGHT_TIMELINE.room.timeline.limit = 5
