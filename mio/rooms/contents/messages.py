@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 TexT     = TypeVar("TexT", bound="Textual")
 ContentT = TypeVar("ContentT", bound="EventContent")
 
+HTML_FORMAT:                    str      = "org.matrix.custom.html"
 THUMBNAIL_POSSIBLE_PIL_FORMATS: Set[str] = {"PNG", "JPEG"}
 THUMBNAIL_SIZE_MAX_OF_ORIGINAL: float    = 0.9  # must be <90% of orig size
 
@@ -78,12 +79,12 @@ class Textual(Message):
         if plaintext == html:
             return cls(plaintext)
 
-        return cls(plaintext, "org.matrix.custom.html", html)
+        return cls(plaintext, HTML_FORMAT, html)
 
 
     @property
     def html_no_reply_fallback(self) -> Optional[str]:
-        if self.format != "org.matrix.custom.html":
+        if self.format != HTML_FORMAT:
             return None
 
         soup     = BeautifulSoup(self.formatted_body, "html.parser")
