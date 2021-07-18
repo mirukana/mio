@@ -22,7 +22,8 @@ from ...core.files import (
 )
 from ...core.ids import MXC, EventId
 from ...core.transfer import TransferUpdateCallback
-from ...core.utils import HTML_TAGS_RE
+from ...core.utils import html2plain, plain2html
+from ..events import TimelineEvent
 
 if TYPE_CHECKING:
     from ...client import Client
@@ -30,9 +31,21 @@ if TYPE_CHECKING:
 TexT     = TypeVar("TexT", bound="Textual")
 ContentT = TypeVar("ContentT", bound="EventContent")
 
-HTML_FORMAT:                    str      = "org.matrix.custom.html"
 THUMBNAIL_POSSIBLE_PIL_FORMATS: Set[str] = {"PNG", "JPEG"}
 THUMBNAIL_SIZE_MAX_OF_ORIGINAL: float    = 0.9  # must be <90% of orig size
+
+HTML_FORMAT         = "org.matrix.custom.html"
+MATRIX_TO           = "https://matrix.to/#"
+HTML_REPLY_FALLBACK = (
+    "<mx-reply>"
+        "<blockquote>"
+            '<a href="{matrix_to}/{room_id}/{event_id}">In reply to</a> '
+            '<a href="{matrix_to}/{user_id}">{user_id}</a>'
+            "<br>"
+            "{content}"
+        "</blockquote>"
+    "</mx-reply>"
+)
 
 
 # Base classes
@@ -61,7 +74,7 @@ class Textual(Message):
 
     format:         Optional[str]     = None
     formatted_body: Optional[str]     = None
-    in_reply_to:    Optional[EventId] = None
+    replies_to:     Optional[EventId] = None
 
 
     @classmethod
@@ -74,7 +87,7 @@ class Textual(Message):
                 reply_fallback.extract()
                 html = str(soup)
 
-            plaintext = HTML_TAGS_RE.sub("", html)
+            plaintext = html2plain(html)
 
         if plaintext == html:
             return cls(plaintext)
@@ -95,6 +108,32 @@ class Textual(Message):
             return str(soup)
 
         return self.formatted_body
+
+
+    def replying_to(self: TexT, event: TimelineEvent) -> TexT:
+        content = event.content
+        body = content.body if isinstance(content, Message) else content.type
+
+        new_plaintext = "\n".join(
+            f"> <{event.sender}> {line}" if i == 0 else f"> {line}"
+            for i, line in enumerate(body.splitlines())
+        ) + "\n\n" + self.body
+
+        new_html = HTML_REPLY_FALLBACK.format(
+            matrix_to = MATRIX_TO,
+            room_id   = event.room.id,
+            event_id  = event.id,
+            user_id   = event.sender,
+            content   =
+                getattr(content, "formatted_body", "") or plain2html(body),
+        ) + (self.formatted_body or plain2html(self.body))
+
+        return self.but(
+            body           = new_plaintext,
+            format         = HTML_FORMAT,
+            formatted_body = new_html,
+            replies_to     = event.id,
+        )
 
 
 @dataclass
