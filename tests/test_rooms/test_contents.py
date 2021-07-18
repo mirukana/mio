@@ -11,9 +11,9 @@ from pytest import mark, raises
 from mio.client import Client
 from mio.core.ids import MXC
 from mio.rooms.contents.messages import (
-    THUMBNAIL_POSSIBLE_PIL_FORMATS, THUMBNAIL_SIZE_MAX_OF_ORIGINAL, Audio,
-    Emote, EncryptedFile, File, Image, Media, Notice, Text, Thumbnailable,
-    Video,
+    HTML_FORMAT, THUMBNAIL_POSSIBLE_PIL_FORMATS,
+    THUMBNAIL_SIZE_MAX_OF_ORIGINAL, Audio, Emote, EncryptedFile, File, Image,
+    Media, Notice, Text, Thumbnailable, Video,
 )
 from mio.rooms.room import Room
 
@@ -53,14 +53,14 @@ async def test_textual_from_html(room: Room):
         content = room.timeline[-1].content
         assert isinstance(content, kind)
         assert content.body == "abc"
-        assert content.format == "org.matrix.custom.html"
+        assert content.format == HTML_FORMAT
         assert content.formatted_body == "<p>abc</p>"
 
 
 def test_textual_from_html_manual_plaintext():
     text = Text.from_html("<p>abc</p>", plaintext="123")
     assert text.body == "123"
-    assert text.format == "org.matrix.custom.html"
+    assert text.format == HTML_FORMAT
     assert text.formatted_body == "<p>abc</p>"
 
 
