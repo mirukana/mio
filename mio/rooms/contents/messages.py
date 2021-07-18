@@ -11,6 +11,7 @@ from typing import (
 )
 
 import aiofiles
+from bs4 import BeautifulSoup
 from PIL import Image as PILImage
 
 from ...core.contents import EventContent
@@ -55,44 +56,44 @@ class Message(EventContent):
 
 @dataclass
 class Textual(Message):
-    aliases = {
-        "in_reply_to": ["m.relates_to", "m.in_reply_to", "event_id"],
-    }
+    aliases = {"in_reply_to": ["m.relates_to", "m.in_reply_to", "event_id"]}
 
     format:         Optional[str]     = None
     formatted_body: Optional[str]     = None
-    stripped_body:  Optional[str]     = None
     in_reply_to:    Optional[EventId] = None
-
-
-    @property
-    def stripped_body(self):
-        stripped_body = self.body
-
-        # Strip body if it's a reply, according to matrix spec
-        if self.in_reply_to:
-            parts = self.body.split("\n")
-
-            while parts[0].startswith("> "):
-                parts = parts[1:]
-
-            if not parts[0]:  # Sometimes parts[0] is ""
-                parts = parts[1:]
-
-            stripped_body = "\n".join(parts)
-
-        return stripped_body
 
 
     @classmethod
     def from_html(cls: Type[TexT], html: str, plaintext: str = None) -> TexT:
         if plaintext is None:
+            soup           = BeautifulSoup(html, "html.parser")
+            reply_fallback = soup.find("mx-reply")
+
+            if reply_fallback:
+                reply_fallback.extract()
+                html = str(soup)
+
             plaintext = HTML_TAGS_RE.sub("", html)
 
         if plaintext == html:
             return cls(plaintext)
 
         return cls(plaintext, "org.matrix.custom.html", html)
+
+
+    @property
+    def html_no_reply_fallback(self) -> Optional[str]:
+        if self.format != "org.matrix.custom.html":
+            return None
+
+        soup     = BeautifulSoup(self.formatted_body, "html.parser")
+        fallback = soup.find("mx-reply")
+
+        if fallback:
+            fallback.extract()
+            return str(soup)
+
+        return self.formatted_body
 
 
 @dataclass

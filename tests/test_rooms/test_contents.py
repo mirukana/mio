@@ -71,6 +71,16 @@ def test_textual_same_html_plaintext():
     assert text.formatted_body is None
 
 
+def test_textual_no_reply_fallback():
+    assert Text("plain").html_no_reply_fallback is None
+
+    reply = Text.from_html("<mx-reply>...</mx-reply><b>foo</b>")
+    assert reply.html_no_reply_fallback == "<b>foo</b>"
+
+    not_reply = Text.from_html("<b>foo</b>")
+    assert not_reply.html_no_reply_fallback == "<b>foo</b>"
+
+
 def test_encrypted_file_init():
     create_encrypted_file(key_operations=["encrypt", "decrypt"])
 
