@@ -10,11 +10,14 @@ from pytest import mark, raises
 
 from mio.client import Client
 from mio.core.ids import MXC
+from mio.core.utils import plain2html
 from mio.rooms.contents.messages import (
-    HTML_FORMAT, THUMBNAIL_POSSIBLE_PIL_FORMATS,
-    THUMBNAIL_SIZE_MAX_OF_ORIGINAL, Audio, Emote, EncryptedFile, File, Image,
-    Media, Notice, Text, Thumbnailable, Video,
+    HTML_FORMAT, HTML_REPLY_FALLBACK, MATRIX_TO,
+    THUMBNAIL_POSSIBLE_PIL_FORMATS, THUMBNAIL_SIZE_MAX_OF_ORIGINAL, Audio,
+    Emote, EncryptedFile, File, Image, Media, Notice, Text, Thumbnailable,
+    Video,
 )
+from mio.rooms.contents.settings import Name
 from mio.rooms.room import Room
 
 from ..conftest import TestData
@@ -79,6 +82,43 @@ def test_textual_no_reply_fallback():
 
     not_reply = Text.from_html("<b>foo</b>")
     assert not_reply.html_no_reply_fallback == "<b>foo</b>"
+
+
+async def test_textual_replying_to(room: Room):
+    await room.timeline.send(Text("plain\nmsg"))
+    await room.timeline.send(Text.from_html("<b>html</b><br>msg"))
+    await room.state.send(Name("Test room"))
+    await room.client.sync.once()
+    plain, html, other = list(room.timeline.values())[-3:]
+
+    def check_reply_attrs(first_event, reply, fallback_content, reply_content):
+        assert reply.replies_to == first_event.id
+        assert reply.format == HTML_FORMAT
+
+        assert reply.formatted_body == HTML_REPLY_FALLBACK.format(
+            matrix_to = MATRIX_TO,
+            room_id   = room.id,
+            user_id   = room.client.user_id,
+            event_id  = first_event.id,
+            content   = fallback_content,
+        ) + reply_content
+
+    reply = Text("nice").replying_to(plain)
+    assert reply.body == f"> <{plain.sender}> plain\n> msg\n\nnice"
+    check_reply_attrs(plain, reply, plain2html(plain.content.body), "nice")
+
+    reply = Text("nice").replying_to(html)
+    assert reply.body == f"> <{plain.sender}> html\n> msg\n\nnice"
+    check_reply_attrs(html, reply, html.content.formatted_body, "nice")
+
+    reply = Text.from_html("<i>nice</i>").replying_to(html)
+    assert reply.body == f"> <{plain.sender}> html\n> msg\n\nnice"
+    check_reply_attrs(html, reply, html.content.formatted_body, "<i>nice</i>")
+
+    reply = Text("nice").replying_to(other)
+    assert reply.body == f"> <{plain.sender}> {Name.type}\n\nnice"
+    assert other.type
+    check_reply_attrs(other, reply, plain2html(other.type), "nice")
 
 
 def test_encrypted_file_init():
