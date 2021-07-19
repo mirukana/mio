@@ -59,6 +59,20 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
         return not self.gaps
 
 
+    async def load_event(self, event_id: EventId) -> TimelineEvent:
+        if event_id in self:
+            return self[event_id]
+
+        url   = self.room.net.api / "rooms" / self.room.id / "event" / event_id
+        reply = await self.room.net.get(url)
+
+        event: TimelineEvent
+        event = TimelineEvent.from_dict(reply.json, parent=self.room)
+        event.historic = True
+        await self._register_events(event)
+        return event
+
+
     async def load_history(
         self, count: int = 100, filter: Optional[Filter] = LAZY,
     ) -> List[TimelineEvent]:
