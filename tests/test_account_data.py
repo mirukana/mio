@@ -123,7 +123,7 @@ async def test_push_rules_triggering(alice: Client, bob: Client, room: Room):
     assert not PushEventMatch({}, "bad field", "blah").triggered_by(abc)
 
     assert PushEventMatch({}, "content.body", "abc").triggered_by(abc)
-    assert PushEventMatch({}, "content.body", "Ab[cd],").triggered_by(abc)
+    assert PushEventMatch({}, "content.body", "Ab[cd]").triggered_by(abc)
     assert not PushEventMatch({}, "content.body", "ab").triggered_by(abc)
 
     assert PushContainsDisplayName({}).triggered_by(mention)

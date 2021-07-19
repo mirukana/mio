@@ -1,18 +1,14 @@
 # Copyright mio authors & contributors <https://github.com/mirukana/mio>
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
-import html
-import re
 from inspect import isawaitable
 from io import StringIO
 from typing import (
-    Any, Awaitable, Dict, Generator, Mapping, MutableMapping, Optional,
-    Pattern, Tuple, Type, TypeVar, Union,
+    Any, Awaitable, Dict, Generator, Mapping, MutableMapping, Optional, Tuple,
+    Type, TypeVar, Union,
 )
 
 from rich.console import Console
-
-HTML_TAGS_RE: Pattern = re.compile(r"<\/?[^>]+(>|$)")
 
 StrBytes     = Union[str, bytes]
 DictS        = Dict[str, Any]
@@ -98,12 +94,3 @@ def comma_and_join(*items: str) -> str:
         return items[0]
 
     return "%s and %s" % (", ".join(items[:-1]), items[-1])
-
-
-def plain2html(text: str) -> str:
-    new = html.escape(text)
-    return new.replace("\n", "<br>").replace("\t", "&nbsp;" * 4)
-
-
-def html2plain(text: str) -> str:
-    return html.unescape(HTML_TAGS_RE.sub("", text.replace("<br>", "\n")))

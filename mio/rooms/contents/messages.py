@@ -20,9 +20,9 @@ from ...core.files import (
     SeekableIO, guess_mime, has_transparency, measure, media_info,
     read_whole_binary, save_jpg, save_png,
 )
+from ...core.html import html2markdown, plain2html
 from ...core.ids import MXC, EventId
 from ...core.transfer import TransferUpdateCallback
-from ...core.utils import html2plain, plain2html
 from ..events import TimelineEvent
 
 if TYPE_CHECKING:
@@ -87,7 +87,7 @@ class Textual(Message):
                 reply_fallback.extract()
                 html = str(soup)
 
-            plaintext = html2plain(html)
+            plaintext = html2markdown(html)
 
         if plaintext == html:
             return cls(plaintext)

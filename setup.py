@@ -29,7 +29,9 @@ setup(
         aiopath           >= 0.5.4,  < 0.6
         backoff           >= 1.10.0, < 2
         beautifulsoup4    >= 4.9.3,  < 5
+        filelock          >= 3.0.12, < 4
         loguru            >= 0.5.3,  < 0.6
+        markdownify       >= 0.9.2,  < 0.10
         pycryptodomex     >= 3.10.1, < 4
         python-magic      >= 0.4.22, < 0.5
         python-olm        >= 3.1.3,  < 4
@@ -38,7 +40,6 @@ setup(
         typingplus        >= 2.2.3,  < 3
         unpaddedbase64    >= 2.1.0,  < 3
         yarl              >= 1.6.3,  < 2
-        filelock          >= 3.0.12, < 4
 
         pyfastcopy        >= 1.0.3,   < 2;   python_version<'3.8'
         typing-extensions >= 3.7.4.3, < 4;   python_version<'3.8'

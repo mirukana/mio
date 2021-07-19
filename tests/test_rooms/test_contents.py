@@ -9,8 +9,8 @@ from PIL import Image as PILImage
 from pytest import mark, raises
 
 from mio.client import Client
+from mio.core.html import plain2html
 from mio.core.ids import MXC
-from mio.core.utils import plain2html
 from mio.rooms.contents.messages import (
     HTML_FORMAT, HTML_REPLY_FALLBACK, MATRIX_TO,
     THUMBNAIL_POSSIBLE_PIL_FORMATS, THUMBNAIL_SIZE_MAX_OF_ORIGINAL, Audio,
@@ -108,11 +108,11 @@ async def test_textual_replying_to(room: Room):
     check_reply_attrs(plain, reply, plain2html(plain.content.body), "nice")
 
     reply = Text("nice").replying_to(html)
-    assert reply.body == f"> <{plain.sender}> html\n> msg\n\nnice"
+    assert reply.body == f"> <{plain.sender}> **html**  \n> msg\n\nnice"
     check_reply_attrs(html, reply, html.content.formatted_body, "nice")
 
     reply = Text.from_html("<i>nice</i>").replying_to(html)
-    assert reply.body == f"> <{plain.sender}> html\n> msg\n\nnice"
+    assert reply.body == f"> <{plain.sender}> **html**  \n> msg\n\n*nice*"
     check_reply_attrs(html, reply, html.content.formatted_body, "<i>nice</i>")
 
     reply = Text("nice").replying_to(other)
