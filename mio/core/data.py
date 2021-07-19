@@ -282,8 +282,18 @@ class JSON(RichFix):
     ) -> Any:
 
         typ     = unwrap_annotated(annotation)
+        typo    = getattr(typ, "__bound__", typ)
+        typo    = getattr(typo, "__origin__", typo)
+        value   = cls._apply_loader(typ, value, parent, field_name)
+
+        if typo is Union:
+            loadable = cls._get_loadable_type(annotation, value)
+            if loadable:
+                typ  = unwrap_annotated(loadable)
+                typo = getattr(typ, "__bound__", typ)
+                typo = getattr(typo, "__origin__", typo)
+
         datacls = is_dataclass(typ)
-        value    = cls._apply_loader(typ, value, parent, field_name)
 
         if datacls and is_subclass(typ, JSON) and isinstance(value, Mapping):
             return typ.from_dict(value, parent)
@@ -298,8 +308,6 @@ class JSON(RichFix):
             })
 
         value = cls._auto_cast(typ, value)
-        typo = getattr(typ, "__bound__", typ)
-        typo = getattr(typo, "__origin__", typo)
 
         if typo is Union or isinstance(typo, (str, ForwardRef)):
             return value
