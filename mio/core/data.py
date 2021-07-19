@@ -309,7 +309,7 @@ class JSON(RichFix):
 
         value = cls._auto_cast(typ, value)
 
-        if typo is Union or isinstance(typo, (str, ForwardRef)):
+        if typo in (Union, Literal) or isinstance(typo, (str, ForwardRef)):
             return value
 
         if is_subclass(typo, Mapping) and isinstance(value, Mapping):
@@ -424,6 +424,10 @@ class JSON(RichFix):
     @classmethod
     def _auto_cast(cls, annotation: Any, value: Any) -> Any:
         typ = cls._get_loadable_type(annotation, value)
+
+        # If it's a Literal but incorrect value, typingplus.cast will raise
+        if typ is Literal and value == annotation.__args__[0]:
+            return value
 
         if typ:
             try:
