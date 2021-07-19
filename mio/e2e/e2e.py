@@ -3,6 +3,7 @@
 
 import json
 from asyncio import Future, ensure_future
+from binascii import Error as BinAsciiError
 from dataclasses import dataclass, field
 from datetime import datetime
 from functools import partial
@@ -198,7 +199,7 @@ class E2E(JSONClientModule):
 
         try:
             decoded = unpaddedbase64.decode_base64(data)
-        except Exception as e:
+        except BinAsciiError as e:
             raise err.SessionFileInvalidBase64(next(iter(e.args), ""))
 
         if len(decoded) < err.SessionFileInvalidDataSize.minimum:
