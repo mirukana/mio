@@ -5,9 +5,27 @@ from pytest import mark
 
 from mio.client import Client
 from mio.rooms.contents.messages import Text
+from mio.rooms.contents.settings import Creation
+from mio.rooms.events import TimelineEvent
 from mio.rooms.room import Room
 
 pytestmark = mark.asyncio
+
+
+async def test_load_event(room: Room):
+    new = []
+    cb  = lambda room, event: new.append((room, event))  # noqa
+    room.client.rooms.callbacks[TimelineEvent].append(cb)
+
+    event_id = room.timeline[0].id
+    got      = await room.timeline.load_event(event_id)
+    assert isinstance(got.content, Creation)
+    assert not new
+
+    del room.timeline._data[event_id]
+    got = await room.timeline.load_event(event_id)
+    assert isinstance(got.content, Creation)
+    assert len(new) == 1
 
 
 async def test_send_to_lazy_encrypted_room(e2e_room: Room, bob: Client):
