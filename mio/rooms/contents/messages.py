@@ -170,7 +170,9 @@ class EncryptedFile(JSON):
 
 @dataclass
 class Media(Message):
-    aliases = {"mxc": ["url"], "mime": ["info", "mimetype"]}
+    aliases = {
+        "mxc": ["url"], "encrypted": ["file"], "mime": ["info", "mimetype"],
+    }
 
     mxc:       Optional[MXC]           = None
     encrypted: Optional[EncryptedFile] = None
@@ -274,11 +276,12 @@ class Playable(Media):
 class Thumbnailable(Media):
     aliases = {
         **Media.aliases,
-        "thumbnail_mxc":    ["info", "thumbnail_url"],
-        "thumbnail_width":  ["info", "thumbnail_info", "w"],
-        "thumbnail_height": ["info", "thumbnail_info", "h"],
-        "thumbnail_mime":   ["info", "thumbnail_info", "mimetype"],
-        "thumbnail_size":   ["info", "thumbnail_info", "size"],
+        "thumbnail_mxc":       ["info", "thumbnail_url"],
+        "thumbnail_encrypted": ["info", "thumbnail_file"],
+        "thumbnail_width":     ["info", "thumbnail_info", "w"],
+        "thumbnail_height":    ["info", "thumbnail_info", "h"],
+        "thumbnail_mime":      ["info", "thumbnail_info", "mimetype"],
+        "thumbnail_size":      ["info", "thumbnail_info", "size"],
     }
 
     thumbnail_mxc:       Optional[MXC]           = None
