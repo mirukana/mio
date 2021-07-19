@@ -217,7 +217,7 @@ class Sync(JSONClientModule):
             if not caught:
                 room.invited = True
                 room.left    = False
-                await room_events_call(data, "invite_state", room)
+                await room_events_call(data, "invite_state", room, True)
 
         # -- Joined rooms
 
