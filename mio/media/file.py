@@ -34,16 +34,8 @@ class Media:
 
 
     @classmethod
-    async def from_data(
-        cls,
-        store:  "MediaStore",
-        data:   SeekableIO,
-        sha256: Optional[str] = None,
-    ) -> "Media":
-
-        if not sha256:
-            sha256 = await sha256_chunked(data)
-
+    async def from_data(cls, store: "MediaStore", data: SeekableIO) -> "Media":
+        sha256 = await sha256_chunked(data)
         content = store._content_path(sha256)
 
         if not await content.exists():
@@ -60,17 +52,13 @@ class Media:
 
     @classmethod
     async def from_file_to_move(
-        cls,
-        store:  "MediaStore",
-        path:   Union[Path, str],
-        sha256: Optional[str] = None,
+        cls, store: "MediaStore", path: Union[Path, str],
     ) -> "Media":
 
         apath = AsyncPath(path)
 
-        if not sha256:
-            async with aiofiles.open(apath, "rb") as file:
-                sha256 = await sha256_chunked(file)
+        async with aiofiles.open(apath, "rb") as file:
+            sha256 = await sha256_chunked(file)
 
         content = store._content_path(sha256)
 
