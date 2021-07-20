@@ -255,7 +255,6 @@ async def test_load_all_users(alice: Client, bob: Client, room: Room):
     # Initial state when invited, no users manually loaded
 
     await bob.sync.once()
-    assert len(bob.rooms[room.id].state.users) == 1
     assert not bob.rooms[room.id].state.all_users_loaded
 
     # Loading users while invited (not kept up to date by server)

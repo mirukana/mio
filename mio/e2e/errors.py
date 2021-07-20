@@ -195,3 +195,24 @@ class SessionFileInvalidHMAC(SessionFileImportError):
 class SessionFileInvalidJSON(SessionFileImportError):
     data:          bytes
     error_message: str
+
+
+@dataclass
+class MediaDecryptError(E2EModuleError):
+    pass
+
+
+@dataclass
+class MediaInvalidBase64(MediaDecryptError):
+    error_message: str
+
+
+@dataclass
+class MediaAESError(MediaDecryptError):
+    error_message: str
+
+
+@dataclass
+class MediaSHA256Mismatch(MediaDecryptError):
+    expected: bytes
+    got:      bytes

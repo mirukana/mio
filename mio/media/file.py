@@ -16,12 +16,12 @@ from ..core.files import (
     decode_name, read_chunked_binary, remove_write_permissions, sha256_chunked,
 )
 from ..core.ids import MXC
+from ..e2e.contents import EncryptedMediaInfo
 from ..net.exchange import Reply
 from .thumbnail import Thumbnail, ThumbnailForm, ThumbnailMode
 
 if TYPE_CHECKING:
     from .store import MediaStore
-
 
 @dataclass
 class Media:
@@ -97,21 +97,26 @@ class Media:
             mxc_file = await named_file.readlink()
             host     = decode_name(mxc_file.parent.parent.parent.name)
             mxc      = MXC(f"mxc://{host}/{decode_name(mxc_file.parent.name)}")
+            decrypt  = self.store._decrypt_info_path(mxc)
 
-            yield Reference(self, named_link, named_file, mxc_file, mxc, fname)
-
-
-    @property
-    async def last_reference(self) -> "Reference":
-        refs = [r async for r in self.references]
-        return max(
-            refs,
-            key=lambda r: int(r.named_link.name.split(".")[1]))
+            args = (named_link, named_file, mxc_file, decrypt, mxc, fname)
+            yield Reference(self, *args)
 
 
-    @property
-    async def last_mxc(self) -> MXC:
-        return (await self.last_reference).mxc
+    async def last_reference(
+        self, encrypted: Optional[bool] = None,
+    ) -> "Reference":
+        refs = [
+            r async for r in self.references
+            if encrypted is None or
+            (encrypted is True and await r.decrypt_file.exists()) or
+            (encrypted is False and not await r.decrypt_file.exists())
+        ]
+        return max(refs, key = lambda r: int(r.named_link.name.split(".")[1]))
+
+
+    async def last_mxc(self, encrypted: Optional[bool] = None) -> MXC:
+        return (await self.last_reference(encrypted)).mxc
 
 
     async def remove(self) -> None:
@@ -135,19 +140,25 @@ class Reference:
     named_link:      AsyncPath
     named_file:      AsyncPath
     mxc_file:        AsyncPath
+    decrypt_file:    AsyncPath
     mxc:             MXC
     server_filename: str
 
 
     @classmethod
     async def create(
-        cls, media: Media, mxc: MXC, filename: Optional[str] = None,
+        cls,
+        media:        Media,
+        mxc:          MXC,
+        filename:     Optional[str]                = None,
+        decrypt_info: Optional[EncryptedMediaInfo] = None,
     ) -> "Reference":
 
-        # MXC file
+        # MXC & decrypt info files
 
         assert mxc.host
         mxc_file = media.store._mxc_path(mxc)
+        df = decrypt_file = media.store._decrypt_info_path(mxc)
 
         # Named file
 
@@ -190,7 +201,10 @@ class Reference:
             await name_conflict.parent.mkdir(parents=True, exist_ok=True)
             await name_conflict.symlink_to(named_file_0)
 
-        return cls(media, named_link, named_file, mxc_file, mxc, filename)
+        if decrypt_info:
+            await decrypt_file.write_text(decrypt_info.json)
+
+        return cls(media, named_link, named_file, mxc_file, df, mxc, filename)
 
 
     @property

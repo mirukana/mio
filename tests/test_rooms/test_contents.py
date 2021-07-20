@@ -11,11 +11,11 @@ from pytest import mark, raises
 from mio.client import Client
 from mio.core.html import plain2html
 from mio.core.ids import MXC
+from mio.e2e.contents import EncryptedMediaInfo
 from mio.rooms.contents.messages import (
     HTML_FORMAT, HTML_REPLY_FALLBACK, MATRIX_TO,
     THUMBNAIL_POSSIBLE_PIL_FORMATS, THUMBNAIL_SIZE_MAX_OF_ORIGINAL, Audio,
-    Emote, EncryptedFile, File, Image, Media, Notice, Text, Thumbnailable,
-    Video,
+    Emote, File, Image, Media, Notice, Text, Thumbnailable, Video,
 )
 from mio.rooms.contents.settings import Name
 from mio.rooms.room import Room
@@ -24,12 +24,12 @@ from ..conftest import TestData
 
 pytestmark = mark.asyncio
 
-def create_encrypted_file(**init_kwargs):
-    return EncryptedFile(**{
+def create_encrypted_media_info(**init_kwargs):
+    return EncryptedMediaInfo(**{
         "mxc":             MXC("mxc://a/b"),
-        "counter_block":   "",
+        "init_vector":     "",
         "key":             "",
-        "hashes":          {},
+        "sha256":          "AAAA",
         "key_operations":  ["encrypt", "decrypt"],
         "key_type":        "oct",
         "key_algorithm":   "A256CTR",
@@ -121,19 +121,19 @@ async def test_textual_replying_to(room: Room):
     check_reply_attrs(other, reply, plain2html(other.type), "nice")
 
 
-def test_encrypted_file_init():
-    create_encrypted_file(key_operations=["encrypt", "decrypt"])
+def test_encrypted_media_info_init():
+    create_encrypted_media_info(key_operations=["encrypt", "decrypt"])
 
     with raises(TypeError):
-        create_encrypted_file(key_operations=["encrypt"])
+        create_encrypted_media_info(key_operations=["encrypt"])
 
     with raises(TypeError):
-        create_encrypted_file(key_operations=["decrypt"])
+        create_encrypted_media_info(key_operations=["decrypt"])
 
 
 def test_media_init():
     Media(body="", mxc=MXC("mxc://a/b"))
-    Media(body="", encrypted=create_encrypted_file())
+    Media(body="", encrypted=create_encrypted_media_info())
 
     with raises(TypeError):
         Media(body="")
@@ -278,3 +278,32 @@ async def test_thumb_not_enough_saved_space(alice: Client, data: TestData):
     PILImage.open(data.tiny_unicolor_bmp).save(buffer, "PNG", optimize=True)
     buffer.seek(0)
     assert not await thumb._set_thumbnail(alice, buffer, "image/png")
+
+
+async def test_encrypted_media(e2e_room: Room, bob: Client, data: TestData):
+    await bob.rooms.join(e2e_room.id)
+
+    alice = e2e_room.client
+    await alice.sync.once()
+    event = await Media.from_path(alice, data.large_unicolor_png, encrypt=True)
+    await e2e_room.timeline.send(event)
+
+    await bob.sync.once()
+    got = bob.rooms[e2e_room.id].timeline[-1].content
+    assert got.mxc is None
+    assert got.encrypted
+    assert got.mime == "image/png"
+    assert got.size >= 219
+    assert got.width == 1024
+    assert got.height == 768
+
+    assert got.thumbnail_mxc is None
+    assert got.thumbnail_encrypted
+    assert got.thumbnail_mime == "image/png"
+    assert got.thumbnail_size
+    assert got.thumbnail_width == 800
+    assert got.thumbnail_height == 600
+
+    media          = await bob.media.download(got.encrypted)
+    original_bytes = data.large_unicolor_png.read_bytes()
+    assert await media.content.read_bytes() == original_bytes

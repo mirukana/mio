@@ -9,15 +9,18 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 import aiofiles
+from aiofiles.tempfile import NamedTemporaryFile as AioTempFile  # type: ignore
 from aiopath import AsyncPath
 from yarl import URL
 
 from ..core.data import Parent
 from ..core.files import (
     SeekableIO, atomic_write, encode_name, guess_mime, measure,
+    read_chunked_binary,
 )
 from ..core.ids import MXC
 from ..core.transfer import Transfer, TransferUpdateCallback
+from ..e2e.contents import EncryptedMediaInfo
 from ..module import ClientModule
 from ..net.errors import RangeNotSatisfiable
 from ..net.exchange import Reply
@@ -26,7 +29,6 @@ from .thumbnail import Thumbnail, ThumbnailForm
 
 if TYPE_CHECKING:
     from ..client import Client
-
 
 @dataclass
 class MediaStore(ClientModule):
@@ -43,6 +45,7 @@ class MediaStore(ClientModule):
         data:      SeekableIO,
         filename:  Optional[str]          = None,
         on_update: TransferUpdateCallback = None,
+        encrypt:   bool                   = False,
     ) -> Transfer[Media, bytes]:
         # TODO: check server max allowed size
 
@@ -58,18 +61,34 @@ class MediaStore(ClientModule):
                     # TODO: check if mxc still exists on server & is accessible
                     return media
 
-            mime    = await guess_mime(data)
-            url     = self.net.media_api / "upload"
-            headers = {"Content-Type": mime, "Content-Length": str(size)}
+            e2e          = self.client.e2e
+            decrypt_info = None
+            url          = self.net.media_api / "upload"
+            headers      = {"Content-Length": str(size)}
 
             if filename:
                 url %= {"filename": filename}
 
-            reply = await self.net.post(url, data, headers)
-            mxc   = MXC(reply.json["content_uri"])
+            if encrypt:
+                async with AioTempFile() as file:
+                    chunks = read_chunked_binary(data)
 
-            await Reference.create(media, mxc, filename)
+                    async for chunk in e2e._encrypt_media(chunks):
+                        if isinstance(chunk, EncryptedMediaInfo):
+                            decrypt_info = chunk
+                        else:
+                            await file.write(chunk)
+
+                    await file.seek(0)
+                    headers["Content-Type"] = "application/octet-stream"
+                    reply = await self.net.post(url, file, headers)
+            else:
+                headers["Content-Type"] = await guess_mime(data)
+                reply = await self.net.post(url, data, headers)
+
             media._reply = reply
+            mxc          = MXC(reply.json["content_uri"])
+            await Reference.create(media, mxc, filename, decrypt_info)
             return media
 
         transfer.task = asyncio.ensure_future(_upload())
@@ -77,20 +96,30 @@ class MediaStore(ClientModule):
 
 
     async def upload_from_path(
-        self, path: Union[Path, str], on_update: TransferUpdateCallback = None,
+        self,
+        path:      Union[Path, str],
+        on_update: TransferUpdateCallback = None,
+        encrypt:   bool                   = False,
     ) -> Media:
 
         async with aiofiles.open(path, "rb") as file:
-            return await self.upload(file, Path(path).name, on_update)
+            return await self.upload(file, Path(path).name, on_update, encrypt)
 
 
     def download(
-        self, mxc: MXC, on_update: TransferUpdateCallback = None,
+        self,
+        source:    Union[MXC, EncryptedMediaInfo],
+        on_update: TransferUpdateCallback = None,
     ) -> Transfer[Media, bytes]:
 
         transfer: Transfer[Media, bytes] = Transfer(on_update=on_update)
 
         async def _download() -> Media:
+            if isinstance(source, EncryptedMediaInfo):
+                mxc, decrypt_info = source.mxc, source
+            else:
+                mxc, decrypt_info = source, None  # type: ignore
+
             assert mxc.host
 
             with suppress(FileNotFoundError):
@@ -100,6 +129,7 @@ class MediaStore(ClientModule):
                 self.net.media_api / "download" / mxc.host / mxc.path[1:],
                 self._partial_path(mxc),
                 transfer,
+                decrypt_info,
             )
 
             media        = await Media.from_file_to_move(self, path)
@@ -113,12 +143,12 @@ class MediaStore(ClientModule):
 
     async def download_to_path(
         self,
-        mxc:       MXC,
+        source:    Union[MXC, EncryptedMediaInfo],
         path:      Union[Path, str],
         on_update: TransferUpdateCallback = None,
     ) -> Media:
 
-        return await (await self.download(mxc, on_update)).save_as(path)
+        return await (await self.download(source, on_update)).save_as(path)
 
 
     def get_thumbnail(
@@ -168,6 +198,10 @@ class MediaStore(ClientModule):
         return self.path / "mxc" / host / mxid[:2] / mxid / "original"
 
 
+    def _decrypt_info_path(self, mxc: MXC) -> AsyncPath:
+        return self._mxc_path(mxc).with_name("decrypt.json")
+
+
     def _partial_path(self, mxc: MXC) -> AsyncPath:
         assert mxc.host
         host = encode_name(mxc.host)
@@ -197,7 +231,11 @@ class MediaStore(ClientModule):
 
 
     async def _download_file(
-        self, source: URL, path: AsyncPath, transfer: Transfer,
+        self,
+        http_url:     URL,
+        path:         AsyncPath,
+        transfer:     Transfer,
+        decrypt_info: Optional[EncryptedMediaInfo] = None,
     ) -> Tuple[Reply, AsyncPath]:
 
         start = 0
@@ -209,7 +247,7 @@ class MediaStore(ClientModule):
 
         try:
             headers = {"Range": f"bytes={start}-"} if start else None
-            reply   = await self.net.get(source, headers)
+            reply   = await self.net.get(http_url, headers)
         except RangeNotSatisfiable as e:
             return (e.reply, path)
 
@@ -223,5 +261,16 @@ class MediaStore(ClientModule):
         async with atomic_write(path, mode) as output:
             async for chunk in transfer:
                 await output.write(chunk)
+
+        if not decrypt_info:
+            return (reply, path)
+
+        async with aiofiles.open(path, "rb") as encrypted:
+            async with atomic_write(path, "wb") as decrypted:
+                chunks = read_chunked_binary(encrypted)
+                e2e    = self.client.e2e
+
+                async for chunk in e2e._decrypt_media(chunks, decrypt_info):
+                    await decrypted.write(chunk)
 
         return (reply, path)

@@ -3,16 +3,19 @@
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Tuple
+from typing import (
+    TYPE_CHECKING, Any, ClassVar, Dict, List, Literal, Optional, Tuple,
+)
 from uuid import uuid4
 
+from mio.core.data import JSON
+
 from ..core.contents import EventContent
-from ..core.ids import RoomId
+from ..core.ids import MXC, RoomId
 from . import MegolmAlgorithm, OlmAlgorithm
 
 if TYPE_CHECKING:
     from ..rooms.events import TimelineEvent
-
 
 @dataclass
 class Olm(EventContent):
@@ -163,3 +166,36 @@ class ForwardedGroupSessionInfo(EventContent):
 @dataclass
 class Dummy(EventContent):
     type = "m.dummy"
+
+
+@dataclass
+class EncryptedMediaInfo(JSON):
+    aliases = {
+        "mxc":             "url",
+        "init_vector":     "iv",
+        "key":             ["key", "k"],
+        "sha256":          ["hashes", "sha256"],
+        "key_operations":  ["key", "key_ops"],
+        "key_type":        ["key", "kty"],
+        "key_algorithm":   ["key", "alg"],
+        "key_extractable": ["key", "ext"],
+        "version":         "v",
+    }
+
+    mxc:         MXC
+    init_vector: str
+    key:         str
+    sha256:      str  # base64ed binary digest
+
+    key_operations:  List[str]
+    key_type:        Literal["oct"]
+    key_algorithm:   Literal["A256CTR"]
+    key_extractable: Literal[True]
+    version:         Literal["v2"]
+
+
+    def __post_init__(self) -> None:
+        ops = self.key_operations
+
+        if "encrypt" not in ops or "decrypt" not in ops:
+            raise TypeError(f"{self} key_operations missing encrypt/decrypt")

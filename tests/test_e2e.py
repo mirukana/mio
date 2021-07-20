@@ -3,18 +3,20 @@
 
 import json
 
+import aiofiles
 from pytest import mark, raises
 
 from mio.client import Client
+from mio.core.files import read_chunked_binary
 from mio.core.utils import NoneType
 from mio.devices.events import ToDeviceEvent
 from mio.e2e import errors as err
-from mio.e2e.contents import Dummy, Megolm, Olm
+from mio.e2e.contents import Dummy, EncryptedMediaInfo, Megolm, Olm
 from mio.e2e.e2e import SESSION_FILE_FOOTER, SESSION_FILE_HEADER
 from mio.rooms.contents.messages import Text
 from mio.rooms.room import Room
 
-from .conftest import new_device_from
+from .conftest import TestData, new_device_from
 
 pytestmark = mark.asyncio
 
@@ -405,3 +407,39 @@ async def test_olm_session_reordering(alice: Client, bob: Client):
     await alice.sync.once()
     assert alice_sessions[0] is not oldest_session
     assert alice_sessions[1] is oldest_session
+
+
+async def test_encrypt_decrypt_media(alice: Client, data: TestData):
+    async with aiofiles.open(data.gradient_png, "rb") as file:
+        encrypted_parts = []
+        info            = None
+
+        async for chunk in alice.e2e._encrypt_media(read_chunked_binary(file)):
+            if isinstance(chunk, EncryptedMediaInfo):
+                info = chunk
+            else:
+                encrypted_parts.append(chunk)
+
+    async def parts():
+        for part in encrypted_parts:
+            yield part
+
+    decrypt = alice.e2e._decrypt_media
+    assert info
+    decrypted = b"".join([c async for c in decrypt(parts(), info)])
+    assert decrypted == data.gradient_png.read_bytes()
+
+    with raises(err.MediaInvalidBase64):
+        await decrypt(parts(), info.but(sha256="x")).__anext__()
+
+    with raises(err.MediaInvalidBase64):
+        await decrypt(parts(), info.but(key="x")).__anext__()
+
+    with raises(err.MediaInvalidBase64):
+        await decrypt(parts(), info.but(init_vector="x")).__anext__()
+
+    with raises(err.MediaAESError):
+        await decrypt(parts(), info.but(key="eA")).__anext__()
+
+    with raises(err.MediaSHA256Mismatch):
+        [_ async for _ in decrypt(parts(), info.but(sha256="eA"))]

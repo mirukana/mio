@@ -54,7 +54,7 @@ class Profile(JSONClientModule):
     ) -> Media:
 
         media = await self.client.media.upload(data, filename, on_update)
-        await self.set_avatar(await media.last_mxc)
+        await self.set_avatar(await media.last_mxc(encrypted=False))
         return media
 
 
@@ -63,7 +63,7 @@ class Profile(JSONClientModule):
     ) -> Media:
 
         media = await self.client.media.upload_from_path(path, on_update)
-        await self.set_avatar(await media.last_mxc)
+        await self.set_avatar(await media.last_mxc(encrypted=False))
         return media
 
 

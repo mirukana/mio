@@ -30,7 +30,9 @@ async def test_up_download_path(alice: Client, data: TestData, tmp_path: Path):
     assert first._reply.request.headers["Content-Length"] == "58"
 
     media = await alice.media.download_to_path(
-        await first.last_mxc, tmp_path / "download.bmp", on_update=got2.append,
+        await first.last_mxc(),
+        tmp_path / "download.bmp",
+        on_update=got2.append,
     )
     assert media.sha256 == first.sha256
     assert got2
@@ -39,7 +41,7 @@ async def test_up_download_path(alice: Client, data: TestData, tmp_path: Path):
 
     media = await alice.media.upload_from_path(tmp_path / "download.bmp")
     assert media.sha256 == first.sha256
-    assert (await media.last_mxc) == (await first.last_mxc)
+    assert (await media.last_mxc()) == (await first.last_mxc())
 
 
 async def test_upload_text_file_from_path(alice: Client, data: TestData):
@@ -51,12 +53,12 @@ async def test_upload_text_file_from_path(alice: Client, data: TestData):
 async def test_upload_nameless(alice: Client, data: TestData):
     async with aiofiles.open(data.tiny_unicolor_bmp, "rb") as file:
         media = await alice.media.upload(file)
-        mxc   = await media.last_mxc
+        mxc   = await media.last_mxc()
         await media.remove()
         assert not await media.content.exists()
 
     media = await alice.media.download(mxc)
-    ref   = await media.last_reference
+    ref   = await media.last_reference()
     assert ref.named_file.name == ref.mxc.path[1:]
 
 
@@ -65,7 +67,7 @@ async def test_partial_download(alice: Client, data: TestData):
     # this ends up only testing "we want a range but server doesn't comply"
 
     media     = await alice.media.upload_from_path(data.tiny_unicolor_bmp)
-    mxc       = await media.last_mxc
+    mxc       = await media.last_mxc()
     partial   = alice.media._partial_path(mxc)
     full_size = (await media.content.stat()).st_size
     await media.save_as(partial)
@@ -93,19 +95,19 @@ async def test_partial_download(alice: Client, data: TestData):
 
 async def test_get_thumbnail(alice: Client, data: TestData):
     media = await alice.media.upload_from_path(data.large_unicolor_png)
-    ref   = await media.last_reference
+    ref   = await media.last_reference()
     assert not [t async for t in ref.thumbnails]
 
     form  = ThumbnailForm.tiny
-    thumb = await alice.media.get_thumbnail(await media.last_mxc, form)
+    thumb = await alice.media.get_thumbnail(await media.last_mxc(), form)
     assert len([t async for t in ref.thumbnails]) == 1
 
     assert await thumb.file.exists()
-    assert thumb.for_mxc == await media.last_mxc
+    assert thumb.for_mxc == await media.last_mxc()
     assert thumb.form is form
     assert not await thumb._partial_file().exists()
 
-    thumb2 = await alice.media.get_thumbnail(await media.last_mxc, form)
+    thumb2 = await alice.media.get_thumbnail(await media.last_mxc(), form)
     assert thumb2.file == thumb.file
     assert len([t async for t in ref.thumbnails]) == 1
 
@@ -148,9 +150,9 @@ async def test_named_file_clash(alice: Client, data: TestData):
         media2 = await alice.media.upload(file, image.name)
 
     assert media1 != media2
-    assert (await media1.last_reference).named_file.name == image.name
-    assert (await media1.last_reference).server_filename == image.name
+    assert (await media1.last_reference()).named_file.name == image.name
+    assert (await media1.last_reference()).server_filename == image.name
 
     solved_clash = image.with_suffix(f".001{image.suffix}").name
-    assert (await media2.last_reference).named_file.name == solved_clash
-    assert (await media2.last_reference).server_filename == image.name
+    assert (await media2.last_reference()).named_file.name == solved_clash
+    assert (await media2.last_reference()).server_filename == image.name

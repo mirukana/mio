@@ -68,7 +68,7 @@ async def test_set_avatar_from_data(alice: Client, room: Room, data: TestData):
         media = await alice.profile.set_avatar_from_data(file)
 
     await alice.sync.once()
-    assert alice.profile.avatar == await media.last_mxc
+    assert alice.profile.avatar == await media.last_mxc()
 
 
 async def test_set_avatar_from_path(alice: Client, room: Room, data: TestData):
@@ -78,4 +78,4 @@ async def test_set_avatar_from_path(alice: Client, room: Room, data: TestData):
 
     media = await alice.profile.set_avatar_from_path(data.tiny_unicolor_bmp)
     await alice.sync.once()
-    assert alice.profile.avatar == await media.last_mxc
+    assert alice.profile.avatar == await media.last_mxc()

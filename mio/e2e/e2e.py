@@ -8,22 +8,22 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from functools import partial
 from typing import (
-    Any, Callable, ClassVar, Collection, Deque, Dict, List, Optional, Set,
-    Tuple, Type, Union,
+    Any, AsyncIterator, Callable, ClassVar, Collection, Deque, Dict, List,
+    Optional, Set, Tuple, Type, Union,
 )
 
 import olm
-import unpaddedbase64
 from aiopath import AsyncPath
 from Cryptodome import Random
 from Cryptodome.Cipher import AES
 from Cryptodome.Hash import HMAC, SHA256, SHA512
 from Cryptodome.Protocol.KDF import PBKDF2
 from Cryptodome.Util import Counter
+from unpaddedbase64 import decode_base64, encode_base64
 
 from ..core.contents import EventContent
 from ..core.data import Runtime
-from ..core.ids import EventId, RoomId, UserId
+from ..core.ids import MXC, EventId, RoomId, UserId
 from ..devices.device import Device
 from ..devices.events import ToDeviceEvent
 from ..module import JSONClientModule
@@ -32,8 +32,9 @@ from ..rooms.timeline import TimelineEvent
 from . import Algorithm, MegolmAlgorithm
 from . import errors as err
 from .contents import (
-    CancelGroupSessionRequest, Dummy, ForwardedGroupSessionInfo,
-    GroupSessionInfo, GroupSessionRequest, Megolm, Olm,
+    CancelGroupSessionRequest, Dummy, EncryptedMediaInfo,
+    ForwardedGroupSessionInfo, GroupSessionInfo, GroupSessionRequest, Megolm,
+    Olm,
 )
 
 # TODO: protect against concurrency and saving sessions before sharing
@@ -178,7 +179,7 @@ class E2E(JSONClientModule):
             cipher.encrypt(json_modifier(json.dumps(sessions)).encode()),
         ))
 
-        base64 = unpaddedbase64.encode_base64(b"".join((
+        base64 = encode_base64(b"".join((
             data, HMAC.new(hmac_key, data, SHA256).digest(),
         )))
 
@@ -198,7 +199,7 @@ class E2E(JSONClientModule):
         data = data[len(SESSION_FILE_HEADER): -len(SESSION_FILE_FOOTER)]
 
         try:
-            decoded = unpaddedbase64.decode_base64(data)
+            decoded = decode_base64(data)
         except BinAsciiError as e:
             raise err.SessionFileInvalidBase64(next(iter(e.args), ""))
 
@@ -484,6 +485,65 @@ class E2E(JSONClientModule):
         await self.save()
 
         return encrypted
+
+
+    async def _decrypt_media(
+        self, data: AsyncIterator[bytes], info: EncryptedMediaInfo,
+    ) -> AsyncIterator[bytes]:
+
+        try:
+            wanted_sha256 = decode_base64(info.sha256)
+            aes256_key    = decode_base64(info.key)
+            init_vector   = decode_base64(info.init_vector)
+        except BinAsciiError as e:
+            raise err.MediaInvalidBase64(next(iter(e.args), ""))
+
+        sha256     = SHA256.new()
+        prefix     = init_vector[:8]
+        init_value = int.from_bytes(init_vector[8:], "big")
+        counter    = Counter.new(64, prefix=prefix, initial_value=init_value)
+
+        try:
+            cipher = AES.new(aes256_key, AES.MODE_CTR, counter=counter)
+        except ValueError as e:
+            raise err.MediaAESError(next(iter(e.args), ""))
+
+        async for chunk in data:
+            sha256.update(chunk)
+            yield cipher.decrypt(chunk)
+
+        got_sha256 = sha256.digest()
+
+        if wanted_sha256 != got_sha256:
+            raise err.MediaSHA256Mismatch(wanted_sha256, got_sha256)
+
+
+    async def _encrypt_media(
+        self, data: AsyncIterator[bytes],
+    ) -> AsyncIterator[Union[bytes, EncryptedMediaInfo]]:
+
+        aes256_key  = Random.new().read(32)
+        init_vector = Random.new().read(8)
+        counter     = Counter.new(64, prefix=init_vector, initial_value=0)
+        cipher      = AES.new(aes256_key, AES.MODE_CTR, counter=counter)
+        sha256      = SHA256.new()
+
+        async for chunk in data:
+            encrypted = cipher.encrypt(chunk)
+            sha256.update(encrypted)
+            yield encrypted
+
+        yield EncryptedMediaInfo(
+            mxc             = MXC("mxc://replace/me"),
+            init_vector     = encode_base64(init_vector + b"\x00" * 8),
+            key             = encode_base64(aes256_key, urlsafe=True),
+            sha256          = encode_base64(sha256.digest()),
+            key_operations  = ["encrypt", "decrypt"],
+            key_type        = "oct",
+            key_algorithm   = "A256CTR",
+            key_extractable = True,
+            version         = "v2",
+        )
 
 
     async def _drop_outbound_group_session(self, room_id: RoomId) -> None:

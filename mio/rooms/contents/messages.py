@@ -6,8 +6,7 @@ from datetime import timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import (
-    TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Set, Type, TypeVar,
-    Union,
+    TYPE_CHECKING, Any, ClassVar, Dict, Optional, Set, Type, TypeVar, Union,
 )
 
 import aiofiles
@@ -15,7 +14,6 @@ from bs4 import BeautifulSoup
 from PIL import Image as PILImage
 
 from ...core.contents import EventContent
-from ...core.data import JSON, Literal
 from ...core.files import (
     SeekableIO, guess_mime, has_transparency, measure, media_info,
     read_whole_binary, save_jpg, save_png,
@@ -23,6 +21,7 @@ from ...core.files import (
 from ...core.html import html2markdown, plain2html
 from ...core.ids import MXC, EventId
 from ...core.transfer import TransferUpdateCallback
+from ...e2e.contents import EncryptedMediaInfo
 from ..events import TimelineEvent
 
 if TYPE_CHECKING:
@@ -137,47 +136,15 @@ class Textual(Message):
 
 
 @dataclass
-class EncryptedFile(JSON):
-    aliases = {
-        "mxc":             "url",
-        "counter_block":   "iv",
-        "key":             ["key", "k"],
-        "key_operations":  ["key", "key_ops"],
-        "key_type":        ["key", "kty"],
-        "key_algorithm":   ["key", "alg"],
-        "key_extractable": ["key", "ext"],
-        "version":         "v",
-    }
-
-    mxc:           MXC
-    counter_block: str
-    key:           str
-    hashes:        Dict[str, str]
-
-    key_operations:  List[str]
-    key_type:        Literal["oct"]
-    key_algorithm:   Literal["A256CTR"]
-    key_extractable: Literal[True]
-    version:         Literal["v2"]
-
-
-    def __post_init__(self) -> None:
-        ops = self.key_operations
-
-        if "encrypt" not in ops or "decrypt" not in ops:
-            raise TypeError(f"{self} key_operations missing encrypt/decrypt")
-
-
-@dataclass
 class Media(Message):
     aliases = {
         "mxc": ["url"], "encrypted": ["file"], "mime": ["info", "mimetype"],
     }
 
-    mxc:       Optional[MXC]           = None
-    encrypted: Optional[EncryptedFile] = None
-    mime:      Optional[str]           = None
-    size:      Optional[int]           = None
+    mxc:       Optional[MXC]                = None
+    encrypted: Optional[EncryptedMediaInfo] = None
+    mime:      Optional[str]                = None
+    size:      Optional[int]                = None
 
 
     def __post_init__(self) -> None:
@@ -190,21 +157,32 @@ class Media(Message):
         cls,
         client:                 "Client",
         data:                   SeekableIO,
+        encrypt:                bool                   = False,
         filename:               Optional[str]          = None,
         body:                   Optional[str]          = None,
         on_upload_update:       TransferUpdateCallback = None,
         on_thumb_upload_update: TransferUpdateCallback = None,
     ) -> "Media":
 
-        body = body or filename or ""
-        mime = await guess_mime(data)
-        size = await measure(data)
-
-        media = await client.media.upload(data, filename, on_upload_update)
+        body  = body or filename or ""
+        mime  = await guess_mime(data)
+        size  = await measure(data)
+        media = await client.media.upload(
+            data, filename, on_upload_update, encrypt,
+        )
 
         base = mime.split("/")[0]
         cls  = {"image": Image, "video": Video, "audio": Audio}.get(base, File)
-        obj  = cls(body, await media.last_mxc, mime=mime, size=size)
+
+        if encrypt:
+            ref      = await media.last_reference(encrypted=True)
+            injson   = await ref.decrypt_file.read_text()
+            info     = EncryptedMediaInfo.from_json(injson, parent=None)
+            info.mxc = ref.mxc
+            obj      = cls(body, encrypted=info, mime=mime, size=size)
+        else:
+            mxc = await media.last_mxc(encrypted=False)
+            obj = cls(body, mxc, mime=mime, size=size)
 
         if isinstance(obj, Visual):
             await Visual._set_dimensions(obj, data)
@@ -213,8 +191,8 @@ class Media(Message):
             await Playable._set_duration(obj, data)
 
         if isinstance(obj, Thumbnailable):
-            cb = on_thumb_upload_update
-            await Thumbnailable._set_thumbnail(obj, client, data, mime, cb)
+            args = (obj, client, data, mime, encrypt, on_thumb_upload_update)
+            await Thumbnailable._set_thumbnail(*args)
 
         if isinstance(obj, File):
             obj.filename = filename
@@ -227,6 +205,7 @@ class Media(Message):
         cls,
         client:                 "Client",
         path:                   Union[Path, str],
+        encrypt:                bool                   = False,
         body:                   Optional[str]          = None,
         on_upload_update:       TransferUpdateCallback = None,
         on_thumb_upload_update: TransferUpdateCallback = None,
@@ -235,7 +214,7 @@ class Media(Message):
         async with aiofiles.open(path, "rb") as file:
             name = Path(path).name
             cbs  = (on_upload_update, on_thumb_upload_update)
-            return await cls.from_data(client, file, name, body, *cbs)
+            return await cls.from_data(client, file, encrypt, name, body, *cbs)
 
 
 @dataclass
@@ -284,12 +263,12 @@ class Thumbnailable(Media):
         "thumbnail_size":      ["info", "thumbnail_info", "size"],
     }
 
-    thumbnail_mxc:       Optional[MXC]           = None
-    thumbnail_encrypted: Optional[EncryptedFile] = None
-    thumbnail_width:     Optional[int]           = None
-    thumbnail_height:    Optional[int]           = None
-    thumbnail_mime:      Optional[str]           = None
-    thumbnail_size:      Optional[int]           = None
+    thumbnail_mxc:       Optional[MXC]                = None
+    thumbnail_encrypted: Optional[EncryptedMediaInfo] = None
+    thumbnail_width:     Optional[int]                = None
+    thumbnail_height:    Optional[int]                = None
+    thumbnail_mime:      Optional[str]                = None
+    thumbnail_size:      Optional[int]                = None
 
 
     async def _set_thumbnail(
@@ -297,6 +276,7 @@ class Thumbnailable(Media):
         client:           "Client",
         data:             SeekableIO,
         mime:             str,
+        encrypt:          bool                   = False,
         on_upload_update: TransferUpdateCallback = None,
     ) -> Optional[bytes]:
 
@@ -326,10 +306,18 @@ class Thumbnailable(Media):
             return None
 
         media = await client.media.upload(
-            BytesIO(thumb_bytes), on_update=on_upload_update,
+            BytesIO(thumb_bytes), on_update=on_upload_update, encrypt=encrypt,
         )
 
-        self.thumbnail_mxc    = await media.last_mxc
+        if encrypt:
+            ref    = await media.last_reference(encrypted=True)
+            injson = await ref.decrypt_file.read_text()
+            info   = EncryptedMediaInfo.from_json(injson, parent=None)
+
+            self.thumbnail_encrypted = info.but(mxc=ref.mxc)
+        else:
+            self.thumbnail_mxc = await media.last_mxc(encrypted=False)
+
         self.thumbnail_width  = image.width
         self.thumbnail_height = image.height
         self.thumbnail_mime   = mime
