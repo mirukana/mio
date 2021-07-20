@@ -19,6 +19,11 @@
         ]
         ignore_missing_imports = true
 
+[tool.isort]
+    # https://pycqa.github.io/isort/docs/configuration/options/
+    multi_line_output      = 5
+    include_trailing_comma = true
+
 [tool.pytest.ini_options]
     testpaths  = "tests"
     minversion = "6.2.1"
