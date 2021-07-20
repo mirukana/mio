@@ -135,7 +135,7 @@ async def atomic_write(
     prefix = f".{final.stem}."
     suffix = f"{final.suffix}.partial"
 
-    with NamedTemporaryFile(
+    async with aiofiles.tempfile.NamedTemporaryFile(
         dir=final.parent, prefix=prefix, suffix=suffix, delete=False,
     ) as file:
         temp = AsyncPath(file.name)

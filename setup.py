@@ -24,7 +24,7 @@ setup(
 
     python_requires  = ">=3.7, <4",
     install_requires = requires("""
-        aiofiles          >= 0.6.0,  < 0.7
+        aiofiles          >= 0.7.0,  < 0.8
         aiohttp           >= 3.7.3,  < 4
         aiopath           >= 0.5.4,  < 0.6
         backoff           >= 1.10.0, < 2
