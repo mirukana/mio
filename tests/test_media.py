@@ -90,7 +90,7 @@ async def test_partial_download(alice: Client, data: TestData):
     assert (await partial.stat()).st_size == full_size
 
     await alice.media.download(mxc)
-    assert not await partial.exists()
+    assert not await partial.parent.parent.exists()
 
 
 async def test_get_thumbnail(alice: Client, data: TestData):

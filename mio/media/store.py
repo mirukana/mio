@@ -132,7 +132,12 @@ class MediaStore(ClientModule):
                 decrypt_info,
             )
 
-            media        = await Media.from_file_to_move(self, path)
+            media = await Media.from_file_to_move(self, path)
+
+            with suppress(OSError):  # remove partial downloads dir if empty
+                await path.parent.rmdir()
+                await path.parent.parent.rmdir()
+
             media._reply = reply
             await Reference.create(media, mxc, reply.filename)
             return media
