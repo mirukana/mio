@@ -77,7 +77,8 @@ def test_textual_same_html_plaintext():
 def test_textual_no_reply_fallback():
     assert Text("plain").html_no_reply_fallback is None
 
-    reply = Text.from_html("<mx-reply>...</mx-reply><b>foo</b>")
+    reply = Text.from_html("<b>foo</b>")  # from_html will strip mx-reply
+    reply.formatted_body = HTML_REPLY_FALLBACK + reply.formatted_body
     assert reply.html_no_reply_fallback == "<b>foo</b>"
 
     not_reply = Text.from_html("<b>foo</b>")
