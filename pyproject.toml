@@ -1,3 +1,24 @@
+[tool.mypy]
+    warn_redundant_casts = true
+    warn_unused_ignores  = true
+    warn_unreachable     = true
+
+    [[tool.mypy.overrides]]
+        module = [
+            "aiopath.*",
+            "aioresponses.*",
+            "backoff.*",
+            "magic.*",
+            "markdownify.*",
+            "olm.*",
+            "pymediainfo.*",
+            "ruamel.*",
+            "setuptools.*",
+            "sortedcollections.*",
+            "typingplus.*",
+        ]
+        ignore_missing_imports = true
+
 [tool.pytest.ini_options]
     testpaths  = "tests"
     minversion = "6.2.1"

@@ -99,7 +99,7 @@ class Textual(Message):
         if self.format != HTML_FORMAT:
             return None
 
-        soup     = BeautifulSoup(self.formatted_body, "html.parser")
+        soup     = BeautifulSoup(self.formatted_body or "", "html.parser")
         fallback = soup.find("mx-reply")
 
         if fallback:

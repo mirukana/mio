@@ -28,7 +28,7 @@ class NonStandardRetriableStatus(IntEnum):
     def __new__(cls, code: int, phrase: str, description: str = ""):
         # Do the same thing HTTPStatus's __new__ does
         obj             = int.__new__(cls, code)
-        obj._value_     = code         # type: ignore
+        obj._value_     = code
         obj.phrase      = phrase       # type: ignore
         obj.description = description  # type: ignore
         return obj

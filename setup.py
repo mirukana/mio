@@ -32,6 +32,7 @@ setup(
         filelock          >= 3.0.12, < 4
         loguru            >= 0.5.3,  < 0.6
         markdownify       >= 0.9.2,  < 0.10
+        pillow            >= 8.1.0,  < 9
         pycryptodomex     >= 3.10.1, < 4
         python-magic      >= 0.4.22, < 0.5
         python-olm        >= 3.1.3,  < 4
@@ -60,7 +61,7 @@ setup(
             flake8-pie            >= 0.6.1,   < 0.7
             flake8-quotes         >= 3.2.0,   < 4
             matrix-synapse        >= 1.30.1,  < 2
-            mypy                  >= 0.812,   < 0.900
+            mypy                  >= 0.910,   < 0.1000
             pep8-naming           >= 0.11.1,  < 0.12
             pytest                >= 6.2.1,   < 7
             pytest-cov            >= 2.11.1,  < 3
@@ -68,6 +69,10 @@ setup(
             pytest-sugar          >= 0.9.4,   < 0.10
             pytest-xdist[psutil]  >= 2.2.1,   < 3
             ruamel.yaml           >= 0.16.13, < 0.17
+            types-aiofiles        >= 0.1.7,   < 0.2
+            types-beautifulsoup4  >= 4.9.0, < 5
+            types-filelock        >= 0.1.4,   < 0.2
+            types-pillow          >= 8.1.0,   < 9
         """),
     },
 

@@ -20,7 +20,7 @@ from aiofiles.threadpool.binary import AsyncBufferedReader
 from aiofiles.threadpool.text import AsyncTextIOWrapper
 from aiopath import AsyncPath
 from magic import Magic
-from PIL import Image as PILImage
+from PIL.Image import Image as PILImage
 from pymediainfo import MediaInfo
 
 from .utils import StrBytes, make_awaitable
