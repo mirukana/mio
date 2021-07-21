@@ -43,6 +43,7 @@ class TimelineEvent(RoomEvent[ContentT]):
     room_id:    Optional[RoomId]     = None
     decryption: Runtime[DecryptInfo] = None
     historic:   Runtime[bool]        = False
+    local_echo: Runtime[bool]        = False
     # TODO: unsigned
 
     def __lt__(self, other: "TimelineEvent") -> bool:

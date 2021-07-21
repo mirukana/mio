@@ -46,8 +46,8 @@ async def test_timeline_event_callback_group(alice: Client, room: Room):
     text  = Text("This is a test")
     emote = Emote("tests")
 
-    await room.timeline.send(text)
-    await room.timeline.send(emote)
+    await room.timeline.send(text, local_echo_to=[])
+    await room.timeline.send(emote, local_echo_to=[])
     # We parse a corresponding timeline event on sync for new states
     await room.state.send(CanonicalAlias())
     await alice.sync.once()
@@ -90,8 +90,8 @@ async def test_timeline_event_callback(alice: Client, room: Room):
     cb  = lambda r, e: got.extend([r, type(e.content)])  # noqa
     alice.rooms.callbacks[TimelineEvent].append(cb)
 
-    await room.timeline.send(Text("This is a test"))
-    await room.timeline.send(Emote("tests"))
+    await room.timeline.send(Text("This is a test"), local_echo_to=[])
+    await room.timeline.send(Emote("tests"), local_echo_to=[])
     # We parse a corresponding timeline event on sync for new states
     await room.state.send(CanonicalAlias())
     await alice.sync.once()

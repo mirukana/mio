@@ -25,6 +25,7 @@ from .contents.settings import Creation
 from .events import StateEvent, TimelineEvent
 
 if TYPE_CHECKING:
+    from ..client import Client
     from .room import Room
 
 InGroupSessionKey = Tuple[str, str]  # (sender_curve25519, session_id)
@@ -125,8 +126,12 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
 
 
     async def send(
-        self, content: EventContent, transaction_id: Optional[str] = None,
+        self,
+        content:        EventContent,
+        local_echo_to:  Optional[List["Client"]] = None,
+        transaction_id: Optional[str]            = None,
     ) -> EventId:
+
         room   = self.room
         client = room.client
 
@@ -145,8 +150,33 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
         tx  = transaction_id if transaction_id else str(uuid4())
         url = client.net.api / "rooms" / room.id / "send" / content.type / tx
 
-        reply = await client.net.put(url, content.dict)
-        return EventId(reply.json["event_id"])
+        if local_echo_to is None:
+            local_echo_to = [client]
+
+        echo = await TimelineEvent.from_dict({
+            "type":             content.type,
+            "content":          content.dict,
+            "event_id":         f"$echo.{tx}",
+            "sender":           client.user_id,
+            "origin_server_ts": datetime.now().timestamp() * 1000,
+            "local_echo":       True,
+        }, parent=room)._decrypted()
+
+        for eclient in local_echo_to:
+            if room.id in eclient.rooms:
+                await eclient.rooms[room.id].timeline._register_events(echo)
+
+        reply    = await client.net.put(url, content.dict)
+        event_id = EventId(reply.json["event_id"])
+
+        for eclient in local_echo_to:
+            if room.id in eclient.rooms:
+                timeline           = eclient.rooms[room.id].timeline
+                old: TimelineEvent = timeline._data.pop(echo.id)
+                new: TimelineEvent = old.but(id=event_id, local_echo=False)
+                await timeline._register_events(new)
+
+        return event_id
 
 
     def _get_event_file(self, event: TimelineEvent) -> AsyncPath:

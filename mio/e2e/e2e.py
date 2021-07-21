@@ -406,7 +406,7 @@ class E2E(JSONClientModule):
         if known and decrypted_indice[message_index] != (event.id, event.date):
             raise err.PossibleReplayAttack()
 
-        if not known:
+        if not known and not event.local_echo:
             decrypted_indice[message_index] = (event.id, event.date)
             await self.save()
 
