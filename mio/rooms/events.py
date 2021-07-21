@@ -33,18 +33,23 @@ class RoomEvent(Event[ContentT]):
 
 @dataclass
 class TimelineEvent(RoomEvent[ContentT]):
-    aliases = {"id": "event_id", "date": "origin_server_ts"}
+    aliases = {
+        "id": "event_id",
+        "date": "origin_server_ts",
+        "transaction_id": ("unsigned", "transaction_id"),
+    }
 
-    content:    ContentT
-    id:         EventId
-    sender:     UserId
-    date:       datetime
-    redacts:    Optional[EventId]    = None
-    room_id:    Optional[RoomId]     = None
-    decryption: Runtime[DecryptInfo] = None
-    historic:   Runtime[bool]        = False
-    local_echo: Runtime[bool]        = False
-    # TODO: unsigned
+    content:        ContentT
+    id:             EventId
+    sender:         UserId
+    date:           datetime
+    redacts:        Optional[EventId]    = None
+    room_id:        Optional[RoomId]     = None
+    transaction_id: Optional[str]        = None
+    decryption:     Runtime[DecryptInfo] = None
+    historic:       Runtime[bool]        = False
+    local_echo:     Runtime[bool]        = False
+    # TODO: unsigned.{age,redacted_because}
 
     def __lt__(self, other: "TimelineEvent") -> bool:
         return self.date < other.date
