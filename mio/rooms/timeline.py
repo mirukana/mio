@@ -5,7 +5,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from itertools import groupby
-from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Set, Tuple
 from uuid import uuid4
 
 import aiofiles
@@ -58,6 +58,13 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
     @property
     def fully_loaded(self) -> bool:
         return not self.gaps
+
+
+    @property
+    def unsent_past_events(self) -> Iterable[TimelineEvent]:
+        for event in self.values():
+            if event.historic and event.local_echo:
+                yield event
 
 
     async def load_event(self, event_id: EventId) -> TimelineEvent:
@@ -159,6 +166,7 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
             "event_id":         f"$echo.{tx}",
             "sender":           client.user_id,
             "origin_server_ts": datetime.now().timestamp() * 1000,
+            "unsigned":         {"transaction_id": tx},
             "local_echo":       True,
         }, parent=room)._decrypted()
 

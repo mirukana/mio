@@ -1,6 +1,8 @@
 # Copyright mio authors & contributors <https://github.com/mirukana/mio>
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
+from pathlib import Path
+
 from pytest import mark
 
 from mio.client import Client
@@ -83,3 +85,14 @@ async def test_multiclient_local_echo(e2e_room: Room, bob: Client):
 
     await e2e_room.timeline.send(Text("hi"), [e2e_room.client, bob])
     assert new1 == new2
+
+
+async def test_unsent_past_events(room: Room, tmp_path: Path):
+    await room.timeline.send(Text("abc"))
+    await room.timeline.send(Text("def"))
+    await room.client.sync.once()
+    assert not list(room.timeline.unsent_past_events)
+
+    last = room.timeline[-1]
+    last.historic = last.local_echo = True
+    assert len(list(room.timeline.unsent_past_events)) == 1
