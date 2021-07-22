@@ -24,7 +24,7 @@ from ..e2e.contents import EncryptedMediaInfo
 from ..module import ClientModule
 from ..net.errors import RangeNotSatisfiable
 from ..net.exchange import Reply
-from .file import Media, Reference
+from .file import Reference, StoreMedia
 from .thumbnail import Thumbnail, ThumbnailForm
 
 if TYPE_CHECKING:
@@ -46,15 +46,16 @@ class MediaStore(ClientModule):
         filename:  Optional[str]          = None,
         on_update: TransferUpdateCallback = None,
         encrypt:   bool                   = False,
-    ) -> Transfer[Media, bytes]:
+    ) -> Transfer[StoreMedia, bytes]:
         # TODO: check server max allowed size
 
-        transfer: Transfer[Media, bytes] = Transfer(data, on_update=on_update)
+        transfer: Transfer[StoreMedia, bytes]
+        transfer = Transfer(data, on_update=on_update)
 
-        async def _upload() -> Media:
+        async def _upload() -> StoreMedia:
             size          = await measure(data)
             transfer.size = size
-            media         = await Media.from_data(self, data)
+            media         = await StoreMedia.from_data(self, data)
 
             async for ref in media.references:
                 if ref.server_filename == filename:
@@ -100,7 +101,7 @@ class MediaStore(ClientModule):
         path:      Union[Path, str],
         on_update: TransferUpdateCallback = None,
         encrypt:   bool                   = False,
-    ) -> Media:
+    ) -> StoreMedia:
 
         async with aiofiles.open(path, "rb") as file:
             return await self.upload(file, Path(path).name, on_update, encrypt)
@@ -110,11 +111,11 @@ class MediaStore(ClientModule):
         self,
         source:    Union[MXC, EncryptedMediaInfo],
         on_update: TransferUpdateCallback = None,
-    ) -> Transfer[Media, bytes]:
+    ) -> Transfer[StoreMedia, bytes]:
 
-        transfer: Transfer[Media, bytes] = Transfer(on_update=on_update)
+        transfer: Transfer[StoreMedia, bytes] = Transfer(on_update=on_update)
 
-        async def _download() -> Media:
+        async def _download() -> StoreMedia:
             if isinstance(source, EncryptedMediaInfo):
                 mxc, decrypt_info = source.mxc, source
             else:
@@ -123,7 +124,7 @@ class MediaStore(ClientModule):
             assert mxc.host
 
             with suppress(FileNotFoundError):
-                return await Media.from_mxc(self, mxc)
+                return await StoreMedia.from_mxc(self, mxc)
 
             reply, path = await self._download_file(
                 self.net.media_api / "download" / mxc.host / mxc.path[1:],
@@ -132,7 +133,7 @@ class MediaStore(ClientModule):
                 decrypt_info,
             )
 
-            media = await Media.from_file_to_move(self, path)
+            media = await StoreMedia.from_file_to_move(self, path)
 
             with suppress(OSError):  # remove partial downloads dir if empty
                 await path.parent.rmdir()
@@ -151,7 +152,7 @@ class MediaStore(ClientModule):
         source:    Union[MXC, EncryptedMediaInfo],
         path:      Union[Path, str],
         on_update: TransferUpdateCallback = None,
-    ) -> Media:
+    ) -> StoreMedia:
 
         return await (await self.download(source, on_update)).save_as(path)
 

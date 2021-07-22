@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from .store import MediaStore
 
 @dataclass
-class Media:
+class StoreMedia:
     store:  Parent["MediaStore"] = field(repr=False)
     sha256: str
 
@@ -34,7 +34,10 @@ class Media:
 
 
     @classmethod
-    async def from_data(cls, store: "MediaStore", data: SeekableIO) -> "Media":
+    async def from_data(
+        cls, store: "MediaStore", data: SeekableIO,
+    ) -> "StoreMedia":
+
         sha256 = await sha256_chunked(data)
         content = store._content_path(sha256)
 
@@ -53,7 +56,7 @@ class Media:
     @classmethod
     async def from_file_to_move(
         cls, store: "MediaStore", path: Union[Path, str],
-    ) -> "Media":
+    ) -> "StoreMedia":
 
         apath = AsyncPath(path)
 
@@ -70,7 +73,7 @@ class Media:
 
 
     @classmethod
-    async def from_mxc(cls, store: "MediaStore", mxc: MXC) -> "Media":
+    async def from_mxc(cls, store: "MediaStore", mxc: MXC) -> "StoreMedia":
         mxc_path = store._mxc_path(mxc)
 
         if not await mxc_path.exists():
@@ -127,7 +130,7 @@ class Media:
         await self.content.parent.rmdir()
 
 
-    async def save_as(self, target: Union[Path, str]) -> "Media":
+    async def save_as(self, target: Union[Path, str]) -> "StoreMedia":
         await AsyncPath(target).parent.mkdir(parents=True, exist_ok=True)
         await copy_file_with_metadata(self.content, target)
         await add_write_permissions(target)
@@ -136,7 +139,7 @@ class Media:
 
 @dataclass
 class Reference:
-    media:           Parent[Media] = field(repr=False)
+    media:           Parent[StoreMedia] = field(repr=False)
     named_link:      AsyncPath
     named_file:      AsyncPath
     mxc_file:        AsyncPath
@@ -148,7 +151,7 @@ class Reference:
     @classmethod
     async def create(
         cls,
-        media:        Media,
+        media:        StoreMedia,
         mxc:          MXC,
         filename:     Optional[str]                = None,
         decrypt_info: Optional[EncryptedMediaInfo] = None,

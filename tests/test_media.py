@@ -10,7 +10,7 @@ from pytest import mark
 
 from mio.client import Client
 from mio.core.transfer import Transfer
-from mio.media.file import Media
+from mio.media.file import StoreMedia
 from mio.media.thumbnail import ThumbnailForm, ThumbnailMode
 
 from .conftest import TestData
@@ -19,8 +19,8 @@ pytestmark = mark.asyncio
 
 
 async def test_up_download_path(alice: Client, data: TestData, tmp_path: Path):
-    got:  List[Transfer[Media, bytes]] = []
-    got2: List[Transfer[Media, bytes]] = []
+    got:  List[Transfer[StoreMedia, bytes]] = []
+    got2: List[Transfer[StoreMedia, bytes]] = []
 
     image = data.tiny_unicolor_bmp
     first = await alice.media.upload_from_path(image, on_update=got.append)

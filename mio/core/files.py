@@ -21,7 +21,7 @@ from aiofiles.threadpool.text import AsyncTextIOWrapper
 from aiopath import AsyncPath
 from magic import Magic
 from PIL.Image import Image as PILImage
-from pymediainfo import MediaInfo
+from pymediainfo import MediaInfo as PyMediaInfo
 
 from .utils import StrBytes, make_awaitable
 
@@ -252,8 +252,8 @@ async def save_jpg(image: PILImage, optimize: bool = True) -> bytes:
     return buffer.getvalue()
 
 
-async def media_info(data: SeekableIO) -> MediaInfo:
-    lib, handle, _str_version, lib_version = MediaInfo._get_library()
+async def media_info(data: SeekableIO) -> PyMediaInfo:
+    lib, handle, _str_version, lib_version = PyMediaInfo._get_library()
 
     xml_option = "OLDXML" if lib_version >= (17, 10) else "XML"
     lib.MediaInfo_Option(handle, "CharSet", "UTF-8")
@@ -283,4 +283,4 @@ async def media_info(data: SeekableIO) -> MediaInfo:
     info: str = lib.MediaInfo_Inform(handle, 0)
     lib.MediaInfo_Close(handle)
     lib.MediaInfo_Delete(handle)
-    return MediaInfo(info)
+    return PyMediaInfo(info)

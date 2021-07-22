@@ -12,7 +12,7 @@ from .core.files import SeekableIO
 from .core.ids import MXC
 from .core.transfer import TransferUpdateCallback
 from .core.utils import MaybeCoro, make_awaitable
-from .media.file import Media
+from .media.file import StoreMedia
 from .module import JSONClientModule
 from .rooms.contents.users import Member
 from .rooms.events import StateBase
@@ -51,7 +51,7 @@ class Profile(JSONClientModule):
         data:      SeekableIO,
         filename:  Optional[str]          = None,
         on_update: TransferUpdateCallback = None,
-    ) -> Media:
+    ) -> StoreMedia:
 
         media = await self.client.media.upload(data, filename, on_update)
         await self.set_avatar(await media.last_mxc(encrypted=False))
@@ -60,7 +60,7 @@ class Profile(JSONClientModule):
 
     async def set_avatar_from_path(
         self, path: Union[Path, str], on_update: TransferUpdateCallback = None,
-    ) -> Media:
+    ) -> StoreMedia:
 
         media = await self.client.media.upload_from_path(path, on_update)
         await self.set_avatar(await media.last_mxc(encrypted=False))
