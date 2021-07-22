@@ -12,13 +12,6 @@ from ...core.utils import DictS
 
 
 @dataclass
-class Redaction(EventContent):
-    type = "m.room.redaction"
-
-    reason: Optional[str] = None
-
-
-@dataclass
 class Typing(EventContent):
     type    = "m.typing"
     aliases = {"users": "user_ids"}

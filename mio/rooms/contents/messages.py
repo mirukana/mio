@@ -364,3 +364,10 @@ class Audio(Playable):
 class Video(Visual, Playable, Thumbnailable):
     aliases = {**Visual.aliases, **Playable.aliases, **Thumbnailable.aliases}
     msgtype = "m.video"
+
+
+@dataclass
+class Redaction(EventContent):
+    type = "m.room.redaction"
+
+    reason: Optional[str] = None

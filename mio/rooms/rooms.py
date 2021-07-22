@@ -17,7 +17,7 @@ from ..core.ids import EventId, InvalidId, RoomAlias, RoomId, UserId
 from ..core.utils import remove_none
 from ..e2e.e2e import InboundGroupSessionKey
 from ..module import ClientModule
-from .contents.actions import Receipts, Typing
+from .contents.ephemeral import Receipts, Typing
 from .contents.users import Member
 from .events import EphemeralEvent as Ephemeral
 from .events import StateBase, StateEvent
