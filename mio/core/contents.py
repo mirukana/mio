@@ -18,7 +18,7 @@ class EventContent(JSON):
 
     @classmethod
     def from_dict(
-        cls: Type[ContentT], data: DictS, parent: Optional["JSON"] = None,
+        cls: Type[ContentT], data: DictS, parent: Optional[JSON] = None,
     ) -> ContentT:
         try:
             return super().from_dict(data, parent)

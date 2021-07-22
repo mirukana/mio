@@ -3,14 +3,15 @@
 
 import shutil
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, List, Optional, Set, Tuple
+from datetime import datetime
+from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 
 from aiopath import AsyncPath
 
 from ..core.callbacks import CallbackGroup, Callbacks, EventCallbacks
 from ..core.data import JSONFile, Parent, Runtime
 from ..core.files import encode_name
-from ..core.ids import RoomAlias, RoomId, UserId
+from ..core.ids import EventId, RoomAlias, RoomId, UserId
 from ..core.utils import remove_none
 from ..net.net import Network
 from .state import RoomState
@@ -19,7 +20,9 @@ from .timeline import Timeline
 if TYPE_CHECKING:
     from ..client import Client
 
-Heroes = Tuple[UserId, ...]
+Heroes    = Tuple[UserId, ...]
+ReceiptsU = Dict[UserId, Dict[str, Tuple[EventId, Optional[datetime]]]]
+ReceiptsE = Dict[EventId, Dict[str, Dict[UserId, Optional[datetime]]]]
 
 
 @dataclass
@@ -27,10 +30,12 @@ class Room(JSONFile, EventCallbacks):
     client:  Parent["Client"] = field(repr=False)
     id:      RoomId
 
-    # Set by default callbacks
-    invited: bool        = False
-    left:    bool        = False
-    typing:  Set[UserId] = field(repr=False, default_factory=set)
+    # Set by default callbacks defined in rooms.py
+    invited:           bool        = False
+    left:              bool        = False
+    typing:            Set[UserId] = field(repr=False, default_factory=set)
+    receipts_by_user:  ReceiptsU   = field(repr=False, default_factory=dict)
+    receipts_by_event: ReceiptsE   = field(repr=False, default_factory=dict)
 
     # Set by Sync.handle_sync
     unread_notifications: int              = 0
@@ -92,6 +97,17 @@ class Room(JSONFile, EventCallbacks):
             self.net.api / "rooms" / self.id / "typing" / self.client.user_id,
             {"typing": False},
         )
+
+
+    async def send_receipt(
+        self, for_event: Optional[EventId] = None, type: str = "m.read",
+    ) -> None:
+
+        if not for_event:
+            for_event = self.timeline[-1].id
+
+        url = self.net.api / "rooms" / self.id / "receipt" / type / for_event
+        await self.net.post(url)
 
 
     async def create_alias(self, alias: RoomAlias) -> None:

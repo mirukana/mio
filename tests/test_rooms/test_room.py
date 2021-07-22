@@ -1,6 +1,7 @@
 # Copyright mio authors & contributors <https://github.com/mirukana/mio>
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
+from datetime import datetime
 from uuid import uuid4
 
 from pytest import mark
@@ -27,6 +28,49 @@ async def test_typing(room: Room):
     await room.client.sync.once()
     assert not room.typing
     assert not room.state.members[room.client.user_id].typing
+
+
+async def test_receipts(room: Room):
+    def without_dates(dct: dict) -> dict:
+        new = {}
+        for k, v in dct.items():
+            if isinstance(v, tuple) and isinstance(v[1], datetime):
+                new[k] = (v[0], "date")
+            elif isinstance(v, dict):
+                new[k] = without_dates(v)  # type: ignore
+            elif isinstance(v, datetime):
+                new[k] = "date"  # type: ignore
+            else:
+                new[k] = v
+        return new
+
+    client = room.client
+    await room.send_receipt(room.timeline[-2].id)
+    await client.sync.once()
+
+    assert without_dates(room.receipts_by_user) == {
+        client.user_id: {"m.read": (room.timeline[-2].id, "date")},
+    }
+
+    assert without_dates(room.receipts_by_event) == {
+        room.timeline[-2].id: {"m.read": {client.user_id: "date"}},
+    }
+
+    # Update
+
+    await room.send_receipt()
+    await client.sync.once()
+
+    user_in = {"m.read": (room.timeline[-1].id, "date")}
+    assert without_dates(room.receipts_by_user) == {client.user_id: user_in}
+    assert without_dates(room.state.me.receipts) == user_in
+
+    event_in = {"m.read": {client.user_id: "date"}}
+    assert without_dates(room.receipts_by_event) == {
+        room.timeline[-1].id: event_in,
+    }
+    assert not room.timeline[-2].receipts
+    assert without_dates(room.timeline[-1].receipts) == event_in
 
 
 async def test_create_alias(room: Room):

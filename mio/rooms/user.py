@@ -2,11 +2,12 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Optional
+from datetime import datetime
+from typing import TYPE_CHECKING, Dict, Optional, Tuple
 
 from ..core.contents import EventContentType
 from ..core.data import Parent
-from ..core.ids import MXC, UserId
+from ..core.ids import MXC, EventId, UserId
 from ..core.utils import remove_none
 from .contents.messages import Message
 from .contents.settings import Creation
@@ -15,7 +16,6 @@ from .events import StateBase
 
 if TYPE_CHECKING:
     from .room import Room
-
 
 @dataclass
 class RoomUser:
@@ -111,6 +111,11 @@ class RoomUser:
     @property
     def typing(self) -> bool:
         return self.user_id in self.room.typing
+
+
+    @property
+    def receipts(self) -> Dict[str, Tuple[EventId, Optional[datetime]]]:
+        return self.room.receipts_by_user.get(self.user_id, {})
 
 
     def can_send_message(self, event_type: EventContentType = Message) -> bool:

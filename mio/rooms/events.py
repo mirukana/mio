@@ -3,7 +3,7 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import TYPE_CHECKING, List, Optional, Type, TypeVar, Union
+from typing import TYPE_CHECKING, Dict, List, Optional, Type, TypeVar, Union
 
 from ..core.contents import ContentT
 from ..core.data import Parent, Runtime
@@ -53,6 +53,10 @@ class TimelineEvent(RoomEvent[ContentT]):
 
     def __lt__(self, other: "TimelineEvent") -> bool:
         return self.date < other.date
+
+    @property
+    def receipts(self) -> Dict[str, Dict[UserId, Optional[datetime]]]:
+        return self.room.receipts_by_event.get(self.id, {})
 
     async def _decrypted(self, log: bool = True) -> "TimelineEvent":
         if not isinstance(self.content, Megolm):

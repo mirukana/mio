@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 from typing import (
     TYPE_CHECKING, DefaultDict, Dict, List, Optional, Sequence, Set, Tuple,
@@ -12,19 +13,19 @@ from ..core.callbacks import CallbackGroup, Callbacks
 from ..core.contents import EventContent
 from ..core.data import IndexableMap, Parent, Runtime
 from ..core.files import decode_name
-from ..core.ids import InvalidId, RoomAlias, RoomId, UserId
+from ..core.ids import EventId, InvalidId, RoomAlias, RoomId, UserId
 from ..core.utils import remove_none
 from ..e2e.e2e import InboundGroupSessionKey
 from ..module import ClientModule
-from .contents.actions import Typing
+from .contents.actions import Receipts, Typing
 from .contents.users import Member
-from .events import EphemeralEvent, StateBase, StateEvent
+from .events import EphemeralEvent as Ephemeral
+from .events import StateBase, StateEvent
 from .room import Room
 from .user import RoomUser
 
 if TYPE_CHECKING:
     from ..client import Client
-
 
 class MioRoomCallbacks(CallbackGroup):
     async def member(self, room: Room, event: StateBase[Member]) -> None:
@@ -66,8 +67,40 @@ class MioRoomCallbacks(CallbackGroup):
             await room.client.e2e._drop_outbound_group_session(room.id)
 
 
-    async def typing(self, room: Room, event: EphemeralEvent[Typing]) -> None:
+    async def typing(self, room: Room, event: Ephemeral[Typing]) -> None:
         room.typing = event.content.users
+
+
+    async def receipts(self, room: Room, event: Ephemeral[Receipts]) -> None:
+        by_user, by_event = room.receipts_by_user, room.receipts_by_event
+
+        for event_id, types in event.content.source.items():
+            for type, users in types.items():
+                for user_id, info in users.items():
+                    try:
+                        user_id = UserId(user_id)
+                        event_id = EventId(event_id)
+                    except InvalidId:
+                        continue
+
+                    date = None
+                    if "ts" in info:
+                        date = datetime.fromtimestamp(info["ts"] / 1000)
+
+                    previous = by_user.get(user_id, {}).get(type)
+                    by_user.setdefault(user_id, {})[type] = (event_id, date)
+
+                    if previous:
+                        del by_event[previous[0]][type][user_id]
+
+                        if not by_event[previous[0]][type]:
+                            del by_event[previous[0]][type]
+
+                        if not by_event[previous[0]]:
+                            del by_event[previous[0]]
+
+                    d = by_event.setdefault(event_id, {}).setdefault(type, {})
+                    d[user_id] = date
 
 
 @dataclass
