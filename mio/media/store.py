@@ -13,13 +13,17 @@ from aiofiles.tempfile import NamedTemporaryFile as AioTempFile  # type: ignore
 from aiopath import AsyncPath
 from yarl import URL
 
+from mio.sync import Runtime
+
 from ..core.data import Parent
+from ..core.errors import MioError
 from ..core.files import (
     SeekableIO, atomic_write, encode_name, guess_mime, measure,
     read_chunked_binary,
 )
 from ..core.ids import MXC
 from ..core.transfer import Transfer, TransferUpdateCallback
+from ..core.utils import DictS
 from ..e2e.contents import EncryptedMediaInfo
 from ..module import ClientModule
 from ..net.errors import RangeNotSatisfiable
@@ -30,14 +34,30 @@ from .thumbnail import Thumbnail, ThumbnailForm
 if TYPE_CHECKING:
     from ..client import Client
 
+class UploadTooLarge(MioError):
+    size:     int
+    max_size: int
+
+
 @dataclass
 class MediaStore(ClientModule):
     client: Parent["Client"] = field(repr=False)
+
+    _server_config: Runtime[Optional[DictS]] = field(init=False, default=None)
 
 
     @property
     def path(self) -> AsyncPath:
         return self.client.path.parent / "media"
+
+
+    @property
+    async def max_upload_size(self) -> Optional[int]:
+        if self._server_config is None:
+            reply = await self.net.get(self.net.media_api / "config")
+            self._server_config = reply.json
+
+        return self._server_config.get("m.upload.size")
 
 
     def upload(
@@ -47,13 +67,17 @@ class MediaStore(ClientModule):
         on_update: TransferUpdateCallback = None,
         encrypt:   bool                   = False,
     ) -> Transfer[StoreMedia, bytes]:
-        # TODO: check server max allowed size
 
         transfer: Transfer[StoreMedia, bytes]
         transfer = Transfer(data, on_update=on_update)
 
         async def _upload() -> StoreMedia:
-            size          = await measure(data)
+            size     = await measure(data)
+            max_size = await self.max_upload_size
+
+            if max_size is None or size > max_size:
+                raise UploadTooLarge(size, max_size)
+
             transfer.size = size
             media         = await StoreMedia.from_data(self, data)
 

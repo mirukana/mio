@@ -85,6 +85,7 @@ class SynapseHandle:
             no_limits = {"per_second": 9_999_999, "burst_count": 9_999_999}
 
             config.update({
+                "max_upload_size": "1M",
                 "rc_message": no_limits,
                 "rc_registration": no_limits,
                 "rc_login": {

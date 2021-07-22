@@ -2,15 +2,17 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
 import os
+from io import StringIO
 from pathlib import Path
 from typing import List
 
 import aiofiles
-from pytest import mark
+from pytest import mark, raises
 
 from mio.client import Client
 from mio.core.transfer import Transfer
 from mio.media.file import StoreMedia
+from mio.media.store import UploadTooLarge
 from mio.media.thumbnail import ThumbnailForm, ThumbnailMode
 
 from .conftest import TestData
@@ -60,6 +62,16 @@ async def test_upload_nameless(alice: Client, data: TestData):
     media = await alice.media.download(mxc)
     ref   = await media.last_reference()
     assert ref.named_file.name == ref.mxc.path[1:]
+
+
+async def test_upload_max_size(alice: Client):
+    assert alice.media._server_config is None
+    assert await alice.media.max_upload_size == 1024 * 1024
+    assert alice.media._server_config
+
+    with raises(UploadTooLarge):  # type: ignore
+        data = StringIO("x" * (await alice.media.max_upload_size + 1))
+        await alice.media.upload(data)
 
 
 async def test_partial_download(alice: Client, data: TestData):
