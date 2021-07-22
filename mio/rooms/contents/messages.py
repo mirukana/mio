@@ -186,14 +186,14 @@ class Media(Message):
             obj = cls(body, mxc, mime=mime, size=size)
 
         if isinstance(obj, Visual):
-            await Visual._set_dimensions(obj, data)
+            await Visual.set_dimensions_from(obj, data)
 
         if isinstance(obj, Playable):
-            await Playable._set_duration(obj, data)
+            await Playable.set_duration_from(obj, data)
 
         if isinstance(obj, Thumbnailable):
             args = (obj, client, data, mime, encrypt, on_thumb_upload_update)
-            await Thumbnailable._set_thumbnail(*args)
+            await Thumbnailable.set_thumbnail_from(*args)
 
         if isinstance(obj, File):
             obj.filename = filename
@@ -228,7 +228,7 @@ class Visual(Media):
     height: Optional[int] = None
 
 
-    async def _set_dimensions(self, data: SeekableIO) -> bool:
+    async def set_dimensions_from(self, data: SeekableIO) -> bool:
         tracks      = (await media_info(data)).tracks
         widths      = (int(getattr(t, "width", 0) or 0) for t in tracks)
         heights     = (int(getattr(t, "height", 0) or 0) for t in tracks)
@@ -244,7 +244,7 @@ class Playable(Media):
     duration: Optional[timedelta] = None
 
 
-    async def _set_duration(self, data: SeekableIO) -> bool:
+    async def set_duration_from(self, data: SeekableIO) -> bool:
         tracks        = (await media_info(data)).tracks
         durations     = (float(getattr(t, "duration", 0) or 0) for t in tracks)
         long          = max((d for d in durations if d), default=None)
@@ -272,7 +272,7 @@ class Thumbnailable(Media):
     thumbnail_size:      Optional[int]                = None
 
 
-    async def _set_thumbnail(
+    async def set_thumbnail_from(
         self,
         client:           "Client",
         data:             SeekableIO,
@@ -371,6 +371,13 @@ class Audio(Playable):
 class Video(Visual, Playable, Thumbnailable):
     aliases = {**Visual.aliases, **Playable.aliases, **Thumbnailable.aliases}
     msgtype = "m.video"
+
+
+@dataclass
+class Location(Thumbnailable):
+    msgtype = "m.location"
+
+    geo_uri: str = "geo:0,0,0"
 
 
 @dataclass
