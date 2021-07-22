@@ -171,8 +171,9 @@ class Media(Message):
             data, filename, on_upload_update, encrypt,
         )
 
-        base = mime.split("/")[0]
-        cls  = {"image": Image, "video": Video, "audio": Audio}.get(base, File)
+        if cls is Media:
+            specialized = {"image": Image, "video": Video, "audio": Audio}
+            cls         = specialized.get(mime.split("/")[0], File)
 
         if encrypt:
             ref      = await media.last_reference(encrypted=True)
@@ -353,6 +354,12 @@ class File(Thumbnailable):
 class Image(Visual, Thumbnailable):
     aliases = {**Visual.aliases, **Thumbnailable.aliases}
     msgtype = "m.image"
+
+
+@dataclass
+class Sticker(Visual, Thumbnailable):
+    aliases = {**Visual.aliases, **Thumbnailable.aliases}
+    msgtype = "m.sticker"
 
 
 @dataclass

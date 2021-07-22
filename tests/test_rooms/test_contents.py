@@ -15,7 +15,7 @@ from mio.e2e.contents import EncryptedMediaInfo
 from mio.rooms.contents.messages import (
     HTML_FORMAT, HTML_REPLY_FALLBACK, MATRIX_TO,
     THUMBNAIL_POSSIBLE_PIL_FORMATS, THUMBNAIL_SIZE_MAX_OF_ORIGINAL, Audio,
-    Emote, File, Image, Media, Notice, Text, Thumbnailable, Video,
+    Emote, File, Image, Media, Notice, Sticker, Text, Thumbnailable, Video,
 )
 from mio.rooms.contents.settings import Name
 from mio.rooms.room import Room
@@ -170,6 +170,25 @@ async def test_image_from_path(alice: Client, data: TestData):
     assert image.thumbnail_height == 600
     assert image.thumbnail_mime == "image/png"
     assert image.thumbnail_size and image.thumbnail_size < image.size
+
+
+async def test_explicit_sticker_from_path(alice: Client, data: TestData):
+    sticker = await Sticker.from_path(alice, data.large_unicolor_png)
+    assert isinstance(sticker, Sticker)
+
+    assert sticker.mxc and await alice.media.download(sticker.mxc)
+    assert sticker.body == data.large_unicolor_png.name
+    assert sticker.encrypted is None
+    assert sticker.mime == "image/png"
+    assert sticker.size == data.large_unicolor_png.stat().st_size
+
+    assert sticker.thumbnail_mxc
+    assert await alice.media.download(sticker.thumbnail_mxc)
+    assert sticker.thumbnail_encrypted is None
+    assert sticker.thumbnail_width == 800
+    assert sticker.thumbnail_height == 600
+    assert sticker.thumbnail_mime == "image/png"
+    assert sticker.thumbnail_size and sticker.thumbnail_size < sticker.size
 
 
 async def test_video_from_path(alice: Client, data: TestData):
