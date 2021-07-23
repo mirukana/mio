@@ -2,15 +2,16 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, DefaultDict, Dict, List
+from typing import TYPE_CHECKING, DefaultDict, Dict, List, Tuple
 
 from aiopath import AsyncPath
 
 from ..core.callbacks import CallbackGroup, Callbacks, EventCallbacks
 from ..core.contents import EventContent, EventContentType, str_type
 from ..core.data import Map, Parent, Runtime
+from ..core.ids import UserId
 from ..module import JSONClientModule
-from .contents import PushRules
+from .contents import IgnoredUsers, PushRules
 from .events import AccountDataEvent
 
 if TYPE_CHECKING:
@@ -49,11 +50,29 @@ class AccountData(JSONClientModule, _Map, EventCallbacks):
         return self[PushRules].content if PushRules in self else PushRules()
 
 
+    @property
+    def ignored_users(self) -> Dict[UserId, dict]:
+        ctype = IgnoredUsers
+        return (self[ctype].content if ctype in self else ctype({})).users
+
+
     async def send(self, content: EventContent) -> None:
         assert content.type
         uid = self.client.user_id
         url = self.net.api / "user" / uid / "account_data" / content.type
         await self.net.put(url, content.dict)
+
+
+    async def set_ignore(self, *changes: Tuple[UserId, bool]) -> bool:
+        users = self.ignored_users.copy()
+
+        for user_id, ignore in changes:
+            users.update({user_id: {}}) if ignore else users.pop(user_id, None)
+
+        if users != self.ignored_users:
+            await self.send(IgnoredUsers(users))
+
+        return users != self.ignored_users
 
 
     async def _register(self, *events: AccountDataEvent) -> None:

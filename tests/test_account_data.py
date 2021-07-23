@@ -13,6 +13,7 @@ from mio.account_data.events import AccountDataEvent
 from mio.client import Client
 from mio.core.callbacks import CallbackGroup
 from mio.core.contents import EventContent
+from mio.core.ids import UserId
 from mio.rooms.contents.messages import Text
 from mio.rooms.contents.settings import Creation
 from mio.rooms.room import Room
@@ -172,3 +173,26 @@ async def test_push_rules_triggering(alice: Client, bob: Client, room: Room):
 
     rule = alice.account_data.push_rules.main.triggered(abc)
     assert rule and rule.id == ".m.rule.message"
+
+
+async def test_ignore_users(room: Room, bob: Client) -> None:
+    alice = room.client
+    await room.invite(bob.user_id)
+    await bob.sync.once()
+    assert not bob.account_data.ignored_users
+
+    other = (UserId("@carol:localhost"), True)
+
+    assert await bob.account_data.set_ignore(other, (alice.user_id, True))
+    await bob.sync.once()
+    assert not await bob.account_data.set_ignore(other, (alice.user_id, True))
+    assert bob.account_data.ignored_users == {other[0]: {}, alice.user_id: {}}
+    assert bob.rooms[room.id].inviter_ignored
+    assert bob.rooms[room.id].state.members[alice.user_id].ignored
+
+    assert await bob.account_data.set_ignore((alice.user_id, False))
+    await bob.sync.once()
+    assert not await bob.account_data.set_ignore((alice.user_id, False))
+    assert bob.account_data.ignored_users == {other[0]: {}}
+    assert not bob.rooms[room.id].inviter_ignored
+    assert not bob.rooms[room.id].state.members[alice.user_id].ignored

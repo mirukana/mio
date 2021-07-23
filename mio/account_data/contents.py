@@ -13,6 +13,7 @@ from ..core.contents import EventContent
 from ..core.data import (
     JSON, AutoStrEnum, DictS, IndexableMap, JSONLoadError, Runtime,
 )
+from ..core.ids import UserId
 from ..core.utils import deep_find_subclasses, dot_flatten_dict
 from ..rooms.events import TimelineEvent
 
@@ -280,3 +281,11 @@ class PushRules(EventContent):
     rich_fix = False
 
     main: PushRuleset = field(default_factory=PushRuleset)
+
+
+@dataclass
+class IgnoredUsers(EventContent):
+    type    = "m.ignored_user_list"
+    aliases = {"users": "ignored_users"}
+
+    users: Dict[UserId, dict]

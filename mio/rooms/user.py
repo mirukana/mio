@@ -68,6 +68,11 @@ class RoomUser:
 
 
     @property
+    def ignored(self) -> bool:
+        return self.user_id in self.room.client.account_data.ignored_users
+
+
+    @property
     def invited(self) -> bool:
         return self.state.content.membership is Member.Kind.invite
 

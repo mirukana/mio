@@ -78,6 +78,12 @@ class Room(JSONFile, EventCallbacks):
         return self.client.net
 
 
+    @property
+    def inviter_ignored(self) -> bool:
+        inviter = self.state.me.invited_by or False
+        return inviter and inviter in self.client.account_data.ignored_users
+
+
     async def load(self) -> "Room":
         await super().load()
         await self.timeline.load()
