@@ -17,10 +17,12 @@ from ..core.ids import EventId, InvalidId, RoomAlias, RoomId, UserId
 from ..core.utils import remove_none
 from ..e2e.e2e import InboundGroupSessionKey
 from ..module import ClientModule
+from .contents.changes import Redacted, Redaction
 from .contents.ephemeral import Receipts, Typing
-from .contents.users import Member
+from .contents.settings import HistoryVisibility, JoinRules
+from .contents.users import Member, PowerLevels
 from .events import EphemeralEvent as Ephemeral
-from .events import StateBase, StateEvent
+from .events import StateBase, StateEvent, TimelineEvent
 from .room import Room
 from .user import RoomUser
 
@@ -101,6 +103,36 @@ class MioRoomCallbacks(CallbackGroup):
 
                     d = by_event.setdefault(event_id, {}).setdefault(type, {})
                     d[user_id] = date
+
+
+    async def redact(self, room: Room, ev: TimelineEvent[Redaction]) -> None:
+        new_content: EventContent        = Redacted()
+        state:       Optional[StateBase] = None
+
+        for event in room.state.values():
+            if ev.redacts and event.id == ev.redacts:
+                state = event
+                break
+
+        if state:
+            # https://spec.matrix.org/unstable/rooms/v1/#redactions
+            content = state.content
+
+            if isinstance(content, Member):
+                new_content = Member(membership=content.membership)
+            elif isinstance(content, PowerLevels):
+                new_content = content.but(invite=50, notifications={})
+            elif isinstance(content, (JoinRules, HistoryVisibility)):
+                new_content = content
+
+            state.content = new_content
+
+            if isinstance(state, StateEvent):
+                state.redacted_by = ev
+
+        if ev.redacts and ev.redacts in room.timeline:
+            room.timeline[ev.redacts].content     = new_content
+            room.timeline[ev.redacts].redacted_by = ev
 
 
 @dataclass

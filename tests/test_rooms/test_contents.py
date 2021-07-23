@@ -9,15 +9,19 @@ from PIL import Image as PILImage
 from pytest import mark, raises
 
 from mio.client import Client
+from mio.core.contents import EventContent
 from mio.core.html import plain2html
 from mio.core.ids import MXC
 from mio.e2e.contents import EncryptedMediaInfo
+from mio.rooms.contents.changes import Redacted, Redaction
 from mio.rooms.contents.messages import (
     HTML_FORMAT, HTML_REPLY_FALLBACK, MATRIX_TO,
     THUMBNAIL_POSSIBLE_PIL_FORMATS, THUMBNAIL_SIZE_MAX_OF_ORIGINAL, Audio,
     Emote, File, Image, Media, Notice, Sticker, Text, Thumbnailable, Video,
 )
-from mio.rooms.contents.settings import Name
+from mio.rooms.contents.settings import HistoryVisibility, JoinRules, Name
+from mio.rooms.contents.users import Member, PowerLevels
+from mio.rooms.events import StateEvent
 from mio.rooms.room import Room
 
 from ..conftest import TestData
@@ -329,3 +333,63 @@ async def test_encrypted_media(e2e_room: Room, bob: Client, data: TestData):
     media          = await bob.media.download(got.encrypted)
     original_bytes = data.large_unicolor_png.read_bytes()
     assert await media.content.read_bytes() == original_bytes
+
+
+async def test_timeline_redaction(e2e_room: Room):
+    await e2e_room.timeline.send(Text("hi"))
+    await e2e_room.client.sync.once()
+    await e2e_room.timeline[-1].redact("bye")
+    await e2e_room.client.sync.once()
+
+    redaction = e2e_room.timeline[-1]
+    assert isinstance(redaction.content, Redaction)
+    assert redaction.content.reason == "bye"
+
+    redacted = e2e_room.timeline[-2]
+    assert isinstance(redacted.content, Redacted)
+    assert redacted.redacted_by == redaction
+
+
+async def test_state_redaction(room: Room):
+    await room.state.send(Name("123"))
+    await room.client.sync.once()
+    await room.state[Name].redact("bad name")  # type: ignore
+    await room.client.sync.once()
+    room.client.sync.next_batch = None
+    await room.client.sync.once()
+
+    redaction = room.timeline[-1]
+    assert isinstance(redaction.content, Redaction)
+    assert redaction.content.reason == "bad name"
+
+    redacted = room.state[Name]
+    assert isinstance(redacted, StateEvent)
+    assert isinstance(redacted.content, Redacted)
+    assert redacted.redacted_by == redaction
+
+
+async def test_state_redaction_allowed_keys(room: Room):
+    async def check(send: EventContent, expect: EventContent, state_key=""):
+        event_id = await room.state.send(send, state_key)
+        await room.client.sync.once()
+
+        await room.state[type(send), state_key].redact()  # type: ignore
+        await room.client.sync.once()
+
+        assert room.state[type(send), state_key].content == expect
+        assert room.timeline[event_id].content == expect
+
+    await check(
+        room.state[Member, room.client.user_id].content.but(display_name="1"),
+        Member(membership=Member.Kind.join),
+        room.client.user_id,
+    )
+
+    send2 = JoinRules(JoinRules.Rule.private)
+    await check(send2, send2)
+
+    send3 = HistoryVisibility(HistoryVisibility.Visibility.world_readable)
+    await check(send3, send3)
+
+    send = PowerLevels(notifications={"abc": 1}, invite=80, ban=20)
+    await check(send, PowerLevels(ban=20))

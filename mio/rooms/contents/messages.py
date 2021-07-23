@@ -378,10 +378,3 @@ class Location(Thumbnailable):
     msgtype = "m.location"
 
     geo_uri: str = "geo:0,0,0"
-
-
-@dataclass
-class Redaction(EventContent):
-    type = "m.room.redaction"
-
-    reason: Optional[str] = None

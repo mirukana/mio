@@ -4,6 +4,9 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Dict, List, Optional, Type, TypeVar, Union
+from uuid import uuid4
+
+from mio.core.utils import remove_none
 
 from ..core.contents import ContentT
 from ..core.data import Parent, Runtime
@@ -16,6 +19,7 @@ from ..e2e.contents import Megolm
 from ..e2e.errors import MegolmDecryptionError, MegolmVerificationError
 
 if TYPE_CHECKING:
+    from .contents.changes import Redaction
     from .room import Room
 
 StateEvT    = TypeVar("StateEvT", bound="StateEvent")
@@ -26,36 +30,55 @@ DecryptInfo = Optional["TimelineDecryptInfo"]
 class RoomEvent(Event[ContentT]):
     room: Parent["Room"] = field(repr=False)
 
+
     @property
     def logger(self) -> MioLogger:
         return self.room.client
 
 
+    async def _redact(self, reason: Optional[str] = None) -> EventId:
+        net   = self.room.net
+        ev_id = getattr(self, "id", "")
+        tx_id = str(uuid4())
+        url   = net.api / "rooms" / self.room.id / "redact" / ev_id / tx_id
+        reply = await net.put(url, remove_none({"reason": reason}))
+        return EventId(reply.json["event_id"])
+
+
 @dataclass
 class TimelineEvent(RoomEvent[ContentT]):
     aliases = {
-        "id": "event_id",
-        "date": "origin_server_ts",
+        "id":             "event_id",
+        "date":           "origin_server_ts",
         "transaction_id": ("unsigned", "transaction_id"),
+        "redacted_by":    ("unsigned", "redacted_because"),
     }
 
     content:        ContentT
     id:             EventId
     sender:         UserId
     date:           datetime
-    redacts:        Optional[EventId]    = None
-    transaction_id: Optional[str]        = None
-    decryption:     Runtime[DecryptInfo] = None
-    historic:       Runtime[bool]        = False
-    local_echo:     Runtime[bool]        = False
-    # TODO: unsigned.{age,redacted_because}
+    state_key:      Optional[str]                        = None
+    redacts:        Optional[EventId]                    = None
+    redacted_by:    Optional["TimelineEvent[Redaction]"] = None
+    transaction_id: Optional[str]                        = None
+    decryption:     Runtime[DecryptInfo]                 = None
+    historic:       Runtime[bool]                        = False
+    local_echo:     Runtime[bool]                        = False
+
 
     def __lt__(self, other: "TimelineEvent") -> bool:
         return self.date < other.date
 
+
     @property
     def receipts(self) -> Dict[str, Dict[UserId, Optional[datetime]]]:
         return self.room.receipts_by_event.get(self.id, {})
+
+
+    async def redact(self, reason: Optional[str] = None) -> EventId:
+        return await self._redact(reason)
+
 
     async def _decrypted(self, log: bool = True) -> "TimelineEvent":
         if not isinstance(self.content, Megolm):
@@ -116,16 +139,18 @@ class InvitedRoomStateEvent(StateBase[ContentT]):
 @dataclass
 class StateEvent(StateBase[ContentT]):
     aliases = {
-        "id": "event_id",
-        "date": "origin_server_ts",
-        "previous": ("unsigned", "prev_content"),
+        "id":          "event_id",
+        "date":        "origin_server_ts",
+        "previous":    ("unsigned", "prev_content"),
+        "redacted_by": ("unsigned", "redacted_because"),
     }
 
-    content:   ContentT
-    id:        EventId
-    date:      datetime
-    previous:  Optional[ContentT] = None
-    from_disk: Runtime[bool]      = False
+    content:     ContentT
+    id:          EventId
+    date:        datetime
+    previous:    Optional[ContentT]                   = None
+    redacted_by: Optional[TimelineEvent["Redaction"]] = None
+    from_disk:   Runtime[bool]                        = False
 
     @classmethod
     def from_dict(
@@ -139,6 +164,10 @@ class StateEvent(StateBase[ContentT]):
             data.setdefault("unsigned", {})["prev_content"] = content
 
         return super().from_dict(data, parent)
+
+
+    async def redact(self, reason: Optional[str] = None) -> EventId:
+        return await self._redact(reason)
 
 
 @dataclass
