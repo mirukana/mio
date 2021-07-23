@@ -7,11 +7,11 @@ from typing import TYPE_CHECKING, Dict, List, Optional
 
 from ..core.data import JSON, Parent
 from ..core.ids import UserId
+from ..core.utils import DictS
 from ..e2e.contents import GroupSessionRequest
 
 if TYPE_CHECKING:
     from .devices import Devices
-
 
 @dataclass(unsafe_hash=True)
 class Device(JSON):
@@ -56,3 +56,13 @@ class Device(JSON):
                 await e2e._drop_outbound_group_session(room_id)
 
         await self.devices.save()
+
+
+    async def delete(self, auth: DictS) -> None:
+        """Delete this device from the server using an authentication dict."""
+        await self.devices.delete(auth, self.device_id)
+
+
+    async def delete_password(self, password: str) -> None:
+        """Delete this device from the server using password authentication."""
+        await self.devices.delete_password(password, self.device_id)

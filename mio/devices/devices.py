@@ -17,6 +17,7 @@ from ..core.callbacks import CallbackGroup, Callbacks, EventCallbacks
 from ..core.contents import EventContent
 from ..core.data import IndexableMap, Parent, Runtime
 from ..core.ids import InvalidId, UserId
+from ..core.utils import DictS
 from ..e2e.contents import (
     CancelGroupSessionRequest, ForwardedGroupSessionInfo, GroupSessionInfo,
     GroupSessionRequest, Olm,
@@ -173,6 +174,33 @@ class Devices(JSONClientModule, DeviceMap, EventCallbacks):
     @property
     def current(self) -> Device:
         return self.own[self.client.device_id]
+
+
+    async def delete(self, auth: DictS, *devices_id: str) -> None:
+        """Delete own devices from the server using an authentication dict."""
+
+        body = {"devices": devices_id, "auth": auth}
+        await self.net.post(self.net.api / "delete_devices", body)
+
+        if any(i == self.current.device_id for i in devices_id):
+            del self.own[self.client.device_id]
+            await self.save()
+
+            self.client.access_token = ""
+            await self.client.save()
+            await self.client.terminate()
+        else:
+            await self.update([self.client.user_id])
+
+
+    async def delete_password(self, password: str, *devices_id: str) -> None:
+        """Delete own devices from the server using password authentication."""
+
+        await self.delete({
+            "type":     "m.login.password",
+            "user":     self.client.user_id,
+            "password": password,
+        }, *devices_id)
 
 
     async def ensure_tracked(
