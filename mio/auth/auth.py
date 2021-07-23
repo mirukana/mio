@@ -7,14 +7,14 @@ from typing import TYPE_CHECKING, Any, Dict
 
 from yarl import URL
 
-from .core.data import Runtime
-from .core.files import encode_name
-from .core.ids import UserId
-from .module import ClientModule
+from ..core.data import Runtime
+from ..core.files import encode_name
+from ..core.ids import UserId
+from ..module import ClientModule
+from .sso_server import SUCCESS_PAGE_HTML, SSOServer
 
 if TYPE_CHECKING:
-    from .client import Client
-
+    from ..client import Client
 
 @dataclass
 class Auth(ClientModule):
@@ -66,12 +66,18 @@ class Auth(ClientModule):
         })
 
 
-    async def login_token(self, user: str, token: str) -> "Client":
+    async def login_token(self, token: str) -> "Client":
         return await self.login({
             "type":  "m.login.token",
-            "user":  user,
             "token": token,
         })
+
+
+    def start_sso_server(
+        self, success_page_html: str = SUCCESS_PAGE_HTML,
+    ) -> SSOServer:
+        """See `SSOServer` documentation. Pass the token to `login_token`."""
+        return SSOServer(self.client, success_page_html)
 
 
     async def logout(self) -> None:

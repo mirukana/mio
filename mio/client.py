@@ -10,7 +10,7 @@ from filelock import FileLock
 from yarl import URL
 
 from .account_data.account_data import AccountData
-from .auth import Auth
+from .auth.auth import Auth
 from .core.data import JSONFile, Runtime
 from .core.ids import UserId
 from .core.logging import MioLogger
