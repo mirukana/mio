@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Type, TypeVar, Union
 from ..core.contents import ContentT
 from ..core.data import Parent, Runtime
 from ..core.events import Event
-from ..core.ids import EventId, RoomId, UserId
+from ..core.ids import EventId, UserId
 from ..core.logging import MioLogger
 from ..core.utils import DictS
 from ..devices.device import Device
@@ -44,7 +44,6 @@ class TimelineEvent(RoomEvent[ContentT]):
     sender:         UserId
     date:           datetime
     redacts:        Optional[EventId]    = None
-    room_id:        Optional[RoomId]     = None
     transaction_id: Optional[str]        = None
     decryption:     Runtime[DecryptInfo] = None
     historic:       Runtime[bool]        = False
@@ -126,7 +125,6 @@ class StateEvent(StateBase[ContentT]):
     id:        EventId
     date:      datetime
     previous:  Optional[ContentT] = None
-    room_id:   Optional[RoomId]   = None
     from_disk: Runtime[bool]      = False
 
     @classmethod
