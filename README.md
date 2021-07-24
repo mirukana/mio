@@ -57,7 +57,7 @@ from rich import print  # pretty printing, installed as a dependency
 
 
 def on_text_message(room: Room, event: TimelineEvent[Text]) -> None:
-    print(f"{room.id}: {event.sender}: {event.content.body}")
+    print(f"{room.id}: {event.sender}: {event.content.body} ({event.sending})")
 
 
 async def main() -> None:

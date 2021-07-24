@@ -22,7 +22,7 @@ from ..e2e.contents import Megolm
 from ..filters import LAZY_LOAD as LAZY
 from ..filters import Filter
 from .contents.settings import Creation
-from .events import StateEvent, TimelineEvent
+from .events import SendStep, StateEvent, TimelineEvent
 
 if TYPE_CHECKING:
     from ..client import Client
@@ -63,7 +63,7 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
     @property
     def unsent_past_events(self) -> Iterable[TimelineEvent]:
         for event in self.values():
-            if event.historic and event.local_echo:
+            if event.historic and event.sending != SendStep.synced:
                 yield event
 
 
@@ -167,8 +167,8 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
             "sender":           client.user_id,
             "origin_server_ts": datetime.now().timestamp() * 1000,
             "unsigned":         {"transaction_id": tx},
-            "local_echo":       True,
         }, parent=room)._decrypted()
+        echo.sending = SendStep.sending
 
         for eclient in local_echo_to:
             if room.id in eclient.rooms:
@@ -180,8 +180,9 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
         for eclient in local_echo_to:
             if room.id in eclient.rooms:
                 timeline           = eclient.rooms[room.id].timeline
+                sent               = SendStep.sent
                 old: TimelineEvent = timeline._data.pop(echo.id)
-                new: TimelineEvent = old.but(id=event_id, local_echo=False)
+                new: TimelineEvent = old.but(id=event_id, sending=sent)
                 await timeline._register_events(new)
 
         return event_id

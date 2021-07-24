@@ -3,6 +3,7 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import Enum, auto
 from typing import TYPE_CHECKING, Dict, List, Optional, Type, TypeVar, Union
 from uuid import uuid4
 
@@ -27,6 +28,12 @@ StateEvT    = TypeVar("StateEvT", bound="StateEvent")
 DecryptInfo = Optional["TimelineDecryptInfo"]
 
 
+class SendStep(Enum):
+    sending = auto()
+    sent    = auto()
+    synced  = auto()
+
+
 @dataclass
 class RoomEvent(Event[ContentT]):
     room: Parent["Room"] = field(repr=False)
@@ -41,17 +48,16 @@ class RoomEvent(Event[ContentT]):
         ev_id = getattr(self, "id", "")
         tx_id = str(uuid4())
 
-        from .contents.changes import Redaction
         echo: TimelineEvent[Redaction] = TimelineEvent.from_dict({
-            "type":             Redaction.type,
-            "content":          Redaction(reason).dict,
+            "type":             "m.room.redaction",
+            "content":          {"reason": reason},
             "event_id":         f"$echo.{tx_id}",
             "sender":           self.room.client.user_id,
             "origin_server_ts": datetime.now().timestamp() * 1000,
             "unsigned":         {"transaction_id": tx_id},
-            "local_echo":       True,
             "redacts":          ev_id,
         }, parent=self.room)
+        echo.sending = SendStep.sending
         await self.room.timeline._register_events(echo)
 
         net      = self.room.net
@@ -60,8 +66,9 @@ class RoomEvent(Event[ContentT]):
         redac_id = EventId(reply.json["event_id"])
 
         timeline = self.room.timeline
-        old = timeline._data.pop(echo.id)
-        await timeline._register_events(old.but(id=redac_id, local_echo=False))
+        old      = timeline._data.pop(echo.id)
+        sent     = SendStep.sent
+        await timeline._register_events(old.but(id=redac_id, sending=sent))
         return redac_id
 
 
@@ -90,7 +97,7 @@ class TimelineEvent(RoomEvent[ContentT]):
     transaction_id: Optional[str]                        = None
     decryption:     Runtime[DecryptInfo]                 = None
     historic:       Runtime[bool]                        = False
-    local_echo:     Runtime[bool]                        = False
+    sending:        Runtime[SendStep]                    = SendStep.synced
 
 
     def __lt__(self, other: "TimelineEvent") -> bool:

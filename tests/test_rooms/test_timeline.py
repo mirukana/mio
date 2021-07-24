@@ -8,7 +8,7 @@ from pytest import mark
 from mio.client import Client
 from mio.rooms.contents.messages import Text
 from mio.rooms.contents.settings import Creation
-from mio.rooms.events import TimelineEvent
+from mio.rooms.events import SendStep, TimelineEvent
 from mio.rooms.room import Room
 
 pytestmark = mark.asyncio
@@ -59,14 +59,15 @@ async def test_local_echo(e2e_room: Room):
         assert event.decryption
 
     assert new[0].id == "$echo.abc"
-    assert new[0].local_echo
+    assert new[0].sending == SendStep.sending
     assert new[0].id not in e2e_room.timeline
 
     assert new[1].id != new[0].id
-    assert not new[1].local_echo
+    assert new[1].sending == SendStep.sent
     assert new[1].id in e2e_room.timeline
 
     await e2e_room.client.sync.once()
+    assert new[2].sending == SendStep.synced
     assert len(new) == 3
     assert len(e2e_room.timeline) == initial_events + 1
 
@@ -93,6 +94,7 @@ async def test_unsent_past_events(room: Room, tmp_path: Path):
     await room.client.sync.once()
     assert not list(room.timeline.unsent_past_events)
 
-    last = room.timeline[-1]
-    last.historic = last.local_echo = True
+    last          = room.timeline[-1]
+    last.historic = True
+    last.sending  = SendStep.sending
     assert len(list(room.timeline.unsent_past_events)) == 1

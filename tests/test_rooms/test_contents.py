@@ -21,7 +21,7 @@ from mio.rooms.contents.messages import (
 )
 from mio.rooms.contents.settings import HistoryVisibility, JoinRules, Name
 from mio.rooms.contents.users import Member, PowerLevels
-from mio.rooms.events import StateEvent, TimelineEvent
+from mio.rooms.events import SendStep, StateEvent, TimelineEvent
 from mio.rooms.room import Room
 
 from ..conftest import TestData
@@ -364,7 +364,7 @@ async def test_timeline_redaction(e2e_room: Room):
     # Check callback results for real events
     assert isinstance(new[-2].content, Redaction)
     assert isinstance(new[-1].content, Redacted)
-    assert not new[2].local_echo
+    assert new[2].sending == SendStep.synced
 
 
 async def test_state_redaction(room: Room):
