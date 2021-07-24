@@ -65,7 +65,7 @@ async def main() -> None:
         # Register a function that will be called when we receive Text events:
         client.rooms.callbacks[TimelineEvent[Text]].append(on_text_message)
 
-        if client.path.exists():
+        if await client.was_saved:
             await client.load()
         else:
             await client.auth.login_password("alice", "1234")

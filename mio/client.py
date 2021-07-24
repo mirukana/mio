@@ -1,6 +1,8 @@
 # Copyright mio authors & contributors <https://github.com/mirukana/mio>
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
+import json
+from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Union
@@ -83,6 +85,14 @@ class Client(JSONFile, MioLogger):
     @property
     def path(self) -> AsyncPath:
         return AsyncPath(self.base_dir) / "client.json"
+
+
+    @property
+    async def was_saved(self) -> bool:
+        data = "{}"
+        with suppress(FileNotFoundError):
+            data = await self.path.read_text()
+        return bool(json.loads(data).get("access_token"))
 
 
     async def load(self, **base_dir_placeholders: str) -> "Client":

@@ -48,6 +48,7 @@ async def test_file_lock(alice: Client, tmp_path: Path):
 
 async def test_load_from_dir(alice: Client, tmp_path: Path):
     new = clone_client(alice)
+    assert await new.was_saved
     await new.load(user_id=alice.user_id, device_id=alice.device_id)
     compare_clients(new, alice, token=True)
 
