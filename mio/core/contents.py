@@ -29,6 +29,11 @@ class EventContent(JSON):
     def matches(cls, event: DictS) -> bool:
         return bool(cls.type) and cls.type == event.get("type")
 
+    @property
+    def _redacted(self) -> "EventContent":
+        from ..rooms.contents.changes import Redacted
+        return Redacted()
+
 
 class UnknownType(MioError):
     type: Optional[str]

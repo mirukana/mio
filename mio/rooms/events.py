@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from .contents.changes import Redaction
     from .room import Room
 
+RoomEvT     = TypeVar("RoomEvT", bound="RoomEvent")
 StateEvT    = TypeVar("StateEvT", bound="StateEvent")
 DecryptInfo = Optional["TimelineDecryptInfo"]
 
@@ -43,6 +44,12 @@ class RoomEvent(Event[ContentT]):
         url   = net.api / "rooms" / self.room.id / "redact" / ev_id / tx_id
         reply = await net.put(url, remove_none({"reason": reason}))
         return EventId(reply.json["event_id"])
+
+
+    def _redacted(
+        self: RoomEvT, redaction: "TimelineEvent[Redaction]",
+    ) -> RoomEvT:
+        return self.but(content=self.content._redacted, redacted_by=redaction)
 
 
 @dataclass

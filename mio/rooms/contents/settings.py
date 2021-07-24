@@ -83,6 +83,10 @@ class JoinRules(EventContent):
 
     rule: Rule
 
+    @property
+    def _redacted(self) -> "JoinRules":
+        return self
+
 
 @dataclass
 class HistoryVisibility(EventContent):
@@ -96,6 +100,10 @@ class HistoryVisibility(EventContent):
     aliases = {"visibility": "history_visibility"}
 
     visibility: Visibility
+
+    @property
+    def _redacted(self) -> "HistoryVisibility":
+        return self
 
 
 @dataclass

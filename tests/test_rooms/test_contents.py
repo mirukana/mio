@@ -21,7 +21,7 @@ from mio.rooms.contents.messages import (
 )
 from mio.rooms.contents.settings import HistoryVisibility, JoinRules, Name
 from mio.rooms.contents.users import Member, PowerLevels
-from mio.rooms.events import StateEvent
+from mio.rooms.events import StateEvent, TimelineEvent
 from mio.rooms.room import Room
 
 from ..conftest import TestData
@@ -336,6 +336,10 @@ async def test_encrypted_media(e2e_room: Room, bob: Client, data: TestData):
 
 
 async def test_timeline_redaction(e2e_room: Room):
+    new = []
+    cb  = lambda room, event: new.append(event)  # noqa
+    e2e_room.client.rooms.callbacks[TimelineEvent].append(cb)
+
     await e2e_room.timeline.send(Text("hi"))
     await e2e_room.client.sync.once()
     await e2e_room.timeline[-1].redact("bye")
@@ -349,8 +353,19 @@ async def test_timeline_redaction(e2e_room: Room):
     assert isinstance(redacted.content, Redacted)
     assert redacted.redacted_by == redaction
 
+    assert isinstance(new[-2].content, Redaction)
+    assert isinstance(new[-1].content, Redacted)
+
 
 async def test_state_redaction(room: Room):
+    tl_new = []
+    tl_cb  = lambda room, event: tl_new.append(event)  # noqa
+    room.client.rooms.callbacks[TimelineEvent].append(tl_cb)
+
+    st_new = []
+    st_cb  = lambda room, event: st_new.append(event)  # noqa
+    room.client.rooms.callbacks[StateEvent].append(st_cb)
+
     await room.state.send(Name("123"))
     await room.client.sync.once()
     await room.state[Name].redact("bad name")  # type: ignore
@@ -366,6 +381,10 @@ async def test_state_redaction(room: Room):
     assert isinstance(redacted, StateEvent)
     assert isinstance(redacted.content, Redacted)
     assert redacted.redacted_by == redaction
+
+    assert isinstance(tl_new[-2].content, Redaction)
+    assert isinstance(tl_new[-1].content, Redacted)
+    assert isinstance(st_new[-1].content, Redacted)
 
 
 async def test_state_redaction_allowed_keys(room: Room):

@@ -44,6 +44,10 @@ class Member(EventContent):
     def absent(self) -> bool:
         return self.membership in (self.Kind.leave, self.Kind.ban)
 
+    @property
+    def _redacted(self) -> "Member":
+        return type(self)(membership=self.membership)
+
 
 @dataclass
 class PowerLevels(EventContent):
@@ -89,3 +93,7 @@ class PowerLevels(EventContent):
 
     def notification_min_level(self, kind: str) -> int:
         return self.notifications.get(kind, 50)
+
+    @property
+    def _redacted(self) -> "PowerLevels":
+        return self.but(invite=50, notifications={"room": 50})
