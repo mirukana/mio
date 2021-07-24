@@ -18,6 +18,7 @@ from ..core.utils import DictS
 from ..devices.device import Device
 from ..e2e.contents import Megolm
 from ..e2e.errors import MegolmDecryptionError, MegolmVerificationError
+from ..net.errors import ServerError
 
 if TYPE_CHECKING:
     from .contents.changes import Redaction
@@ -29,6 +30,7 @@ DecryptInfo = Optional["TimelineDecryptInfo"]
 
 
 class SendStep(Enum):
+    failed  = auto()
     sending = auto()
     sent    = auto()
     synced  = auto()
@@ -60,14 +62,21 @@ class RoomEvent(Event[ContentT]):
         echo.sending = SendStep.sending
         await self.room.timeline._register_events(echo)
 
-        net      = self.room.net
-        url      = net.api / "rooms" / self.room.id / "redact" / ev_id / tx_id
-        reply    = await net.put(url, remove_none({"reason": reason}))
-        redac_id = EventId(reply.json["event_id"])
+        net = self.room.net
+        url = net.api / "rooms" / self.room.id / "redact" / ev_id / tx_id
+
+        try:
+            reply = await net.put(url, remove_none({"reason": reason}))
+        except ServerError:
+            timeline                  = self.room.timeline
+            timeline[echo.id].sending = SendStep.failed
+            await timeline._register_events(timeline[echo.id])
+            raise
 
         timeline = self.room.timeline
         old      = timeline._data.pop(echo.id)
         sent     = SendStep.sent
+        redac_id = EventId(reply.json["event_id"])
         await timeline._register_events(old.but(id=redac_id, sending=sent))
         return redac_id
 

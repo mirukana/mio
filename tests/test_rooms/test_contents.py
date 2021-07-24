@@ -13,6 +13,7 @@ from mio.core.contents import EventContent
 from mio.core.html import plain2html
 from mio.core.ids import MXC
 from mio.e2e.contents import EncryptedMediaInfo
+from mio.net.errors import MatrixError
 from mio.rooms.contents.changes import Redacted, Redaction
 from mio.rooms.contents.messages import (
     HTML_FORMAT, HTML_REPLY_FALLBACK, MATRIX_TO,
@@ -349,6 +350,7 @@ async def test_timeline_redaction(e2e_room: Room):
     assert isinstance(new[-2].content, Redaction)
     assert isinstance(new[-1].content, Redacted)
     assert new[-1].redacted_by == new[-2]
+    assert new[-1].redacted_by.sending == SendStep.sent
     await e2e_room.client.sync.once()
 
     # Check Redaction in timeline
@@ -422,3 +424,35 @@ async def test_state_redaction_allowed_keys(room: Room):
 
     send = PowerLevels(notifications={"abc": 1}, invite=80, ban=20)
     await check(send, PowerLevels(ban=20))
+
+
+async def test_redact_failure(room: Room):
+    await room.timeline.send(Text("hi"))
+    await room.client.sync.once()
+    await room.leave()
+
+    new = []
+    cb  = lambda room, event: new.append((  # noqa
+        type(event.content),
+        event.sending,
+        event.redacted_by.sending if event.redacted_by else None,
+    ))
+    room.client.rooms.callbacks[TimelineEvent].append(cb)
+
+    with raises(MatrixError):
+        await room.timeline[-1].redact()
+
+    assert isinstance(room.timeline[-2].content, Redacted)
+    assert room.timeline[-2].redacted_by
+    assert room.timeline[-2].redacted_by.sending == SendStep.failed
+
+    assert isinstance(room.timeline[-1].content, Redaction)
+    assert room.timeline[-1].sending == SendStep.failed
+    assert room.timeline[-1].id not in room.timeline.unsent
+
+    assert new == [
+        (Redaction, SendStep.sending, None),
+        (Redacted, SendStep.synced, SendStep.sending),
+        (Redaction, SendStep.failed, None),
+        (Redacted, SendStep.synced, SendStep.failed),
+    ]

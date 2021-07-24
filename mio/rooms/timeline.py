@@ -5,7 +5,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from itertools import groupby
-from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 from uuid import uuid4
 
 import aiofiles
@@ -21,6 +21,8 @@ from ..core.utils import remove_none
 from ..e2e.contents import Megolm
 from ..filters import LAZY_LOAD as LAZY
 from ..filters import Filter
+from ..net.errors import ServerError
+from .contents.changes import Redaction
 from .contents.settings import Creation
 from .events import SendStep, StateEvent, TimelineEvent
 
@@ -37,6 +39,10 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
     room: Parent["Room"]       = field(repr=False)
     gaps: Dict[EventId, "Gap"] = field(default_factory=ValueSortedDict)
 
+    unsent: Dict[EventId, TimelineEvent] = field(
+        default_factory=ValueSortedDict,
+    )
+
     _data: Runtime[Dict[EventId, TimelineEvent]] = field(
         default_factory=ValueSortedDict,
     )
@@ -50,6 +56,17 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
     )
 
 
+    async def load(self) -> "Timeline":
+        await super().load()
+
+        for event in self.unsent.values():
+            event.historic = True
+            event.sending  = SendStep.failed
+
+        await self._register_events(*self.unsent.values())
+        return self
+
+
     @property
     def path(self) -> AsyncPath:
         return self.room.path.parent / "timeline.json"
@@ -58,13 +75,6 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
     @property
     def fully_loaded(self) -> bool:
         return not self.gaps
-
-
-    @property
-    def unsent_past_events(self) -> Iterable[TimelineEvent]:
-        for event in self.values():
-            if event.historic and event.sending != SendStep.synced:
-                yield event
 
 
     async def load_event(self, event_id: EventId) -> TimelineEvent:
@@ -139,8 +149,9 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
         transaction_id: Optional[str]            = None,
     ) -> EventId:
 
-        room   = self.room
-        client = room.client
+        room          = self.room
+        client        = room.client
+        clear_content = content
 
         if room.state.encryption and not isinstance(content, Megolm):
             if not room.state.all_users_loaded:
@@ -157,35 +168,54 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
         tx  = transaction_id if transaction_id else str(uuid4())
         url = client.net.api / "rooms" / room.id / "send" / content.type / tx
 
-        if local_echo_to is None:
-            local_echo_to = [client]
+        echo_rooms = [
+            c.rooms[room.id]
+            for c in ([client] if local_echo_to is None else local_echo_to)
+            if room.id in c.rooms
+        ]
 
-        echo = await TimelineEvent.from_dict({
-            "type":             content.type,
-            "content":          content.dict,
+        echo: TimelineEvent = TimelineEvent.from_dict({
+            "type":             clear_content.type,
+            "content":          clear_content.dict,
             "event_id":         f"$echo.{tx}",
             "sender":           client.user_id,
             "origin_server_ts": datetime.now().timestamp() * 1000,
             "unsigned":         {"transaction_id": tx},
-        }, parent=room)._decrypted()
+        }, parent=room)
         echo.sending = SendStep.sending
 
-        for eclient in local_echo_to:
-            if room.id in eclient.rooms:
-                await eclient.rooms[room.id].timeline._register_events(echo)
+        for echo_room in echo_rooms:
+            await echo_room.timeline._register_events(echo)
 
-        reply    = await client.net.put(url, content.dict)
+        try:
+            reply = await client.net.put(url, content.dict)
+        except ServerError:
+            for echo_room in echo_rooms:
+                event         = echo_room.timeline[echo.id]
+                event.sending = SendStep.failed
+                await echo_room.timeline._register_events(event)
+
+            raise
+
         event_id = EventId(reply.json["event_id"])
 
-        for eclient in local_echo_to:
-            if room.id in eclient.rooms:
-                timeline           = eclient.rooms[room.id].timeline
-                sent               = SendStep.sent
-                old: TimelineEvent = timeline._data.pop(echo.id)
-                new: TimelineEvent = old.but(id=event_id, sending=sent)
-                await timeline._register_events(new)
+        for echo_room in echo_rooms:
+            old: TimelineEvent = echo_room.timeline._data.pop(echo.id)
+            new: TimelineEvent = old.but(id=event_id, sending=SendStep.sent)
+            await echo_room.timeline._register_events(new)
 
         return event_id
+
+
+    async def resend_failed(
+        self,
+        event:         TimelineEvent,
+        local_echo_to: Optional[List["Client"]] = None,
+    ) -> EventId:
+
+        tx_id = event.transaction_id
+        assert tx_id and event.sending == SendStep.failed
+        return await self.send(event.content, local_echo_to, tx_id)
 
 
     def _get_event_file(self, event: TimelineEvent) -> AsyncPath:
@@ -226,6 +256,24 @@ class Timeline(JSONFile, IndexableMap[EventId, TimelineEvent]):
 
         if not _save:
             return
+
+        unsent_changed = False
+
+        for event in events:
+            if event.sending in (SendStep.failed, SendStep.sending):
+                is_redaction = isinstance(event.content, Redaction)
+
+                if event.id not in self.unsent and not is_redaction:
+                    unsent_changed        = True
+                    self.unsent[event.id] = event
+            else:
+                tx_id = event.transaction_id
+
+                if tx_id and self.unsent.pop(EventId(f"$echo.{tx_id}"), None):
+                    unsent_changed = True
+
+        if unsent_changed:
+            await self.save()
 
         for path, event_group in groupby(events, key=self._get_event_file):
             sorted_group = sorted(event_group)

@@ -28,7 +28,7 @@ from ..devices.device import Device
 from ..devices.events import ToDeviceEvent
 from ..module import JSONClientModule
 from ..rooms.contents.settings import Encryption
-from ..rooms.events import SendStep, TimelineEvent
+from ..rooms.events import TimelineEvent
 from . import Algorithm, MegolmAlgorithm
 from . import errors as err
 from .contents import (
@@ -406,7 +406,7 @@ class E2E(JSONClientModule):
         if known and decrypted_indice[message_index] != (event.id, event.date):
             raise err.PossibleReplayAttack()
 
-        if not known and event.sending == SendStep.synced:
+        if not known:
             decrypted_indice[message_index] = (event.id, event.date)
             await self.save()
 

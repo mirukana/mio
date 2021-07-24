@@ -1,11 +1,11 @@
 # Copyright mio authors & contributors <https://github.com/mirukana/mio>
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
-from pathlib import Path
-
-from pytest import mark
+from pytest import mark, raises
 
 from mio.client import Client
+from mio.core.ids import EventId
+from mio.net.errors import MatrixError
 from mio.rooms.contents.messages import Text
 from mio.rooms.contents.settings import Creation
 from mio.rooms.events import SendStep, TimelineEvent
@@ -56,7 +56,7 @@ async def test_local_echo(e2e_room: Room):
     for event in new:
         assert event.content == Text("hi")
         assert event.sender == e2e_room.client.user_id
-        assert event.decryption
+        assert not event.decryption
 
     assert new[0].id == "$echo.abc"
     assert new[0].sending == SendStep.sending
@@ -88,13 +88,53 @@ async def test_multiclient_local_echo(e2e_room: Room, bob: Client):
     assert new1 == new2
 
 
-async def test_unsent_past_events(room: Room, tmp_path: Path):
-    await room.timeline.send(Text("abc"))
-    await room.timeline.send(Text("def"))
-    await room.client.sync.once()
-    assert not list(room.timeline.unsent_past_events)
+async def test_sending_failure(room: Room, bob: Client):
+    new = []
+    cb  = lambda room, event: new.append((event.id, event.sending))  # noqa
+    room.client.rooms.callbacks[TimelineEvent].append(cb)
 
-    last          = room.timeline[-1]
-    last.historic = True
-    last.sending  = SendStep.sending
-    assert len(list(room.timeline.unsent_past_events)) == 1
+    await room.timeline.send(Text("abc"))
+    await bob.rooms.join(room.id)  # prevent room from becoming inaccessible
+    await room.leave()
+
+    # Event that has failed sending in timeline
+
+    with raises(MatrixError):
+        await room.timeline.send(Text("def"), transaction_id="123")
+
+    unsent_id = EventId("$echo.123")
+    assert new[-1] == (unsent_id, SendStep.failed)
+    assert unsent_id in room.timeline
+    assert list(room.timeline.unsent) == [unsent_id]
+    assert room.timeline.unsent[unsent_id].content == Text("def")
+    assert room.timeline.unsent[unsent_id].sending == SendStep.failed
+    assert not room.timeline.unsent[unsent_id].historic
+
+    # Failed in unsent but not timeline._data after client restart
+
+    await room.client.terminate()
+    client2 = Client(room.client.base_dir)
+    new     = []
+    cb      = lambda room, event: new.append((event.id, event.sending))  # noqa
+    client2.rooms.callbacks[TimelineEvent].append(cb)
+
+    await client2.load()
+    assert new == [(unsent_id, SendStep.failed)]
+
+    timeline2 = client2.rooms[room.id].timeline
+    assert unsent_id in timeline2
+    assert list(timeline2.unsent) == [unsent_id]
+    assert timeline2.unsent[unsent_id].content == Text("def")
+    assert timeline2.unsent[unsent_id].sending == SendStep.failed
+    assert timeline2.unsent[unsent_id].historic
+
+    # Retry sending that failed
+
+    await client2.rooms.join(room.id)
+    event_id = await timeline2.resend_failed(timeline2.unsent[unsent_id])
+    assert timeline2[event_id].sending == SendStep.sent
+    assert not timeline2.unsent
+    assert new[-1] == (event_id, SendStep.sent)
+
+    with raises(AssertionError):
+        await timeline2.resend_failed(timeline2[event_id])
