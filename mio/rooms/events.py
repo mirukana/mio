@@ -38,12 +38,31 @@ class RoomEvent(Event[ContentT]):
 
 
     async def _redact(self, reason: Optional[str] = None) -> EventId:
-        net   = self.room.net
         ev_id = getattr(self, "id", "")
         tx_id = str(uuid4())
-        url   = net.api / "rooms" / self.room.id / "redact" / ev_id / tx_id
-        reply = await net.put(url, remove_none({"reason": reason}))
-        return EventId(reply.json["event_id"])
+
+        from .contents.changes import Redaction
+        echo: TimelineEvent[Redaction] = TimelineEvent.from_dict({
+            "type":             Redaction.type,
+            "content":          Redaction(reason).dict,
+            "event_id":         f"$echo.{tx_id}",
+            "sender":           self.room.client.user_id,
+            "origin_server_ts": datetime.now().timestamp() * 1000,
+            "unsigned":         {"transaction_id": tx_id},
+            "local_echo":       True,
+            "redacts":          ev_id,
+        }, parent=self.room)
+        await self.room.timeline._register_events(echo)
+
+        net      = self.room.net
+        url      = net.api / "rooms" / self.room.id / "redact" / ev_id / tx_id
+        reply    = await net.put(url, remove_none({"reason": reason}))
+        redac_id = EventId(reply.json["event_id"])
+
+        timeline = self.room.timeline
+        old = timeline._data.pop(echo.id)
+        await timeline._register_events(old.but(id=redac_id, local_echo=False))
+        return redac_id
 
 
     def _redacted(

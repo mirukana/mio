@@ -340,21 +340,31 @@ async def test_timeline_redaction(e2e_room: Room):
     cb  = lambda room, event: new.append(event)  # noqa
     e2e_room.client.rooms.callbacks[TimelineEvent].append(cb)
 
+    # Send original message
     await e2e_room.timeline.send(Text("hi"))
     await e2e_room.client.sync.once()
+
+    # Redact + test local echo
     await e2e_room.timeline[-1].redact("bye")
+    assert isinstance(new[-2].content, Redaction)
+    assert isinstance(new[-1].content, Redacted)
+    assert new[-1].redacted_by == new[-2]
     await e2e_room.client.sync.once()
 
+    # Check Redaction in timeline
     redaction = e2e_room.timeline[-1]
     assert isinstance(redaction.content, Redaction)
     assert redaction.content.reason == "bye"
 
+    # Check message now redacted in timeline
     redacted = e2e_room.timeline[-2]
     assert isinstance(redacted.content, Redacted)
     assert redacted.redacted_by == redaction
 
+    # Check callback results for real events
     assert isinstance(new[-2].content, Redaction)
     assert isinstance(new[-1].content, Redacted)
+    assert not new[2].local_echo
 
 
 async def test_state_redaction(room: Room):
